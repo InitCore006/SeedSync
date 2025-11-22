@@ -1,0 +1,6 @@
+djangorestframework
+djangorestframework-simplejwt
+django-cors-headers
+python-decouple
+Pillow
+psycopg2-binary
