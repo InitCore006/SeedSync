@@ -265,6 +265,159 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return user
 
 
+# ============================================================================
+# FARMER REGISTRATION SERIALIZERS (Mobile App)
+# ============================================================================
+
+class FarmerRegistrationStep1Serializer(serializers.Serializer):
+    """Farmer Registration - Step 1: Personal Details"""
+    
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    father_husband_name = serializers.CharField(max_length=200)
+    date_of_birth = serializers.DateField()
+    gender = serializers.ChoiceField(choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')])
+    phone_number = serializers.CharField(max_length=15)
+    
+    def validate_phone_number(self, value):
+        """Validate phone number format"""
+        import re
+        if not re.match(r'^[6-9]\d{9}$', value):
+            raise serializers.ValidationError(
+                "Invalid phone number. Must be a valid 10-digit Indian mobile number."
+            )
+        
+        # Check if already registered
+        if User.objects.filter(phone_number=value).exists():
+            raise serializers.ValidationError("This phone number is already registered.")
+        
+        return value
+
+
+class FarmerRegistrationStep2Serializer(serializers.Serializer):
+    """Farmer Registration - Step 2: Farm & Location Details"""
+    
+    total_land_area = serializers.DecimalField(max_digits=10, decimal_places=2)
+    village = serializers.CharField(max_length=100)
+    block = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    district = serializers.CharField(max_length=100)
+    state = serializers.CharField(max_length=100)
+    pincode = serializers.CharField(max_length=6)
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    crops_grown = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="List of oilseed crops grown"
+    )
+    expected_annual_production = serializers.DecimalField(max_digits=10, decimal_places=2)
+    has_storage = serializers.BooleanField(default=False)
+    storage_capacity = serializers.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        required=False,
+        default=0
+    )
+
+
+class FarmerRegistrationStep3Serializer(serializers.Serializer):
+    """Farmer Registration - Step 3: Banking & Documents"""
+    
+    bank_account_number = serializers.CharField(max_length=20)
+    ifsc_code = serializers.CharField(max_length=11)
+    bank_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    branch_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    upi_id = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    
+    # Optional: Aadhaar for eKYC (encrypted)
+    aadhaar_number = serializers.CharField(max_length=12, required=False, allow_blank=True)
+    
+    # Password for app login
+    password = serializers.CharField(
+        write_only=True,
+        validators=[validate_password],
+        style={'input_type': 'password'}
+    )
+    password_confirm = serializers.CharField(
+        write_only=True,
+        style={'input_type': 'password'}
+    )
+    
+    def validate_ifsc_code(self, value):
+        """Validate IFSC code format"""
+        import re
+        if not re.match(r'^[A-Z]{4}0[A-Z0-9]{6}$', value):
+            raise serializers.ValidationError(
+                "Invalid IFSC code format. Example: SBIN0001234"
+            )
+        return value
+    
+    def validate_aadhaar_number(self, value):
+        """Validate Aadhaar number format"""
+        if value:
+            import re
+            if not re.match(r'^\d{12}$', value):
+                raise serializers.ValidationError(
+                    "Invalid Aadhaar number. Must be 12 digits."
+                )
+        return value
+    
+    def validate_upi_id(self, value):
+        """Validate UPI ID format"""
+        if value:
+            import re
+            if not re.match(r'^[\w.-]+@[\w.-]+$', value):
+                raise serializers.ValidationError(
+                    "Invalid UPI ID format. Example: farmer@paytm"
+                )
+        return value
+    
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({
+                "password": "Password fields didn't match."
+            })
+        return attrs
+
+
+class FarmerProfileSerializer(serializers.ModelSerializer):
+    """Farmer Profile with nested user data"""
+    
+    user = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = FarmerProfile
+        fields = '__all__'
+        read_only_fields = [
+            'id', 'farmer_id', 'credit_score', 
+            'performance_rating', 'total_transactions', 'total_revenue',
+            'created_at', 'updated_at'
+        ]
+    
+    def create(self, validated_data):
+        # Auto-generate farmer_id
+        import uuid
+        validated_data['farmer_id'] = f"FR-{uuid.uuid4().hex[:8].upper()}"
+        return super().create(validated_data)
+
+
+class FarmerProfileListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for list views"""
+    
+    farmer_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    location = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = FarmerProfile
+        fields = [
+            'id', 'farmer_id', 'farmer_name', 'location',
+            'total_land_area', 'credit_score', 'performance_rating'
+        ]
+    
+    def get_location(self, obj):
+        return f"{obj.village}, {obj.district}, {obj.state}"
+
+
+
 
 # ============================================================================
 # FPO REGISTRATION SERIALIZERS
@@ -707,48 +860,6 @@ class PendingApprovalSerializer(serializers.Serializer):
     registration_number = serializers.CharField(required=False)
     gstin = serializers.CharField(required=False)
     location = serializers.CharField(required=False)
-
-
-# ============================================================================
-# FARMER PROFILE SERIALIZERS (Mobile App)
-# ============================================================================
-
-class FarmerProfileSerializer(serializers.ModelSerializer):
-    """Farmer Profile with nested user data"""
-    
-    user = UserSerializer(read_only=True)
-    
-    class Meta:
-        model = FarmerProfile
-        fields = '__all__'
-        read_only_fields = [
-            'id', 'farmer_id', 'credit_score', 
-            'performance_rating', 'total_transactions', 'total_revenue',
-            'created_at', 'updated_at'
-        ]
-    
-    def create(self, validated_data):
-        # Auto-generate farmer_id
-        import uuid
-        validated_data['farmer_id'] = f"FR-{uuid.uuid4().hex[:8].upper()}"
-        return super().create(validated_data)
-
-
-class FarmerProfileListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for list views"""
-    
-    farmer_name = serializers.CharField(source='user.get_full_name', read_only=True)
-    location = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = FarmerProfile
-        fields = [
-            'id', 'farmer_id', 'farmer_name', 'location',
-            'total_land_area', 'credit_score', 'performance_rating'
-        ]
-    
-    def get_location(self, obj):
-        return f"{obj.village}, {obj.district}, {obj.state}"
 
 
 # ============================================================================

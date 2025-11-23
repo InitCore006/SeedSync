@@ -17,6 +17,9 @@ from .models import (
 from .serializers import (
     # Auth & Token
     CustomTokenObtainPairSerializer,
+    FarmerRegistrationStep1Serializer,
+    FarmerRegistrationStep2Serializer,
+    FarmerRegistrationStep3Serializer,
     PasswordChangeSerializer,
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
@@ -425,6 +428,429 @@ def deserialize_from_session(data, decimal_fields=None):
     elif isinstance(data, list):
         return [deserialize_from_session(item, decimal_fields) for item in data]
     return data
+
+
+# ============================================================================
+# FARMER REGISTRATION VIEWS (Mobile App)
+# ============================================================================
+
+class FarmerRegistrationViewSet(viewsets.ViewSet):
+    """Farmer Multi-Step Registration (Mobile App)"""
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    
+    @action(detail=False, methods=['post'], url_path='step1')
+    def step1(self, request):
+        """Step 1: Personal Details"""
+        serializer = FarmerRegistrationStep1Serializer(data=request.data)
+        
+        if serializer.is_valid():
+            # Store in session (serialize Decimals to strings)
+            validated_data = serialize_for_session(serializer.validated_data)
+            validated_data['registration_started'] = str(timezone.now())
+            
+            request.session['farmer_step1'] = validated_data
+            request.session.modified = True
+            
+            return Response({
+                'detail': 'Step 1 completed successfully',
+                'next_step': '/api/users/farmer-registration/step2/',
+                'data': validated_data
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'], url_path='step2')
+    def step2(self, request):
+        """Step 2: Farm & Location Details"""
+        # Check if Step 1 is completed
+        if 'farmer_step1' not in request.session:
+            return Response({
+                'detail': 'Please complete Step 1 first',
+                'error_code': 'STEP1_REQUIRED'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = FarmerRegistrationStep2Serializer(data=request.data)
+        
+        if serializer.is_valid():
+            # Store in session (serialize Decimals to strings)
+            validated_data = serialize_for_session(serializer.validated_data)
+            
+            request.session['farmer_step2'] = validated_data
+            request.session.modified = True
+            
+            return Response({
+                'detail': 'Step 2 completed successfully',
+                'next_step': '/api/users/farmer-registration/step3/',
+                'data': validated_data
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'], url_path='step3')
+    @transaction.atomic
+    def step3(self, request):
+        """Step 3: Banking & Documents - Final Submission"""
+        # Check if Step 2 is completed
+        if 'farmer_step2' not in request.session:
+            return Response({
+                'detail': 'Please complete Step 2 first',
+                'error_code': 'STEP2_REQUIRED'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = FarmerRegistrationStep3Serializer(data=request.data)
+        
+        if serializer.is_valid():
+            try:
+                # Get all step data from session
+                step1_data = request.session.get('farmer_step1', {})
+                step2_data = request.session.get('farmer_step2', {})
+                step3_data = serializer.validated_data
+                
+                # Define Decimal fields for deserialization
+                step2_decimal_fields = [
+                    'total_land_area', 
+                    'expected_annual_production',
+                    'storage_capacity',
+                    'latitude',
+                    'longitude'
+                ]
+                
+                # Convert string Decimals back to Decimal type
+                step2_data = deserialize_from_session(step2_data, step2_decimal_fields)
+                
+                # Extract password and sensitive data
+                password = step3_data.pop('password')
+                step3_data.pop('password_confirm')
+                aadhaar_number = step3_data.pop('aadhaar_number', None)
+                
+                # Get phone number from step 1
+                phone_number = step1_data.get('phone_number')
+                
+                # Generate unique username
+                username = f"farmer_{uuid.uuid4().hex[:8]}"
+                
+                # Create User
+                user = User.objects.create(
+                    username=username,
+                    phone_number=phone_number,
+                    first_name=step1_data.get('first_name'),
+                    last_name=step1_data.get('last_name', ''),
+                    role='FARMER',
+                    approval_status='APPROVED',  # Farmers are auto-approved
+                    phone_verified=True,  # Assume phone verified via OTP
+                    aadhaar_number=aadhaar_number
+                )
+                user.set_password(password)
+                user.save()
+                
+                # Generate Farmer ID
+                farmer_id = f"FR-{user.id.hex[:8].upper()}"
+                
+                # Create Farmer Profile
+                farmer_profile_data = {
+                    'user': user,
+                    'farmer_id': farmer_id,
+                    # Step 1 fields
+                    'father_husband_name': step1_data.get('father_husband_name'),
+                    'date_of_birth': step1_data.get('date_of_birth'),
+                    'gender': step1_data.get('gender'),
+                    # Step 2 fields
+                    'total_land_area': step2_data.get('total_land_area'),
+                    'village': step2_data.get('village'),
+                    'block': step2_data.get('block', ''),
+                    'district': step2_data.get('district'),
+                    'state': step2_data.get('state'),
+                    'pincode': step2_data.get('pincode'),
+                    'latitude': step2_data.get('latitude'),
+                    'longitude': step2_data.get('longitude'),
+                    'crops_grown': step2_data.get('crops_grown', []),
+                    'expected_annual_production': step2_data.get('expected_annual_production'),
+                    'has_storage': step2_data.get('has_storage', False),
+                    'storage_capacity': step2_data.get('storage_capacity', 0),
+                    # Step 3 fields
+                    'bank_account_number': step3_data.get('bank_account_number'),
+                    'ifsc_code': step3_data.get('ifsc_code'),
+                    'bank_name': step3_data.get('bank_name', ''),
+                    'branch_name': step3_data.get('branch_name', ''),
+                    'upi_id': step3_data.get('upi_id', ''),
+                    'aadhaar_verified': bool(aadhaar_number),
+                }
+                
+                # Create Farmer Profile
+                farmer_profile = FarmerProfile.objects.create(**farmer_profile_data)
+                
+                # Clear session data
+                for key in ['farmer_step1', 'farmer_step2']:
+                    request.session.pop(key, None)
+                request.session.modified = True
+                
+                # Generate JWT tokens for immediate login
+                from rest_framework_simplejwt.tokens import RefreshToken
+                refresh = RefreshToken.for_user(user)
+                
+                return Response({
+                    'detail': 'Registration completed successfully! Welcome to SeedSync.',
+                    'user_id': str(user.id),
+                    'farmer_id': farmer_id,
+                    'approval_status': user.approval_status,
+                    'message': 'You can now start selling your produce!',
+                    'tokens': {
+                        'refresh': str(refresh),
+                        'access': str(refresh.access_token),
+                    },
+                    'user': {
+                        'id': str(user.id),
+                        'username': user.username,
+                        'full_name': user.get_full_name(),
+                        'phone_number': user.phone_number,
+                        'role': user.role,
+                        'farmer_id': farmer_id,
+                    },
+                    'redirect_to': '/farmer/dashboard'
+                }, status=status.HTTP_201_CREATED)
+                
+            except Exception as e:
+                # Log the error for debugging
+                print(f"Farmer Registration Error: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                
+                return Response({
+                    'detail': 'An error occurred during registration. Please try again.',
+                    'error': str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'], url_path='progress')
+    def progress(self, request):
+        """Get current registration progress"""
+        progress = {
+            'step1_completed': 'farmer_step1' in request.session,
+            'step2_completed': 'farmer_step2' in request.session,
+            'current_step': 1,
+            'step1_data': request.session.get('farmer_step1'),
+            'step2_data': request.session.get('farmer_step2'),
+        }
+        
+        if progress['step2_completed']:
+            progress['current_step'] = 3
+        elif progress['step1_completed']:
+            progress['current_step'] = 2
+        
+        return Response(progress, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['post'], url_path='clear-session')
+    def clear_session(self, request):
+        """Clear registration session (for testing/restart)"""
+        for key in ['farmer_step1', 'farmer_step2']:
+            request.session.pop(key, None)
+        request.session.modified = True
+        
+        return Response({
+            'detail': 'Session cleared successfully'
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['post'], url_path='verify-phone')
+    def verify_phone(self, request):
+        """Send OTP for phone verification"""
+        phone_number = request.data.get('phone_number')
+        
+        if not phone_number:
+            return Response({
+                'detail': 'Phone number is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if phone already registered
+        if User.objects.filter(phone_number=phone_number).exists():
+            return Response({
+                'detail': 'This phone number is already registered'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # TODO: Send OTP via SMS
+        import random
+        otp = str(random.randint(100000, 999999))
+        
+        # Store OTP in session
+        request.session[f'otp_{phone_number}'] = otp
+        request.session[f'otp_{phone_number}_time'] = str(timezone.now())
+        request.session.modified = True
+        
+        return Response({
+            'detail': 'OTP sent successfully',
+            'phone_number': phone_number,
+            'otp': otp,  # Remove in production
+            'expires_in': 300  # 5 minutes
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['post'], url_path='verify-otp')
+    def verify_otp(self, request):
+        """Verify OTP for phone number"""
+        phone_number = request.data.get('phone_number')
+        otp = request.data.get('otp')
+        
+        if not phone_number or not otp:
+            return Response({
+                'detail': 'Phone number and OTP are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get stored OTP from session
+        stored_otp = request.session.get(f'otp_{phone_number}')
+        
+        if not stored_otp:
+            return Response({
+                'detail': 'OTP not found or expired. Please request a new OTP.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verify OTP
+        if stored_otp == otp:
+            # Mark as verified
+            request.session[f'phone_verified_{phone_number}'] = True
+            request.session.modified = True
+            
+            # Clear OTP
+            request.session.pop(f'otp_{phone_number}', None)
+            request.session.pop(f'otp_{phone_number}_time', None)
+            
+            return Response({
+                'detail': 'Phone number verified successfully',
+                'verified': True
+            }, status=status.HTTP_200_OK)
+        
+        return Response({
+            'detail': 'Invalid OTP. Please try again.',
+            'verified': False
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Update existing FarmerProfileViewSet to allow creation
+class FarmerProfileViewSet(viewsets.ModelViewSet):
+    """Farmer Profile ViewSet (Mobile App Only)"""
+    serializer_class = FarmerProfileSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        
+        if user.role == 'FARMER':
+            return FarmerProfile.objects.filter(user=user)
+        elif user.role == 'GOVERNMENT':
+            return FarmerProfile.objects.all()
+        elif user.role == 'FPO':
+            # FPOs can see farmers in their area
+            try:
+                fpo_profile = user.fpo_profile
+                return FarmerProfile.objects.filter(
+                    state=fpo_profile.state,
+                    district=fpo_profile.district
+                )
+            except FPOProfile.DoesNotExist:
+                return FarmerProfile.objects.none()
+        
+        return FarmerProfile.objects.none()
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return FarmerProfileListSerializer
+        return FarmerProfileSerializer
+    
+    @action(detail=False, methods=['get'])
+    def my_profile(self, request):
+        """Get current farmer's profile"""
+        if request.user.role != 'FARMER':
+            return Response({
+                'detail': 'You are not a Farmer'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            profile = request.user.farmer_profile
+            serializer = self.get_serializer(profile)
+            return Response(serializer.data)
+        except FarmerProfile.DoesNotExist:
+            return Response({
+                'detail': 'Profile not found. Please complete registration.'
+            }, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(detail=False, methods=['patch'])
+    def update_profile(self, request):
+        """Update farmer profile"""
+        if request.user.role != 'FARMER':
+            return Response({
+                'detail': 'You are not a Farmer'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            profile = request.user.farmer_profile
+            
+            # Only allow updating specific fields
+            allowed_fields = [
+                'total_land_area', 'crops_grown', 'expected_annual_production',
+                'has_storage', 'storage_capacity', 'bank_account_number',
+                'ifsc_code', 'bank_name', 'branch_name', 'upi_id'
+            ]
+            
+            filtered_data = {k: v for k, v in request.data.items() if k in allowed_fields}
+            
+            serializer = self.get_serializer(profile, data=filtered_data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            
+            return Response({
+                'detail': 'Profile updated successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except FarmerProfile.DoesNotExist:
+            return Response({
+                'detail': 'Profile not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(detail=False, methods=['get'], url_path='nearby-fpos')
+    def nearby_fpos(self, request):
+        """Get nearby FPOs for farmer"""
+        if request.user.role != 'FARMER':
+            return Response({
+                'detail': 'Only farmers can access this'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            farmer_profile = request.user.farmer_profile
+            
+            # Find FPOs in same district/state
+            nearby_fpos = FPOProfile.objects.filter(
+                user__approval_status='APPROVED',
+                state=farmer_profile.state,
+                district=farmer_profile.district
+            ).select_related('user')
+            
+            fpo_list = []
+            for fpo in nearby_fpos:
+                fpo_list.append({
+                    'id': str(fpo.id),
+                    'organization_name': fpo.organization_name,
+                    'contact_person': fpo.contact_person_name,
+                    'phone_number': fpo.user.phone_number,
+                    'office_address': fpo.office_address,
+                    'total_members': fpo.total_members,
+                    'primary_oilseeds': fpo.primary_oilseeds,
+                })
+            
+            return Response({
+                'count': len(fpo_list),
+                'fpos': fpo_list
+            }, status=status.HTTP_200_OK)
+            
+        except FarmerProfile.DoesNotExist:
+            return Response({
+                'detail': 'Farmer profile not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+# ============================================================================
+# FPO REGISTRATION VIEWS (Mobile App)
+# ============================================================================
+
 
 
 class FPORegistrationViewSet(viewsets.ViewSet):
@@ -1475,53 +1901,5 @@ class GovernmentProfileViewSet(viewsets.ReadOnlyModelViewSet):
                 'detail': 'Profile not found'
             }, status=status.HTTP_404_NOT_FOUND)
 
-
-# ============================================================================
-# FARMER PROFILE VIEWS (Mobile App)
-# ============================================================================
-
-class FarmerProfileViewSet(viewsets.ModelViewSet):
-    """Farmer Profile ViewSet (Mobile App Only)"""
-    serializer_class = FarmerProfileSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        user = self.request.user
-        
-        if user.role == 'FARMER':
-            return FarmerProfile.objects.filter(user=user)
-        elif user.role == 'GOVERNMENT':
-            return FarmerProfile.objects.all()
-        elif user.role == 'FPO':
-            # FPOs can see farmers in their area
-            try:
-                fpo_profile = user.fpo_profile
-                return FarmerProfile.objects.filter(
-                    state=fpo_profile.state,
-                    district=fpo_profile.district
-                )
-            except FPOProfile.DoesNotExist:
-                return FarmerProfile.objects.none()
-        
-        return FarmerProfile.objects.none()
-    
-    @action(detail=False, methods=['get'])
-    def my_profile(self, request):
-        """Get current farmer's profile"""
-        if request.user.role != 'FARMER':
-            return Response({
-                'detail': 'You are not a Farmer'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        try:
-            profile = request.user.farmer_profile
-            serializer = self.get_serializer(profile)
-            return Response(serializer.data)
-        except FarmerProfile.DoesNotExist:
-            return Response({
-                'detail': 'Profile not found. Please complete registration.'
-            }, status=status.HTTP_404_NOT_FOUND)
-            
-            
-            
+           
             
