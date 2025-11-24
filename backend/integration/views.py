@@ -29,7 +29,7 @@ class AgriStackSyncViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AgriStackSyncSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['farmer', 'is_verified']
+    filterset_fields = ['farmer']
     ordering = ['-last_sync_at']
     
     def get_queryset(self):
@@ -392,7 +392,7 @@ class ExternalAPILogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ExternalAPILogSerializer
     permission_classes = [permissions.IsAdminUser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['api_name', 'status_code', 'is_success']
+    filterset_fields = ['api_name',]
     ordering = ['-created_at']
     
     @action(detail=False, methods=['get'])

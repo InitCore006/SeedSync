@@ -50,7 +50,7 @@ class WarehouseListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Warehouse
         fields = [
-            'id', 'warehouse_id', 'name', 'warehouse_type',
+            'id', 'warehouse_id', 'warehouse_name', 'warehouse_type',
             'district', 'state', 'utilization', 'is_active'
         ]
     

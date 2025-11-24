@@ -30,6 +30,7 @@ class Warehouse(TimeStampedModel):
     owner_id = models.IntegerField()  # ID of the profile
     
     # Location
+    warehouse_id = models.IntegerField()
     warehouse_name = models.CharField(max_length=200)
     address = models.TextField()
     state = models.CharField(max_length=100)
@@ -48,6 +49,8 @@ class Warehouse(TimeStampedModel):
     has_weighbridge = models.BooleanField(default=False)
     has_quality_testing = models.BooleanField(default=False)
     has_security = models.BooleanField(default=False)
+    
+    is_active = models.BooleanField(default=True)
     
     @property
     def occupancy_percentage(self):

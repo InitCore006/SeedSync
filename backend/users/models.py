@@ -93,6 +93,8 @@ class User(AbstractUser, TimeStampedModel):
     last_login_ip = models.GenericIPAddressField(null=True, blank=True)
     login_count = models.IntegerField(default=0)
     
+    is_active = models.BooleanField(default=True)
+    
     class Meta:
         db_table = 'users'
         indexes = [

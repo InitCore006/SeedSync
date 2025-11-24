@@ -45,6 +45,8 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
     'django_filters',
     'corsheaders',
     
@@ -179,6 +181,8 @@ REST_FRAMEWORK = {
     ],
     'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
     'DATE_FORMAT': '%Y-%m-%d',
+    
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 
@@ -207,4 +211,10 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'SeedSync API',
+    'DESCRIPTION': 'API documentation for the SeedSync Oilseed Value Chain Platform',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
 

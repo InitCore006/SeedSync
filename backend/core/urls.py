@@ -20,7 +20,11 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView
 from users.views import CustomTokenObtainPairView
-
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+    SpectacularRedocView,
+)
 # Customize admin site
 admin.site.site_header = "SeedSync Platform Administration"
 admin.site.site_title = "SeedSync Admin"
@@ -40,6 +44,15 @@ urlpatterns = [
     path('api/traceability/', include('traceability.urls')),
     path('api/logistics/', include('logistics.urls')),
     path('api/integration/', include('integration.urls')),
+    
+     # OPENAPI SCHEMA
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+
+    # SWAGGER UI
+    path('api/docs/swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+
+    # REDOC UI
+    path('api/docs/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc-ui'),
 ]
 
 # Serve media files in development

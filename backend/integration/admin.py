@@ -42,7 +42,7 @@ class LandRecordAdmin(admin.ModelAdmin):
         'farmer', 'survey_number', 'land_area', 
         'location', 'ownership_type', 'verification_status'
     ]
-    list_filter = ['ownership_type', 'is_verified', 'state']
+    list_filter = ['ownership_type',  'state']
     search_fields = [
         'farmer__farmer_id', 'survey_number', 
         'khasra_number', 'ulpin'
