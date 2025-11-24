@@ -34,8 +34,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     # Authentication
-    path('api/auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/users/auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/users/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     # App APIs
     path('api/users/', include('users.urls')),
