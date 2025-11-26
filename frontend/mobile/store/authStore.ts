@@ -1,48 +1,36 @@
 import { create } from 'zustand';
-import { User } from '@/types/auth.types';
-import { authService } from '@/services/auth.service';
-import { setTokens, clearTokens } from '@lib/api/client';
-import { userStorage } from '@lib/utils/storage';
+import { authService, tokenManager } from '@/services/api/auth.service';
+import type { LoginRequest, LoginResponse } from '@/services/api/auth.service';
 
-interface AuthState {
+export interface AuthState {
   // State
-  user: User | null;
+  user: LoginResponse['user'] | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
 
   // Actions
-  login: (username: string, password: string) => Promise<void>;
+  login: (credentials: LoginRequest) => Promise<void>;
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
   clearError: () => void;
-  updateUser: (user: Partial<User>) => void;
+  setUser: (user: LoginResponse['user']) => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  // ============================================================================
-  // INITIAL STATE
-  // ============================================================================
+export const useAuthStore = create<AuthState>((set) => ({
+  // Initial State
   user: null,
   isAuthenticated: false,
   isLoading: false,
   error: null,
 
-  // ============================================================================
-  // LOGIN
-  // ============================================================================
-  login: async (username: string, password: string) => {
-    set({ isLoading: true, error: null });
-
+  // Login
+  login: async (credentials: LoginRequest) => {
     try {
-      const response = await authService.login({ username, password });
-
-      // Save tokens
-      await setTokens(response.access, response.refresh);
-
-      // Save user data
-      await userStorage.saveUser(response.user);
-
+      set({ isLoading: true, error: null });
+      
+      const response = await authService.login(credentials);
+      
       set({
         user: response.user,
         isAuthenticated: true,
@@ -50,39 +38,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         error: null,
       });
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        'Login failed. Please check your credentials.';
-
+      const errorMessage = error.response?.data?.detail || 
+                          error.response?.data?.message || 
+                          'Login failed. Please check your credentials.';
+      
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         error: errorMessage,
       });
-
+      
       throw error;
     }
   },
 
-  // ============================================================================
-  // LOGOUT
-  // ============================================================================
+  // Logout
   logout: async () => {
-    set({ isLoading: true });
-
     try {
-      // Call logout API
+      set({ isLoading: true });
+      
       await authService.logout();
+      
+      set({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: null,
+      });
     } catch (error) {
-      console.error('Logout API error:', error);
-      // Continue with local logout even if API fails
-    } finally {
-      // Clear tokens and user data
-      await clearTokens();
-      await userStorage.clearUser();
-
+      console.error('Logout error:', error);
+      
+      // Clear local state even if API call fails
       set({
         user: null,
         isAuthenticated: false,
@@ -92,72 +79,52 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  // ============================================================================
-  // LOAD USER (On App Start)
-  // ============================================================================
+  // Load user from storage on app start
   loadUser: async () => {
-    set({ isLoading: true });
-
     try {
-      // Try to get user from storage
-      const storedUser = await userStorage.getUser();
-
-      if (storedUser) {
-        // Verify with backend
-        const user = await authService.getProfile();
-
-        // Update stored user if different
-        if (JSON.stringify(user) !== JSON.stringify(storedUser)) {
-          await userStorage.saveUser(user);
-        }
-
+      set({ isLoading: true });
+      
+      const user = await tokenManager.getUser();
+      const accessToken = await tokenManager.getAccessToken();
+      
+      if (user && accessToken) {
         set({
           user,
           isAuthenticated: true,
           isLoading: false,
+          error: null,
         });
       } else {
         set({
           user: null,
           isAuthenticated: false,
           isLoading: false,
+          error: null,
         });
       }
     } catch (error) {
       console.error('Load user error:', error);
-
-      // Clear invalid session
-      await clearTokens();
-      await userStorage.clearUser();
-
+      
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
+        error: null,
       });
     }
   },
 
-  // ============================================================================
-  // UPDATE USER
-  // ============================================================================
-  updateUser: (updatedUser: Partial<User>) => {
-    const currentUser = get().user;
-
-    if (currentUser) {
-      const newUser = { ...currentUser, ...updatedUser };
-
-      // Update storage
-      userStorage.saveUser(newUser);
-
-      set({ user: newUser });
-    }
-  },
-
-  // ============================================================================
-  // CLEAR ERROR
-  // ============================================================================
+  // Clear error
   clearError: () => {
     set({ error: null });
+  },
+
+  // Set user (for registration flow)
+  setUser: (user: LoginResponse['user']) => {
+    set({
+      user,
+      isAuthenticated: true,
+      error: null,
+    });
   },
 }));

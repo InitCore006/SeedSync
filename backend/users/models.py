@@ -548,6 +548,33 @@ class FarmerProfile(TimeStampedModel):
         return self.bank_details_added or bool(self.upi_id)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class FPOProfile(TimeStampedModel):
     """FPO/Cooperative Profile - WEB REGISTRATION"""
     
