@@ -17,8 +17,6 @@ from .models import (
 
 
 
-
-
 # ============================================================================
 # CUSTOM FILTERS
 # ============================================================================
@@ -77,41 +75,45 @@ class VerificationStatusFilter(admin.SimpleListFilter):
 
 
 class StateFilter(admin.SimpleListFilter):
-    """Dynamic state filter"""
+    """Dynamic state filter for farmers"""
     title = 'State'
     parameter_name = 'state'
     
     def lookups(self, request, model_admin):
-        # Get unique states from all profile types
-        states = set()
-        
-        # Add states from FPO
-        fpo_states = FPOProfile.objects.values_list('state', flat=True).distinct()
-        states.update(fpo_states)
-        
-        # Add states from Processor
-        proc_states = ProcessorProfile.objects.values_list('state', flat=True).distinct()
-        states.update(proc_states)
-        
-        # Add states from Retailer
-        ret_states = RetailerProfile.objects.values_list('state', flat=True).distinct()
-        states.update(ret_states)
-        
-        # Add states from Farmer
-        farm_states = FarmerProfile.objects.values_list('state', flat=True).distinct()
-        states.update(farm_states)
-        
+        # Get unique states from farmer profiles
+        states = FarmerProfile.objects.values_list('state', flat=True).distinct()
         return sorted([(s, s) for s in states if s])
     
     def queryset(self, request, queryset):
         if self.value():
-            return queryset.filter(
-                Q(fpo_profile__state=self.value()) |
-                Q(processor_profile__state=self.value()) |
-                Q(retailer_profile__state=self.value()) |
-                Q(farmer_profile__state=self.value())
-            )
+            return queryset.filter(farmer_profile__state=self.value())
         return queryset
+
+
+class ProfileCompletionFilter(admin.SimpleListFilter):
+    """Filter by profile completion status"""
+    title = 'Profile Completion'
+    parameter_name = 'profile_complete'
+    
+    def lookups(self, request, model_admin):
+        return (
+            ('complete', 'Complete (80%+)'),
+            ('incomplete', 'Incomplete (<80%)'),
+            ('no_profile', 'No Profile Created'),
+        )
+    
+    def queryset(self, request, queryset):
+        if self.value() == 'complete':
+            return queryset.filter(farmer_profile__profile_completed=True)
+        elif self.value() == 'incomplete':
+            return queryset.filter(
+                farmer_profile__profile_completed=False,
+                farmer_profile__isnull=False
+            )
+        elif self.value() == 'no_profile':
+            return queryset.filter(farmer_profile__isnull=True)
+        return queryset
+
 
 
 # ============================================================================
@@ -119,37 +121,87 @@ class StateFilter(admin.SimpleListFilter):
 # ============================================================================
 
 class FarmerProfileInline(admin.StackedInline):
+    """Farmer Profile Inline for User Admin"""
+    
     model = FarmerProfile
     can_delete = False
     verbose_name_plural = 'Farmer Profile'
     fk_name = 'user'
     
     fieldsets = (
+        ('Farmer ID', {
+            'fields': ('farmer_id',)
+        }),
         ('Personal Information', {
-            'fields': ('farmer_id', 'father_husband_name', 'date_of_birth', 'gender')
+            'fields': (
+                'father_husband_name',
+                ('date_of_birth', 'gender')
+            )
+        }),
+        ('Location Details', {
+            'fields': (
+                'village',
+                ('district', 'state'),
+                'pincode',
+                ('latitude', 'longitude')
+            )
         }),
         ('Farm Details', {
-            'fields': ('total_land_area', 'crops_grown', 'expected_annual_production')
+            'fields': (
+                'total_land_area',
+                'primary_crops',
+                'expected_annual_production'
+            )
         }),
-        ('Location', {
-            'fields': (('village', 'block'), ('district', 'state', 'pincode'), ('latitude', 'longitude'))
+        ('Banking Information', {
+            'fields': (
+                ('bank_account_number', 'ifsc_code'),
+                ('bank_name', 'branch_name'),
+                'account_holder_name',
+                'upi_id'
+            )
         }),
-        ('Storage', {
-            'fields': ('has_storage', 'storage_capacity')
-        }),
-        ('Banking', {
-            'fields': ('bank_account_number', 'ifsc_code', 'bank_name', 'branch_name', 'upi_id')
-        }),
-        ('Documents & Verification', {
-            'fields': ('land_records_uploaded', 'aadhaar_verified')
+        ('Verification Status', {
+            'fields': (
+                ('aadhaar_verified', 'land_records_uploaded')
+            )
         }),
         ('Performance Metrics', {
-            'fields': ('credit_score', 'performance_rating', 'total_transactions', 'total_revenue'),
+            'fields': (
+                ('total_transactions', 'total_revenue'),
+                ('performance_rating', 'total_ratings'),
+                'credit_score'
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Profile Status', {
+            'fields': (
+                ('profile_completed', 'profile_completion_percentage'),
+                'is_active_seller'
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Activity Tracking', {
+            'fields': (
+                'last_lot_created_at',
+                'last_transaction_at'
+            ),
             'classes': ('collapse',)
         }),
     )
     
-    readonly_fields = ('farmer_id', 'credit_score', 'performance_rating', 'total_transactions', 'total_revenue')
+    readonly_fields = (
+        'farmer_id',
+        'total_transactions',
+        'total_revenue',
+        'performance_rating',
+        'total_ratings',
+        'credit_score',
+        'profile_completed',
+        'profile_completion_percentage',
+        'last_lot_created_at',
+        'last_transaction_at'
+    )
 
 
 class FPOProfileInline(admin.StackedInline):
@@ -405,6 +457,8 @@ class GovernmentProfileInline(admin.StackedInline):
     readonly_fields = ('total_approvals', 'total_rejections', 'last_active')
 
 
+
+
 # ============================================================================
 # USER ADMIN
 # ============================================================================
@@ -416,8 +470,8 @@ class UserAdmin(BaseUserAdmin):
     # List Display
     list_display = (
         'username',
-        'email_display',
         'phone_display',
+        'email_display',
         'role_badge',
         'approval_badge',
         'verification_status',
@@ -430,6 +484,7 @@ class UserAdmin(BaseUserAdmin):
         RoleFilter,
         ApprovalStatusFilter,
         VerificationStatusFilter,
+        ProfileCompletionFilter,
         StateFilter,
         'is_active',
         'is_staff',
@@ -442,10 +497,9 @@ class UserAdmin(BaseUserAdmin):
         'phone_number',
         'first_name',
         'last_name',
-        'fpo_profile__organization_name',
-        'processor_profile__company_name',
-        'retailer_profile__business_name',
-        'logistics_profile__company_name',
+        'farmer_profile__farmer_id',
+        'farmer_profile__village',
+        'farmer_profile__district',
     )
     
     ordering = ('-date_joined',)
@@ -456,7 +510,11 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('username', 'password')
         }),
         ('Personal Information', {
-            'fields': (('first_name', 'last_name'), 'email', 'phone_number')
+            'fields': (
+                ('first_name', 'last_name'),
+                'phone_number',
+                'email'
+            )
         }),
         ('Role & Status', {
             'fields': (
@@ -467,10 +525,6 @@ class UserAdmin(BaseUserAdmin):
         }),
         ('Verification', {
             'fields': (('phone_verified', 'email_verified'),)
-        }),
-        ('Identity Documents', {
-            'fields': (('aadhaar_number', 'pan_number'),),
-            'classes': ('collapse',)
         }),
         ('Preferences', {
             'fields': (('preferred_language', 'profile_picture'),)
@@ -495,10 +549,18 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('username', 'password1', 'password2')
         }),
         ('Personal Information', {
-            'fields': (('first_name', 'last_name'), 'email', 'phone_number')
+            'fields': (
+                ('first_name', 'last_name'),
+                'phone_number',
+                'email'
+            )
         }),
         ('Role', {
-            'fields': ('role',)
+            'fields': ('role',),
+            'description': 'Select user role. Farmers are auto-approved.'
+        }),
+        ('Language', {
+            'fields': ('preferred_language',)
         }),
     )
     
@@ -529,36 +591,19 @@ class UserAdmin(BaseUserAdmin):
         if obj:
             if obj.role == 'FARMER':
                 self.inlines = [FarmerProfileInline]
-            elif obj.role == 'FPO':
-                self.inlines = [FPOProfileInline]
-            elif obj.role == 'PROCESSOR':
-                self.inlines = [ProcessorProfileInline]
-            elif obj.role == 'RETAILER':
-                self.inlines = [RetailerProfileInline]
-            elif obj.role == 'LOGISTICS':
-                self.inlines = [LogisticsProfileInline]
-            elif obj.role == 'GOVERNMENT':
-                self.inlines = [GovernmentProfileInline]
             else:
                 self.inlines = []
+                # TODO: Add other profile inlines when implemented
+                # elif obj.role == 'FPO':
+                #     self.inlines = [FPOProfileInline]
+                # elif obj.role == 'PROCESSOR':
+                #     self.inlines = [ProcessorProfileInline]
         else:
             self.inlines = []
         
         return super().get_inline_instances(request, obj)
     
     # Custom Display Methods
-    def email_display(self, obj):
-        """Email with verification badge"""
-        verified = '✓' if obj.email_verified else '✗'
-        color = 'green' if obj.email_verified else 'red'
-        return format_html(
-            '{} <span style="color: {};">{}</span>',
-            obj.email,
-            color,
-            verified
-        )
-    email_display.short_description = 'Email'
-    
     def phone_display(self, obj):
         """Phone with verification badge"""
         verified = '✓' if obj.phone_verified else '✗'
@@ -569,7 +614,22 @@ class UserAdmin(BaseUserAdmin):
             color,
             verified
         )
-    phone_display.short_description = 'Phone'
+    phone_display.short_description = 'Phone Number'
+    
+    def email_display(self, obj):
+        """Email with verification badge (optional for farmers)"""
+        if not obj.email:
+            return format_html('<span style="color: gray;">Not provided</span>')
+        
+        verified = '✓' if obj.email_verified else '✗'
+        color = 'green' if obj.email_verified else 'red'
+        return format_html(
+            '{} <span style="color: {};">{}</span>',
+            obj.email,
+            color,
+            verified
+        )
+    email_display.short_description = 'Email'
     
     def role_badge(self, obj):
         """Colored role badge"""
@@ -579,6 +639,7 @@ class UserAdmin(BaseUserAdmin):
             'PROCESSOR': '#ffc107',
             'RETAILER': '#fd7e14',
             'LOGISTICS': '#6f42c1',
+            'WAREHOUSE': '#20c997',
             'GOVERNMENT': '#007bff',
         }
         return format_html(
@@ -608,12 +669,12 @@ class UserAdmin(BaseUserAdmin):
             icons.get(obj.approval_status, ''),
             obj.get_approval_status_display()
         )
-    approval_badge.short_description = 'Approval Status'
+    approval_badge.short_description = 'Status'
     
     def verification_status(self, obj):
         """Verification status with icons"""
-        phone = '📱' if obj.phone_verified else '📱❌'
-        email = '📧' if obj.email_verified else '📧❌'
+        phone = '📱✓' if obj.phone_verified else '📱✗'
+        email = '📧✓' if obj.email_verified else '📧✗' if obj.email else '📧-'
         return format_html('{} {}', phone, email)
     verification_status.short_description = 'Verified'
     
@@ -635,8 +696,9 @@ class UserAdmin(BaseUserAdmin):
     
     def action_buttons(self, obj):
         """Quick action buttons"""
-        if obj.role == 'GOVERNMENT':
-            return format_html('-')
+        # Farmers and Government are auto-approved
+        if obj.role in ['FARMER', 'GOVERNMENT']:
+            return format_html('<span style="color: green;">✓ Auto-Approved</span>')
         
         if obj.approval_status == 'PENDING':
             approve_url = reverse('admin:users_user_changelist')
@@ -647,21 +709,22 @@ class UserAdmin(BaseUserAdmin):
                 approve_url, obj.pk
             )
         elif obj.approval_status == 'APPROVED':
-            return format_html(
-                '<span style="color: green;">✓ Active</span>'
-            )
+            return format_html('<span style="color: green;">✓ Active</span>')
         elif obj.approval_status == 'REJECTED':
-            return format_html(
-                '<span style="color: red;">✗ Rejected</span>'
-            )
+            return format_html('<span style="color: red;">✗ Rejected</span>')
+        elif obj.approval_status == 'SUSPENDED':
+            return format_html('<span style="color: gray;">⏸ Suspended</span>')
         return '-'
     action_buttons.short_description = 'Actions'
     
     # Admin Actions
     @admin.action(description='✓ Approve selected users')
     def approve_users(self, request, queryset):
-        """Approve selected pending users"""
-        queryset = queryset.filter(approval_status='PENDING')
+        """Approve selected pending users (excludes farmers/government)"""
+        queryset = queryset.filter(
+            approval_status='PENDING'
+        ).exclude(role__in=['FARMER', 'GOVERNMENT'])
+        
         updated = queryset.update(
             approval_status='APPROVED',
             approved_by=request.user,
@@ -671,8 +734,11 @@ class UserAdmin(BaseUserAdmin):
     
     @admin.action(description='✗ Reject selected users')
     def reject_users(self, request, queryset):
-        """Reject selected pending users"""
-        queryset = queryset.filter(approval_status='PENDING')
+        """Reject selected pending users (excludes farmers/government)"""
+        queryset = queryset.filter(
+            approval_status='PENDING'
+        ).exclude(role__in=['FARMER', 'GOVERNMENT'])
+        
         updated = queryset.update(
             approval_status='REJECTED',
             approved_by=request.user,
@@ -699,7 +765,7 @@ class UserAdmin(BaseUserAdmin):
     @admin.action(description='📧 Verify emails')
     def verify_email(self, request, queryset):
         """Manually verify emails"""
-        updated = queryset.update(email_verified=True)
+        updated = queryset.filter(email__isnull=False).exclude(email='').update(email_verified=True)
         self.message_user(request, f'{updated} email(s) verified.')
     
     @admin.action(description='📊 Export to CSV')
@@ -713,122 +779,261 @@ class UserAdmin(BaseUserAdmin):
         
         writer = csv.writer(response)
         writer.writerow([
-            'Username', 'Email', 'Phone', 'Role', 'Approval Status',
+            'Username', 'Phone', 'Email', 'Role', 'Approval Status',
             'Phone Verified', 'Email Verified', 'Date Joined'
         ])
         
         for user in queryset:
             writer.writerow([
                 user.username,
-                user.email,
                 user.phone_number,
+                user.email or 'N/A',
                 user.get_role_display(),
                 user.get_approval_status_display(),
-                user.phone_verified,
-                user.email_verified,
+                'Yes' if user.phone_verified else 'No',
+                'Yes' if user.email_verified else 'No',
                 user.date_joined.strftime('%Y-%m-%d %H:%M:%S')
             ])
         
         return response
 
 
+
+
 # ============================================================================
-# PROFILE-SPECIFIC ADMINS (Read-Only Views)
+# FARMER PROFILE ADMIN
 # ============================================================================
 
 @admin.register(FarmerProfile)
 class FarmerProfileAdmin(admin.ModelAdmin):
-    """Farmer Profile Admin"""
+    """Farmer Profile Admin - Dedicated view for farmer data"""
     
     list_display = (
         'farmer_id',
         'farmer_name',
+        'phone_number',
         'location_display',
         'land_area',
+        'profile_completion_badge',
         'credit_badge',
         'rating_display',
-        'verification_status'
+        'verification_status',
+        'activity_status'
     )
     
-    list_filter = ('state', 'district', 'aadhaar_verified', 'land_records_uploaded', 'has_storage')
-    search_fields = ('farmer_id', 'user__first_name', 'user__last_name', 'village', 'district', 'state')
+    list_filter = (
+        'state',
+        'district',
+        'profile_completed',
+        'aadhaar_verified',
+        'land_records_uploaded',
+        'is_active_seller',
+        'created_at'
+    )
+    
+    search_fields = (
+        'farmer_id',
+        'user__first_name',
+        'user__last_name',
+        'user__phone_number',
+        'village',
+        'district',
+        'state'
+    )
+    
+    ordering = ('-created_at',)
     
     readonly_fields = (
-        'farmer_id', 'credit_score', 'performance_rating',
-        'total_transactions', 'total_revenue', 'created_at', 'updated_at'
+        'farmer_id',
+        'total_transactions',
+        'total_revenue',
+        'performance_rating',
+        'total_ratings',
+        'credit_score',
+        'profile_completed',
+        'profile_completion_percentage',
+        'last_lot_created_at',
+        'last_transaction_at',
+        'created_at',
+        'updated_at'
     )
     
     fieldsets = (
         ('User Link', {
             'fields': ('user',)
         }),
-        ('Farmer Details', {
-            'fields': ('farmer_id', 'father_husband_name', 'date_of_birth', 'gender')
+        ('Farmer Identification', {
+            'fields': ('farmer_id',)
         }),
-        ('Farm Information', {
+        ('Personal Information', {
             'fields': (
-                'total_land_area', 'crops_grown', 'expected_annual_production',
-                ('has_storage', 'storage_capacity')
+                'father_husband_name',
+                ('date_of_birth', 'gender')
             )
         }),
-        ('Location', {
+        ('Location Details', {
             'fields': (
-                ('village', 'block'),
-                ('district', 'state', 'pincode'),
+                'village',
+                ('district', 'state'),
+                'pincode',
                 ('latitude', 'longitude')
             )
         }),
-        ('Banking', {
+        ('Farm Details', {
+            'fields': (
+                'total_land_area',
+                'primary_crops',
+                'expected_annual_production'
+            )
+        }),
+        ('Banking Information', {
             'fields': (
                 ('bank_account_number', 'ifsc_code'),
                 ('bank_name', 'branch_name'),
+                'account_holder_name',
                 'upi_id'
             )
         }),
-        ('Verification', {
-            'fields': ('land_records_uploaded', 'aadhaar_verified')
-        }),
-        ('Performance', {
+        ('Verification & Documents', {
             'fields': (
-                ('credit_score', 'performance_rating'),
-                ('total_transactions', 'total_revenue')
+                ('aadhaar_verified', 'land_records_uploaded')
+            )
+        }),
+        ('Performance Metrics', {
+            'fields': (
+                ('total_transactions', 'total_revenue'),
+                ('performance_rating', 'total_ratings'),
+                'credit_score'
+            )
+        }),
+        ('Profile Status', {
+            'fields': (
+                ('profile_completed', 'profile_completion_percentage'),
+                'is_active_seller'
+            )
+        }),
+        ('Activity Tracking', {
+            'fields': (
+                'last_lot_created_at',
+                'last_transaction_at',
+                ('created_at', 'updated_at')
             )
         }),
     )
     
+    # Custom Display Methods
     def farmer_name(self, obj):
-        return obj.user.get_full_name()
+        """Display farmer's full name"""
+        return obj.user.get_full_name() or obj.user.username
     farmer_name.short_description = 'Farmer Name'
+    farmer_name.admin_order_field = 'user__first_name'
+    
+    def phone_number(self, obj):
+        """Display phone number"""
+        return obj.user.phone_number
+    phone_number.short_description = 'Phone'
     
     def location_display(self, obj):
-        return f"{obj.village}, {obj.district}, {obj.state}"
+        """Display formatted location"""
+        return obj.location_display
     location_display.short_description = 'Location'
     
     def land_area(self, obj):
+        """Display land area with unit"""
         return f"{obj.total_land_area} acres"
     land_area.short_description = 'Land Area'
+    land_area.admin_order_field = 'total_land_area'
+    
+    def profile_completion_badge(self, obj):
+        """Show profile completion status with progress bar"""
+        percentage = obj.profile_completion_percentage
+        color = 'green' if percentage >= 80 else 'orange' if percentage >= 50 else 'red'
+        
+        return format_html(
+            '<div style="width: 100px; background-color: #f0f0f0; border-radius: 3px;">'
+            '<div style="width: {}%; background-color: {}; color: white; text-align: center; padding: 2px; border-radius: 3px;">{} %</div>'
+            '</div>',
+            percentage,
+            color,
+            percentage
+        )
+    profile_completion_badge.short_description = 'Profile %'
+    profile_completion_badge.admin_order_field = 'profile_completion_percentage'
     
     def credit_badge(self, obj):
-        color = 'green' if obj.credit_score >= 700 else 'orange' if obj.credit_score >= 500 else 'red'
+        """Display credit score with color coding"""
+        score = obj.credit_score
+        if score >= 700:
+            color = '#28a745'  # Green - Excellent
+        elif score >= 600:
+            color = '#ffc107'  # Yellow - Good
+        elif score >= 500:
+            color = '#fd7e14'  # Orange - Fair
+        else:
+            color = '#dc3545'  # Red - Poor
+        
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 3px;">{}</span>',
+            '<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold;">{}</span>',
             color,
-            obj.credit_score
+            score
         )
     credit_badge.short_description = 'Credit Score'
+    credit_badge.admin_order_field = 'credit_score'
     
     def rating_display(self, obj):
-        stars = '⭐' * int(obj.performance_rating)
-        return format_html('{} ({})', stars, obj.performance_rating)
+        """Display star rating"""
+        rating = obj.performance_rating
+        full_stars = int(rating)
+        half_star = 1 if (rating - full_stars) >= 0.5 else 0
+        empty_stars = 5 - full_stars - half_star
+        
+        stars = '⭐' * full_stars
+        if half_star:
+            stars += '½'
+        stars += '☆' * empty_stars
+        
+        return format_html(
+            '{} <small>({:.1f}/5.0 from {} ratings)</small>',
+            stars,
+            rating,
+            obj.total_ratings
+        )
     rating_display.short_description = 'Rating'
+    rating_display.admin_order_field = 'performance_rating'
     
     def verification_status(self, obj):
-        aadhaar = '✓' if obj.aadhaar_verified else '✗'
-        land = '✓' if obj.land_records_uploaded else '✗'
-        return format_html('Aadhaar: {} | Land: {}', aadhaar, land)
-    verification_status.short_description = 'Documents'
-
-
+        """Show verification status"""
+        aadhaar_icon = '✓' if obj.aadhaar_verified else '✗'
+        aadhaar_color = 'green' if obj.aadhaar_verified else 'red'
+        
+        land_icon = '✓' if obj.land_records_uploaded else '✗'
+        land_color = 'green' if obj.land_records_uploaded else 'red'
+        
+        return format_html(
+            '<span style="color: {};">Aadhaar: {}</span><br/>'
+            '<span style="color: {};">Land: {}</span>',
+            aadhaar_color, aadhaar_icon,
+            land_color, land_icon
+        )
+    verification_status.short_description = 'Verification'
+    
+    def activity_status(self, obj):
+        """Show activity status"""
+        if obj.is_active_seller:
+            status = '<span style="color: green;">● Active</span>'
+        else:
+            status = '<span style="color: gray;">○ Inactive</span>'
+        
+        last_activity = obj.last_transaction_at or obj.last_lot_created_at
+        if last_activity:
+            days_ago = (timezone.now() - last_activity).days
+            status += f'<br/><small>Last: {days_ago}d ago</small>'
+        
+        return format_html(status)
+    activity_status.short_description = 'Activity'
+    
+    
+    
 # Replace the performance_display methods in ALL profile admins with simpler individual displays
 
 @admin.register(FPOProfile)

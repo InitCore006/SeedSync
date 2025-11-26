@@ -15,6 +15,39 @@ from django.db.models import Q
 
 User = get_user_model()
 
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
+from django.db.models import Q
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+from .models import FarmerProfile
+
+User = get_user_model()
+
+
+
+# ============================================================================
+# HELPER SERIALIZERS
+# ============================================================================
+
+class PhoneNumberSerializer(serializers.Serializer):
+    """Simple phone number validation"""
+    
+    phone_number = serializers.CharField(required=True, max_length=15)
+    
+    def validate_phone_number(self, value):
+        import re
+        cleaned_number = value.replace('+91', '').replace(' ', '').replace('-', '')
+        
+        if not re.match(r'^[6-9]\d{9}$', cleaned_number):
+            raise serializers.ValidationError(
+                "Invalid phone number. Must be a valid 10-digit Indian mobile number."
+            )
+        
+        return cleaned_number
+
 
 # ============================================================================
 # JWT TOKEN SERIALIZERS
@@ -28,7 +61,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         
         # Check if user can login
         if not self.user.can_login:
-            if self.user.role != 'GOVERNMENT' and not self.user.is_approved:
+            if self.user.role == 'GOVERNMENT':
+                raise serializers.ValidationError({
+                    'detail': 'Your government account is inactive. Please contact admin.',
+                    'approval_status': self.user.approval_status
+                })
+            elif not self.user.is_approved:
                 raise serializers.ValidationError({
                     'detail': 'Your account is pending approval. Please wait for admin verification.',
                     'approval_status': self.user.approval_status
@@ -38,7 +76,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['user'] = {
             'id': str(self.user.id),
             'username': self.user.username,
-            'email': self.user.email,
+            'email': self.user.email or '',
             'full_name': self.user.get_full_name(),
             'role': self.user.role,
             'role_display': self.user.get_role_display(),
@@ -50,12 +88,26 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'profile_picture': self.user.profile_picture.url if self.user.profile_picture else None
         }
         
+        # Add role-specific data for farmers
+        if self.user.role == 'FARMER':
+            try:
+                farmer_profile = self.user.farmer_profile
+                data['user']['farmer_id'] = farmer_profile.farmer_id
+                data['user']['profile_completed'] = farmer_profile.profile_completed
+                data['user']['profile_completion_percentage'] = farmer_profile.profile_completion_percentage
+                data['user']['location'] = farmer_profile.location_display
+            except FarmerProfile.DoesNotExist:
+                data['user']['profile_completed'] = False
+                data['user']['profile_completion_percentage'] = 0
+        
         # Add role-specific dashboard URL
         dashboard_mapping = {
+            'FARMER': '/farmer/dashboard',  # Mobile app home
             'FPO': '/fpo/dashboard',
             'PROCESSOR': '/processor/dashboard',
             'RETAILER': '/retailer/dashboard',
             'LOGISTICS': '/logistics/dashboard',
+            'WAREHOUSE': '/warehouse/dashboard',
             'GOVERNMENT': '/government/dashboard',
         }
         data['redirect_to'] = dashboard_mapping.get(self.user.role, '/')
@@ -68,14 +120,30 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 # ============================================================================
 
 class PasswordChangeSerializer(serializers.Serializer):
-    """Change Password"""
+    """Change Password (for authenticated users)"""
     
-    old_password = serializers.CharField(required=True, style={'input_type': 'password'})
-    new_password = serializers.CharField(required=True, style={'input_type': 'password'})
-    new_password_confirm = serializers.CharField(required=True, style={'input_type': 'password'})
+    old_password = serializers.CharField(
+        required=True, 
+        write_only=True,
+        style={'input_type': 'password'}
+    )
+    new_password = serializers.CharField(
+        required=True,
+        write_only=True,
+        validators=[validate_password],
+        style={'input_type': 'password'}
+    )
+    new_password_confirm = serializers.CharField(
+        required=True,
+        write_only=True,
+        style={'input_type': 'password'}
+    )
     
-    def validate_new_password(self, value):
-        validate_password(value)
+    def validate_old_password(self, value):
+        """Verify old password"""
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Current password is incorrect.")
         return value
     
     def validate(self, attrs):
@@ -87,41 +155,57 @@ class PasswordChangeSerializer(serializers.Serializer):
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
-    """Request Password Reset via Phone/Email"""
+    """Request Password Reset via Phone Number"""
     
-    identifier = serializers.CharField(
+    phone_number = serializers.CharField(
         required=True,
-        help_text="Phone number or Email"
+        help_text="10-digit Indian mobile number"
     )
     
-    def validate_identifier(self, value):
-        # Check if user exists with this phone/email
-        user = User.objects.filter(
-            Q(phone_number=value) | Q(email=value)
-        ).first()
+    def validate_phone_number(self, value):
+        """Validate phone number format and existence"""
+        import re
         
+        # Clean phone number (remove +91 prefix if exists)
+        cleaned_number = value.replace('+91', '').replace(' ', '').replace('-', '')
+        
+        # Validate format
+        if not re.match(r'^[6-9]\d{9}$', cleaned_number):
+            raise serializers.ValidationError(
+                "Invalid phone number. Must be a valid 10-digit Indian mobile number starting with 6-9."
+            )
+        
+        # Check if user exists
+        user = User.objects.filter(phone_number__icontains=cleaned_number).first()
         if not user:
-            raise serializers.ValidationError("No account found with this phone number or email.")
+            raise serializers.ValidationError(
+                "No account found with this phone number."
+            )
         
-        return value
+        return cleaned_number
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
     """Confirm Password Reset with OTP"""
     
-    identifier = serializers.CharField(required=True)
-    otp = serializers.CharField(required=True, max_length=6)
+    phone_number = serializers.CharField(required=True)
+    otp = serializers.CharField(required=True, max_length=6, min_length=6)
     new_password = serializers.CharField(
-        required=True, 
+        required=True,
+        write_only=True,
+        validators=[validate_password],
         style={'input_type': 'password'}
     )
     new_password_confirm = serializers.CharField(
         required=True,
+        write_only=True,
         style={'input_type': 'password'}
     )
     
-    def validate_new_password(self, value):
-        validate_password(value)
+    def validate_otp(self, value):
+        """Validate OTP format"""
+        if not value.isdigit():
+            raise serializers.ValidationError("OTP must contain only digits.")
         return value
     
     def validate(self, attrs):
@@ -139,18 +223,56 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 class SendOTPSerializer(serializers.Serializer):
     """Send OTP to phone number"""
     
-    phone_number = serializers.CharField(required=True)
+    phone_number = serializers.CharField(required=True, max_length=15)
     purpose = serializers.ChoiceField(
-        choices=['REGISTRATION', 'LOGIN', 'PASSWORD_RESET'],
+        choices=[
+            ('REGISTRATION', 'Registration'),
+            ('LOGIN', 'Login'),
+            ('PASSWORD_RESET', 'Password Reset'),
+            ('PHONE_VERIFICATION', 'Phone Verification')
+        ],
         default='REGISTRATION'
     )
+    
+    def validate_phone_number(self, value):
+        """Validate and clean phone number"""
+        import re
+        
+        # Clean phone number
+        cleaned_number = value.replace('+91', '').replace(' ', '').replace('-', '')
+        
+        # Validate format
+        if not re.match(r'^[6-9]\d{9}$', cleaned_number):
+            raise serializers.ValidationError(
+                "Invalid phone number. Must be a valid 10-digit Indian mobile number."
+            )
+        
+        # Check if already registered (only for REGISTRATION purpose)
+        purpose = self.initial_data.get('purpose', 'REGISTRATION')
+        if purpose == 'REGISTRATION':
+            if User.objects.filter(phone_number__icontains=cleaned_number).exists():
+                raise serializers.ValidationError(
+                    "This phone number is already registered. Please login instead."
+                )
+        
+        return cleaned_number
 
 
 class VerifyOTPSerializer(serializers.Serializer):
     """Verify OTP"""
     
-    phone_number = serializers.CharField(required=True)
-    otp = serializers.CharField(required=True, max_length=6)
+    phone_number = serializers.CharField(required=True, max_length=15)
+    otp = serializers.CharField(required=True, max_length=6, min_length=6)
+    
+    def validate_phone_number(self, value):
+        """Clean phone number"""
+        return value.replace('+91', '').replace(' ', '').replace('-', '')
+    
+    def validate_otp(self, value):
+        """Validate OTP format"""
+        if not value.isdigit():
+            raise serializers.ValidationError("OTP must contain only digits.")
+        return value
 
 
 # ============================================================================
@@ -158,207 +280,232 @@ class VerifyOTPSerializer(serializers.Serializer):
 # ============================================================================
 
 class UserSerializer(serializers.ModelSerializer):
-    """General User Serializer"""
+    """General User Serializer (Read-Only)"""
     
-    profile_complete = serializers.SerializerMethodField()
-    profile_type = serializers.SerializerMethodField()
-    full_name = serializers.SerializerMethodField()
+    full_name = serializers.CharField(source='get_full_name', read_only=True)
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
     
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'full_name',
-            'phone_number', 'role', 'approval_status', 'is_approved',
+            'phone_number', 'role', 'role_display', 'approval_status', 'is_approved',
             'phone_verified', 'email_verified', 'preferred_language',
             'profile_picture', 'is_active', 'date_joined', 'last_login',
-            'login_count', 'profile_complete', 'profile_type'
+            'login_count'
         ]
         read_only_fields = [
-            'id', 'date_joined', 'last_login', 'login_count',
-            'approval_status', 'is_approved'
+            'id', 'username', 'date_joined', 'last_login', 'login_count',
+            'approval_status', 'is_approved', 'phone_verified', 'email_verified'
         ]
-    
-    def get_full_name(self, obj):
-        return obj.get_full_name()
-    
-    def get_profile_complete(self, obj):
-        profile_mapping = {
-            'FARMER': 'farmer_profile',
-            'FPO': 'fpo_profile',
-            'PROCESSOR': 'processor_profile',
-            'RETAILER': 'retailer_profile',
-            'LOGISTICS': 'logistics_profile',
-            'GOVERNMENT': 'government_profile',
-        }
-        profile_attr = profile_mapping.get(obj.role)
-        return hasattr(obj, profile_attr) if profile_attr else False
-    
-    def get_profile_type(self, obj):
-        return obj.get_role_display()
 
 
-class UserRegistrationSerializer(serializers.ModelSerializer):
-    """Base User Registration (Step 1 for all roles)"""
-    
-    password = serializers.CharField(
-        write_only=True, 
-        required=True, 
-        validators=[validate_password],
-        style={'input_type': 'password'}
-    )
-    password_confirm = serializers.CharField(
-        write_only=True, 
-        required=True,
-        style={'input_type': 'password'}
-    )
+class UserUpdateSerializer(serializers.ModelSerializer):
+    """Update User Basic Info"""
     
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'password', 'password_confirm',
-            'first_name', 'last_name', 'phone_number', 'role',
-            'preferred_language', 'aadhaar_number', 'pan_number'
+            'first_name', 'last_name', 'email', 'preferred_language',
+            'profile_picture'
         ]
         extra_kwargs = {
-            'email': {'required': True},
-            'phone_number': {'required': True},
-            'first_name': {'required': True},
-            'last_name': {'required': True},
+            'email': {'required': False}
         }
     
-    def validate_phone_number(self, value):
-        if User.objects.filter(phone_number=value).exists():
-            raise serializers.ValidationError("This phone number is already registered.")
-        return value
-    
     def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
+        """Check if email is already taken by another user"""
+        user = self.context['request'].user
+        if value and User.objects.exclude(id=user.id).filter(email=value).exists():
             raise serializers.ValidationError("This email is already registered.")
         return value
-    
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password_confirm']:
-            raise serializers.ValidationError({
-                "password": "Password fields didn't match."
-            })
-        
-        # Government users cannot self-register
-        if attrs.get('role') == 'GOVERNMENT':
-            raise serializers.ValidationError({
-                "role": "Government officials cannot self-register. Please contact admin."
-            })
-        
-        return attrs
-    
-    def create(self, validated_data):
-        validated_data.pop('password_confirm')
-        password = validated_data.pop('password')
-        
-        # Auto-generate username if not provided
-        if not validated_data.get('username'):
-            validated_data['username'] = validated_data['email'].split('@')[0]
-        
-        user = User(**validated_data)
-        user.set_password(password)
-        user.save()
-        
-        return user
 
 
 # ============================================================================
-# FARMER REGISTRATION SERIALIZERS (Mobile App)
+# FARMER REGISTRATION SERIALIZERS (Mobile App - 3 Steps)
 # ============================================================================
 
-class FarmerRegistrationStep1Serializer(serializers.Serializer):
-    """Farmer Registration - Step 1: Personal Details"""
+class FarmerRegistrationPhoneVerifySerializer(serializers.Serializer):
+    """Step 0: Phone Number Verification (OTP sent separately)"""
     
-    first_name = serializers.CharField(max_length=150)
-    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
-    father_husband_name = serializers.CharField(max_length=200)
-    date_of_birth = serializers.DateField()
-    gender = serializers.ChoiceField(choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')])
-    phone_number = serializers.CharField(max_length=15)
+    phone_number = serializers.CharField(required=True, max_length=15)
+    otp = serializers.CharField(required=True, max_length=6, min_length=6)
     
     def validate_phone_number(self, value):
-        """Validate phone number format"""
+        """Validate and clean phone number"""
         import re
-        if not re.match(r'^[6-9]\d{9}$', value):
+        
+        cleaned_number = value.replace('+91', '').replace(' ', '').replace('-', '')
+        
+        if not re.match(r'^[6-9]\d{9}$', cleaned_number):
             raise serializers.ValidationError(
                 "Invalid phone number. Must be a valid 10-digit Indian mobile number."
             )
         
-        # Check if already registered
-        if User.objects.filter(phone_number=value).exists():
-            raise serializers.ValidationError("This phone number is already registered.")
+        if User.objects.filter(phone_number__icontains=cleaned_number).exists():
+            raise serializers.ValidationError(
+                "This phone number is already registered."
+            )
         
+        return cleaned_number
+
+
+class FarmerRegistrationStep1Serializer(serializers.Serializer):
+    """
+    Farmer Registration - Step 1: Personal Details
+    (After OTP verification)
+    """
+    
+    phone_number = serializers.CharField(required=True, max_length=15)
+    first_name = serializers.CharField(required=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    father_husband_name = serializers.CharField(required=True, max_length=200)
+    date_of_birth = serializers.DateField(required=False, allow_null=True)
+    gender = serializers.ChoiceField(
+        required=True,
+        choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')]
+    )
+    email = serializers.EmailField(required=False, allow_blank=True)
+    
+    def validate_phone_number(self, value):
+        """Phone should already be verified"""
+        cleaned_number = value.replace('+91', '').replace(' ', '').replace('-', '')
+        
+        # Check if phone is already registered
+        if User.objects.filter(phone_number__icontains=cleaned_number).exists():
+            raise serializers.ValidationError(
+                "This phone number is already registered."
+            )
+        
+        return cleaned_number
+    
+    def validate_email(self, value):
+        """Check if email exists (optional field)"""
+        if value and User.objects.filter(email=value).exists():
+            raise serializers.ValidationError(
+                "This email is already registered."
+            )
         return value
 
 
 class FarmerRegistrationStep2Serializer(serializers.Serializer):
-    """Farmer Registration - Step 2: Farm & Location Details"""
+    """
+    Farmer Registration - Step 2: Location & Farm Details
+    """
     
-    total_land_area = serializers.DecimalField(max_digits=10, decimal_places=2)
-    village = serializers.CharField(max_length=100)
-    block = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    district = serializers.CharField(max_length=100)
-    state = serializers.CharField(max_length=100)
-    pincode = serializers.CharField(max_length=6)
-    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
-    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
-    crops_grown = serializers.ListField(
-        child=serializers.CharField(),
-        help_text="List of oilseed crops grown"
-    )
-    expected_annual_production = serializers.DecimalField(max_digits=10, decimal_places=2)
-    has_storage = serializers.BooleanField(default=False)
-    storage_capacity = serializers.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
+    # Location
+    village = serializers.CharField(required=True, max_length=100)
+    district = serializers.CharField(required=True, max_length=100)
+    state = serializers.CharField(required=True, max_length=100)
+    pincode = serializers.CharField(required=True, max_length=6)
+    
+    # GPS Coordinates (auto-captured from mobile)
+    latitude = serializers.DecimalField(
         required=False,
-        default=0
+        allow_null=True,
+        max_digits=9,
+        decimal_places=6
     )
+    longitude = serializers.DecimalField(
+        required=False,
+        allow_null=True,
+        max_digits=9,
+        decimal_places=6
+    )
+    
+    # Farm Details
+    total_land_area = serializers.DecimalField(
+        required=True,
+        max_digits=10,
+        decimal_places=2,
+        min_value=0.1
+    )
+    primary_crops = serializers.ListField(
+        child=serializers.CharField(),
+        required=True,
+        min_length=1,
+        help_text="List of oilseed crops: ['Groundnut', 'Mustard', 'Sesame']"
+    )
+    expected_annual_production = serializers.DecimalField(
+        required=True,
+        max_digits=10,
+        decimal_places=2,
+        min_value=0,
+        help_text="Expected yearly production in quintals"
+    )
+    
+    def validate_pincode(self, value):
+        """Validate PIN code format"""
+        import re
+        if not re.match(r'^\d{6}$', value):
+            raise serializers.ValidationError(
+                "Invalid PIN code. Must be exactly 6 digits."
+            )
+        return value
 
 
 class FarmerRegistrationStep3Serializer(serializers.Serializer):
-    """Farmer Registration - Step 3: Banking & Documents"""
+    """
+    Farmer Registration - Step 3: Bank Details & Password
+    (Optional bank details, but password required)
+    """
     
-    bank_account_number = serializers.CharField(max_length=20)
-    ifsc_code = serializers.CharField(max_length=11)
-    bank_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    branch_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    upi_id = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    # Bank Details (Optional but recommended)
+    bank_account_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=20
+    )
+    ifsc_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=11
+    )
+    bank_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=100
+    )
+    branch_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=100
+    )
+    account_holder_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=200
+    )
     
-    # Optional: Aadhaar for eKYC (encrypted)
-    aadhaar_number = serializers.CharField(max_length=12, required=False, allow_blank=True)
+    # UPI (Alternative to bank account)
+    upi_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=100
+    )
     
-    # Password for app login
+    # Password (Required for login)
     password = serializers.CharField(
+        required=True,
         write_only=True,
         validators=[validate_password],
         style={'input_type': 'password'}
     )
     password_confirm = serializers.CharField(
+        required=True,
         write_only=True,
         style={'input_type': 'password'}
     )
     
     def validate_ifsc_code(self, value):
         """Validate IFSC code format"""
-        import re
-        if not re.match(r'^[A-Z]{4}0[A-Z0-9]{6}$', value):
-            raise serializers.ValidationError(
-                "Invalid IFSC code format. Example: SBIN0001234"
-            )
-        return value
-    
-    def validate_aadhaar_number(self, value):
-        """Validate Aadhaar number format"""
         if value:
             import re
-            if not re.match(r'^\d{12}$', value):
+            if not re.match(r'^[A-Z]{4}0[A-Z0-9]{6}$', value.upper()):
                 raise serializers.ValidationError(
-                    "Invalid Aadhaar number. Must be 12 digits."
+                    "Invalid IFSC code format. Example: SBIN0001234"
                 )
+            return value.upper()
         return value
     
     def validate_upi_id(self, value):
@@ -367,57 +514,241 @@ class FarmerRegistrationStep3Serializer(serializers.Serializer):
             import re
             if not re.match(r'^[\w.-]+@[\w.-]+$', value):
                 raise serializers.ValidationError(
-                    "Invalid UPI ID format. Example: farmer@paytm"
+                    "Invalid UPI ID format. Example: farmer@paytm or 9999999999@upi"
                 )
         return value
     
     def validate(self, attrs):
+        """Cross-field validation"""
+        
+        # Password match check
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({
-                "password": "Password fields didn't match."
+                'password_confirm': "Password fields didn't match."
             })
+        
+        # Either bank account or UPI should be provided
+        has_bank = attrs.get('bank_account_number') and attrs.get('ifsc_code')
+        has_upi = attrs.get('upi_id')
+        
+        if not (has_bank or has_upi):
+            raise serializers.ValidationError(
+                "Please provide either bank account details (Account Number + IFSC) or UPI ID for receiving payments."
+            )
+        
         return attrs
 
 
+# ============================================================================
+# FARMER PROFILE SERIALIZERS
+# ============================================================================
+
 class FarmerProfileSerializer(serializers.ModelSerializer):
-    """Farmer Profile with nested user data"""
+    """
+    Complete Farmer Profile Serializer
+    Used for: Profile View, Profile Update
+    """
     
-    user = UserSerializer(read_only=True)
+    # Nested user data (read-only)
+    user_details = UserSerializer(source='user', read_only=True)
+    
+    # Computed fields
+    location_display = serializers.CharField(read_only=True)
+    bank_details_added = serializers.BooleanField(read_only=True)
+    can_create_lot = serializers.BooleanField(read_only=True)
+    can_receive_payment = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = FarmerProfile
-        fields = '__all__'
-        read_only_fields = [
-            'id', 'farmer_id', 'credit_score', 
-            'performance_rating', 'total_transactions', 'total_revenue',
-            'created_at', 'updated_at'
+        fields = [
+            'id',
+            'user',
+            'user_details',
+            'farmer_id',
+            
+            # Personal Details
+            'father_husband_name',
+            'date_of_birth',
+            'gender',
+            
+            # Location
+            'village',
+            'district',
+            'state',
+            'pincode',
+            'latitude',
+            'longitude',
+            'location_display',
+            
+            # Farm Details
+            'total_land_area',
+            'primary_crops',
+            'expected_annual_production',
+            
+            # Bank Details
+            'bank_account_number',
+            'ifsc_code',
+            'bank_name',
+            'branch_name',
+            'account_holder_name',
+            'upi_id',
+            'bank_details_added',
+            
+            # Verification
+            'aadhaar_verified',
+            'land_records_uploaded',
+            
+            # Performance Metrics (read-only)
+            'total_transactions',
+            'total_revenue',
+            'performance_rating',
+            'total_ratings',
+            'credit_score',
+            
+            # Profile Status
+            'profile_completed',
+            'profile_completion_percentage',
+            'can_create_lot',
+            'can_receive_payment',
+            
+            # Activity
+            'last_lot_created_at',
+            'last_transaction_at',
+            'is_active_seller',
+            
+            # Timestamps
+            'created_at',
+            'updated_at',
         ]
+        read_only_fields = [
+            'id',
+            'farmer_id',
+            'total_transactions',
+            'total_revenue',
+            'performance_rating',
+            'total_ratings',
+            'credit_score',
+            'profile_completed',
+            'profile_completion_percentage',
+            'last_lot_created_at',
+            'last_transaction_at',
+            'aadhaar_verified',
+            'land_records_uploaded',
+            'created_at',
+            'updated_at',
+        ]
+
+
+class FarmerProfileUpdateSerializer(serializers.ModelSerializer):
+    """
+    Update Farmer Profile (Editable Fields Only)
+    """
     
-    def create(self, validated_data):
-        # Auto-generate farmer_id
-        import uuid
-        validated_data['farmer_id'] = f"FR-{uuid.uuid4().hex[:8].upper()}"
-        return super().create(validated_data)
+    class Meta:
+        model = FarmerProfile
+        fields = [
+            # Personal
+            'father_husband_name',
+            'date_of_birth',
+            'gender',
+            
+            # Location (can update if moved)
+            'village',
+            'district',
+            'state',
+            'pincode',
+            'latitude',
+            'longitude',
+            
+            # Farm
+            'total_land_area',
+            'primary_crops',
+            'expected_annual_production',
+            
+            # Bank (can update)
+            'bank_account_number',
+            'ifsc_code',
+            'bank_name',
+            'branch_name',
+            'account_holder_name',
+            'upi_id',
+        ]
 
 
 class FarmerProfileListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for list views"""
+    """
+    Lightweight Farmer Profile for List Views
+    Used in: Admin Dashboard, Search Results
+    """
     
     farmer_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    phone_number = serializers.CharField(source='user.phone_number', read_only=True)
     location = serializers.SerializerMethodField()
     
     class Meta:
         model = FarmerProfile
         fields = [
-            'id', 'farmer_id', 'farmer_name', 'location',
-            'total_land_area', 'credit_score', 'performance_rating'
+            'id',
+            'farmer_id',
+            'farmer_name',
+            'phone_number',
+            'location',
+            'total_land_area',
+            'primary_crops',
+            'performance_rating',
+            'total_transactions',
+            'is_active_seller',
+            'created_at',
         ]
     
     def get_location(self, obj):
-        return f"{obj.village}, {obj.district}, {obj.state}"
+        return obj.location_display
 
 
-
+class FarmerDashboardSerializer(serializers.ModelSerializer):
+    """
+    Farmer Dashboard Summary
+    Used in: Mobile App Dashboard
+    """
+    
+    user = UserSerializer(read_only=True)
+    
+    # Stats (these will come from related models)
+    active_lots_count = serializers.SerializerMethodField()
+    pending_bids_count = serializers.SerializerMethodField()
+    this_month_revenue = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = FarmerProfile
+        fields = [
+            'farmer_id',
+            'user',
+            'location_display',
+            'profile_completion_percentage',
+            'performance_rating',
+            'total_transactions',
+            'total_revenue',
+            'active_lots_count',
+            'pending_bids_count',
+            'this_month_revenue',
+            'can_create_lot',
+            'can_receive_payment',
+        ]
+    
+    def get_active_lots_count(self, obj):
+        """Get count of active lots (from procurement app)"""
+        # TODO: Import after procurement models are ready
+        return 0
+    
+    def get_pending_bids_count(self, obj):
+        """Get count of pending bids (from procurement app)"""
+        # TODO: Import after procurement models are ready
+        return 0
+    
+    def get_this_month_revenue(self, obj):
+        """Calculate this month's revenue"""
+        # TODO: Calculate from transactions
+        return 0.00
 
 # ============================================================================
 # FPO REGISTRATION SERIALIZERS
@@ -861,28 +1192,3 @@ class PendingApprovalSerializer(serializers.Serializer):
     gstin = serializers.CharField(required=False)
     location = serializers.CharField(required=False)
 
-
-# ============================================================================
-# COMPLETE USER PROFILE SERIALIZER
-# ============================================================================
-
-class UserProfileSerializer(serializers.ModelSerializer):
-    """Complete user profile with role-specific data"""
-    
-    farmer_profile = FarmerProfileSerializer(read_only=True)
-    fpo_profile = FPOProfileSerializer(read_only=True)
-    processor_profile = ProcessorProfileSerializer(read_only=True)
-    retailer_profile = RetailerProfileSerializer(read_only=True)
-    logistics_profile = LogisticsProfileSerializer(read_only=True)
-    government_profile = GovernmentProfileSerializer(read_only=True)
-    
-    class Meta:
-        model = User
-        fields = [
-            'id', 'username', 'email', 'first_name', 'last_name',
-            'phone_number', 'role', 'approval_status', 'is_approved',
-            'phone_verified', 'email_verified', 'preferred_language',
-            'profile_picture', 'farmer_profile', 'fpo_profile',
-            'processor_profile', 'retailer_profile', 'logistics_profile',
-            'government_profile'
-        ]
