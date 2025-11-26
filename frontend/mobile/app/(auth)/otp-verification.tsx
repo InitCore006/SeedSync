@@ -7,13 +7,11 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/common/Button';
-import { useRegistrationStore } from '@/store/registrationStore';
 import { colors } from '@lib/constants/colors';
 import { typography } from '@lib/constants/typography';
 import { spacing, borderRadius } from '@lib/constants/spacing';
@@ -24,18 +22,10 @@ export default function OTPVerificationScreen() {
   const router = useRouter();
   const { phoneNumber } = useLocalSearchParams<{ phoneNumber: string }>();
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [isLoading, setIsLoading] = useState(false);
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
-  
-  const { verifyOTP, verifyPhone, isLoading, simulatedOTP, clearError } = useRegistrationStore();
-
-  // Show simulated OTP in development
-  useEffect(() => {
-    if (__DEV__ && simulatedOTP) {
-      Alert.alert('Simulated OTP', `Your OTP is: ${simulatedOTP}`);
-    }
-  }, [simulatedOTP]);
 
   // Timer countdown
   useEffect(() => {
@@ -72,41 +62,40 @@ export default function OTPVerificationScreen() {
   };
 
   const handleVerify = async (otpCode: string) => {
-    clearError();
-    
+    setIsLoading(true);
     try {
-      await verifyOTP({
-        phone_number: phoneNumber!,
-        otp: otpCode,
-      });
+      // Simulate OTP verification
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      // Navigate to first step of registration
+      // Navigate to registration
       router.push('/(auth)/register');
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Invalid OTP. Please try again.');
+    } catch (error) {
+      console.error('OTP verification error:', error);
       // Reset OTP on error
       setOtp(Array(OTP_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleResend = async () => {
     if (!canResend) return;
 
-    clearError();
-    
+    setIsLoading(true);
     try {
-      await verifyPhone({ phone_number: phoneNumber! });
+      // Simulate resend OTP
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Reset timer
       setTimer(30);
       setCanResend(false);
       setOtp(Array(OTP_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
-      
-      Alert.alert('Success', 'OTP sent successfully!');
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to resend OTP.');
+    } catch (error) {
+      console.error('Resend OTP error:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 

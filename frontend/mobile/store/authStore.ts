@@ -1,36 +1,48 @@
 import { create } from 'zustand';
-import { authService, tokenManager } from '@/services/api/auth.service';
-import type { LoginRequest, LoginResponse } from '@/services/api/auth.service';
+import { User } from '@/types/auth.types';
+import { authService } from '@/services/auth.service';
+import { setTokens, clearTokens } from '@lib/api/client';
+import { userStorage } from '@lib/utils/storage';
 
-export interface AuthState {
+interface AuthState {
   // State
-  user: LoginResponse['user'] | null;
+  user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
 
   // Actions
-  login: (credentials: LoginRequest) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
   clearError: () => void;
-  setUser: (user: LoginResponse['user']) => void;
+  updateUser: (user: Partial<User>) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  // Initial State
+export const useAuthStore = create<AuthState>((set, get) => ({
+  // ============================================================================
+  // INITIAL STATE
+  // ============================================================================
   user: null,
   isAuthenticated: false,
   isLoading: false,
   error: null,
 
-  // Login
-  login: async (credentials: LoginRequest) => {
+  // ============================================================================
+  // LOGIN
+  // ============================================================================
+  login: async (username: string, password: string) => {
+    set({ isLoading: true, error: null });
+
     try {
-      set({ isLoading: true, error: null });
-      
-      const response = await authService.login(credentials);
-      
+      const response = await authService.login({ username, password });
+
+      // Save tokens
+      await setTokens(response.access, response.refresh);
+
+      // Save user data
+      await userStorage.saveUser(response.user);
+
       set({
         user: response.user,
         isAuthenticated: true,
@@ -38,38 +50,39 @@ export const useAuthStore = create<AuthState>((set) => ({
         error: null,
       });
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || 
-                          error.response?.data?.message || 
-                          'Login failed. Please check your credentials.';
-      
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        'Login failed. Please check your credentials.';
+
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         error: errorMessage,
       });
-      
+
       throw error;
     }
   },
 
-  // Logout
+  // ============================================================================
+  // LOGOUT
+  // ============================================================================
   logout: async () => {
+    set({ isLoading: true });
+
     try {
-      set({ isLoading: true });
-      
+      // Call logout API
       await authService.logout();
-      
-      set({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: null,
-      });
     } catch (error) {
-      console.error('Logout error:', error);
-      
-      // Clear local state even if API call fails
+      console.error('Logout API error:', error);
+      // Continue with local logout even if API fails
+    } finally {
+      // Clear tokens and user data
+      await clearTokens();
+      await userStorage.clearUser();
+
       set({
         user: null,
         isAuthenticated: false,
@@ -79,52 +92,72 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  // Load user from storage on app start
+  // ============================================================================
+  // LOAD USER (On App Start)
+  // ============================================================================
   loadUser: async () => {
+    set({ isLoading: true });
+
     try {
-      set({ isLoading: true });
-      
-      const user = await tokenManager.getUser();
-      const accessToken = await tokenManager.getAccessToken();
-      
-      if (user && accessToken) {
+      // Try to get user from storage
+      const storedUser = await userStorage.getUser();
+
+      if (storedUser) {
+        // Verify with backend
+        const user = await authService.getProfile();
+
+        // Update stored user if different
+        if (JSON.stringify(user) !== JSON.stringify(storedUser)) {
+          await userStorage.saveUser(user);
+        }
+
         set({
           user,
           isAuthenticated: true,
           isLoading: false,
-          error: null,
         });
       } else {
         set({
           user: null,
           isAuthenticated: false,
           isLoading: false,
-          error: null,
         });
       }
     } catch (error) {
       console.error('Load user error:', error);
-      
+
+      // Clear invalid session
+      await clearTokens();
+      await userStorage.clearUser();
+
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
-        error: null,
       });
     }
   },
 
-  // Clear error
-  clearError: () => {
-    set({ error: null });
+  // ============================================================================
+  // UPDATE USER
+  // ============================================================================
+  updateUser: (updatedUser: Partial<User>) => {
+    const currentUser = get().user;
+
+    if (currentUser) {
+      const newUser = { ...currentUser, ...updatedUser };
+
+      // Update storage
+      userStorage.saveUser(newUser);
+
+      set({ user: newUser });
+    }
   },
 
-  // Set user (for registration flow)
-  setUser: (user: LoginResponse['user']) => {
-    set({
-      user,
-      isAuthenticated: true,
-      error: null,
-    });
+  // ============================================================================
+  // CLEAR ERROR
+  // ============================================================================
+  clearError: () => {
+    set({ error: null });
   },
 }));

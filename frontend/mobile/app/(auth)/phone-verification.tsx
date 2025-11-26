@@ -7,7 +7,6 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,7 +16,6 @@ import { z } from 'zod';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
-import { useRegistrationStore } from '@/store/registrationStore';
 import { colors } from '@lib/constants/colors';
 import { typography } from '@lib/constants/typography';
 import { spacing } from '@lib/constants/spacing';
@@ -34,7 +32,7 @@ type PhoneFormData = z.infer<typeof phoneSchema>;
 
 export default function PhoneVerificationScreen() {
   const router = useRouter();
-  const { verifyPhone, isLoading, clearError } = useRegistrationStore();
+  const [isLoading, setIsLoading] = React.useState(false);
 
   const {
     control,
@@ -47,45 +45,23 @@ export default function PhoneVerificationScreen() {
     },
   });
 
- const onSubmit = async (data: PhoneFormData) => {
-  clearError();
-  
-  try {
-    // 🔥 SIMULATED OTP FOR DEVELOPMENT - Remove in production
-    const simulatedOTP = '123456';
-    
-    // Show simulated OTP to user
-    Alert.alert(
-      '📱 OTP Sent (Simulated)',
-      `Your verification code is: ${simulatedOTP}\n\nFor testing purposes, the OTP is shown here. In production, it will be sent via SMS.`,
-      [
-        {
-          text: 'OK, Continue',
-          onPress: () => {
-            // Navigate to OTP verification with simulated OTP
-            router.push({
-              pathname: '/(auth)/otp-verification',
-              params: { 
-                phoneNumber: data.phoneNumber,
-                simulatedOTP: simulatedOTP, // Pass simulated OTP for testing
-              },
-            });
-          },
-        },
-      ]
-    );
-
-    // Still call the backend API for consistency (it will generate OTP on server)
-    // but we're using simulated one for testing
-    await verifyPhone({ phone_number: data.phoneNumber });
-    
-  } catch (error: any) {
-    Alert.alert(
-      'Error', 
-      error.response?.data?.detail || 'Failed to send OTP. Please try again.'
-    );
-  }
-};
+  const onSubmit = async (data: PhoneFormData) => {
+    setIsLoading(true);
+    try {
+      // Simulate API call to send OTP
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      
+      // Navigate to OTP verification with phone number
+      router.push({
+        pathname: '/(auth)/otp-verification',
+        params: { phoneNumber: data.phoneNumber },
+      });
+    } catch (error) {
+      console.error('Send OTP error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -117,7 +93,7 @@ export default function PhoneVerificationScreen() {
           {/* Title & Description */}
           <Text style={styles.title}>Enter Phone Number</Text>
           <Text style={styles.description}>
-            We ll send you a verification code to confirm your phone number
+            We'll send you a verification code to confirm your phone number
           </Text>
 
           {/* Form */}

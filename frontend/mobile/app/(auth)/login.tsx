@@ -44,9 +44,8 @@ export default function LoginScreen() {
     clearError();
 
     try {
-      await login({ username: data.username, password: data.password });
-      // Navigation handled by index.tsx - user is logged in
-      router.replace('/(farmer)');
+      await login(data.username, data.password);
+      // Navigation handled by index.tsx
     } catch (err: any) {
       Alert.alert('Login Failed', err.response?.data?.detail || 'Invalid credentials');
     } finally {
