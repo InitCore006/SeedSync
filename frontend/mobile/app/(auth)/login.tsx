@@ -3,208 +3,344 @@ import {
   View,
   Text,
   StyleSheet,
+  TextInput,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/authStore';
-import { loginSchema } from '@lib/schemas/auth.schema';
-import { Input } from '@/components/common/Input';
-import { Button } from '@/components/common/Button';
-import { colors } from '@lib/constants/colors';
-import { typography } from '@lib/constants/typography';
-import { spacing } from '@lib/constants/spacing';
-
-interface LoginFormData {
-  username: string;
-  password: string;
-}
+import { validatePhone } from '@/lib/utils/validation';
+import { cleanPhoneNumber } from '@/lib/utils/validation';
 
 export default function LoginScreen() {
-  const router = useRouter();
-  const { login, error, clearError } = useAuthStore();
-  const [loading, setLoading] = useState(false);
+  const { login, isLoading, error, clearError } = useAuthStore();
 
-  const {
-    control,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-  });
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState<{ phone?: string; password?: string }>({});
 
-  const onSubmit = async (data: LoginFormData) => {
-    setLoading(true);
+  const validateForm = (): boolean => {
+    const newErrors: { phone?: string; password?: string } = {};
+
+    // Validate phone
+    const cleaned = cleanPhoneNumber(phoneNumber);
+    if (!cleaned) {
+      newErrors.phone = 'Phone number is required';
+    } else if (!validatePhone(cleaned)) {
+      newErrors.phone = 'Invalid phone number. Enter 10 digits starting with 6-9';
+    }
+
+    // Validate password
+    if (!password) {
+      newErrors.password = 'Password is required';
+    } else if (password.length < 6) {
+      newErrors.password = 'Password is too short';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleLogin = async () => {
     clearError();
 
+    if (!validateForm()) {
+      return;
+    }
+
     try {
-      await login(data.username, data.password);
-      // Navigation handled by index.tsx
+      const cleaned = cleanPhoneNumber(phoneNumber);
+      await login(cleaned, password);
+      // Navigation handled in store
     } catch (err: any) {
-      Alert.alert('Login Failed', err.response?.data?.detail || 'Invalid credentials');
-    } finally {
-      setLoading(false);
+      Alert.alert(
+        'Login Failed',
+        err.response?.data?.detail || 'Invalid credentials. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
+  const handleForgotPassword = () => {
+    router.push('/(auth)/forgot-password');
+  };
+
+  const handleRegister = () => {
+    router.push('/(auth)/registration/verify-phone');
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar style="dark" />
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Logo */}
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('@/assets/images/logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text style={styles.appName}>SeedSync</Text>
-            <Text style={styles.tagline}>Empowering Farmers with Technology</Text>
-          </View>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Welcome Back!</Text>
+          <Text style={styles.subtitle}>
+            Login to continue selling your produce
+          </Text>
+        </View>
 
-          {/* Form */}
-          <View style={styles.formContainer}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Login to your account</Text>
-
-            <Controller
-              control={control}
-              name="username"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Username or Phone"
-                  placeholder="Enter your username or phone number"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={errors.username?.message}
-                  leftIcon="person-outline"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              )}
-            />
-
-            <Controller
-              control={control}
-              name="password"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Password"
-                  placeholder="Enter your password"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={errors.password?.message}
-                  leftIcon="lock-closed-outline"
-                  secureTextEntry
-                />
-              )}
-            />
-
-            <Button
-              title="Login"
-              onPress={handleSubmit(onSubmit)}
-              loading={loading}
-              fullWidth
-            />
-
-            {/* Register Link */}
-            <View style={styles.registerContainer}>
-              <Text style={styles.registerText}>Don't have an account? </Text>
-              <Button
-                title="Register as Farmer"
-                variant="text"
-                onPress={() => router.push('/(auth)/phone-verification')}
+        {/* Form */}
+        <View style={styles.form}>
+          {/* Phone Number */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Phone Number</Text>
+            <View style={[styles.inputContainer, errors.phone && styles.inputError]}>
+              <Text style={styles.prefix}>+91</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="9876543210"
+                keyboardType="phone-pad"
+                maxLength={10}
+                value={phoneNumber}
+                onChangeText={(text) => {
+                  setPhoneNumber(text);
+                  setErrors((prev) => ({ ...prev, phone: undefined }));
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
             </View>
+            {errors.phone && (
+              <Text style={styles.errorText}>{errors.phone}</Text>
+            )}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+          {/* Password */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Password</Text>
+            <View style={[styles.inputContainer, errors.password && styles.inputError]}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="Enter your password"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setErrors((prev) => ({ ...prev, password: undefined }));
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off' : 'eye'}
+                  size={22}
+                  color="#6b7280"
+                />
+              </TouchableOpacity>
+            </View>
+            {errors.password && (
+              <Text style={styles.errorText}>{errors.password}</Text>
+            )}
+          </View>
+
+          {/* Forgot Password */}
+          <TouchableOpacity
+            onPress={handleForgotPassword}
+            style={styles.forgotPassword}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+          </TouchableOpacity>
+
+          {/* Login Button */}
+          <TouchableOpacity
+            style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+            onPress={handleLogin}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.loginButtonText}>Login</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Register Link */}
+          <View style={styles.registerContainer}>
+            <Text style={styles.registerText}>Dont have an account? </Text>
+            <TouchableOpacity onPress={handleRegister}>
+              <Text style={styles.registerLink}>Register as Farmer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            By logging in, you agree to our{' '}
+            <Text style={styles.link}>Terms & Conditions</Text> and{' '}
+            <Text style={styles.link}>Privacy Policy</Text>
+          </Text>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.default,
+    backgroundColor: '#fff',
   },
-
-  keyboardView: {
-    flex: 1,
-  },
-
   scrollContent: {
     flexGrow: 1,
-    padding: spacing.lg,
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
   },
-
-  logoContainer: {
-    alignItems: 'center',
-    marginTop: spacing['2xl'],
-    marginBottom: spacing['2xl'],
+  header: {
+    marginBottom: 40,
   },
-
-  logo: {
-    width: 120,
-    height: 120,
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 8,
   },
-
-  appName: {
-    fontSize: typography.fontSize['3xl'],
-    fontFamily: typography.fontFamily.bold,
-    color: colors.primary[500],
-    marginTop: spacing.md,
+  subtitle: {
+    fontSize: 16,
+    color: '#6b7280',
   },
-
-  tagline: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.regular,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
-
-  formContainer: {
+  form: {
     flex: 1,
   },
-
-  title: {
-    fontSize: typography.fontSize['2xl'],
-    fontFamily: typography.fontFamily.bold,
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
+  inputGroup: {
+    marginBottom: 20,
   },
-
-  subtitle: {
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.regular,
-    color: colors.text.secondary,
-    marginBottom: spacing.xl,
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
   },
-
-  registerContainer: {
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f9fafb',
   },
-
+  inputError: {
+    borderColor: '#ef4444',
+  },
+  prefix: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  eyeIcon: {
+    padding: 4,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#ef4444',
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: 24,
+  },
+  forgotPasswordText: {
+    color: '#10b981',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  loginButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  loginButtonDisabled: {
+    backgroundColor: '#9ca3af',
+  },
+  loginButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 32,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e5e7eb',
+  },
+  dividerText: {
+    color: '#9ca3af',
+    paddingHorizontal: 16,
+    fontSize: 14,
+  },
+  registerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   registerText: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.regular,
-    color: colors.text.secondary,
+    color: '#6b7280',
+    fontSize: 15,
+  },
+  registerLink: {
+    color: '#10b981',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  footer: {
+    marginTop: 40,
+  },
+  footerText: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#9ca3af',
+    lineHeight: 18,
+  },
+  link: {
+    color: '#10b981',
+    fontWeight: '500',
   },
 });

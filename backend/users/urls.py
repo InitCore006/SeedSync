@@ -23,6 +23,7 @@ from .views import (
     send_otp,
     verify_otp,
     get_dashboard_stats,
+    verify_phone
 )
 
 router = DefaultRouter()
@@ -64,6 +65,8 @@ urlpatterns = [
     # OTP
     path('send-otp/', send_otp, name='send-otp'),
     path('verify-otp/', verify_otp, name='verify-otp'),
+    path('verify-phone/', verify_phone, name='verify-phone'),
+    
     
     # User Profile
     path('profile/', UserProfileView.as_view(), name='user-profile'),

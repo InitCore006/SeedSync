@@ -1,70 +1,27 @@
-import Constants from 'expo-constants';
-
 export const APP_CONFIG = {
-  name: 'SeedSync',
-  version: Constants.expoConfig?.version || '1.0.0',
-  apiBaseUrl: process.env.API_BASE_URL || 'http://127.0.0.1:8000/api',
-  apiTimeout: parseInt(process.env.API_TIMEOUT || '30000', 10),
-  
-  // Feature Flags
-  features: {
-    biometric: process.env.ENABLE_BIOMETRIC === 'true',
-    offlineMode: process.env.ENABLE_OFFLINE_MODE === 'true',
-    gpsTracking: process.env.ENABLE_GPS_TRACKING === 'true',
-  },
-
-  // External Services
-  razorpay: {
-    key: process.env.RAZORPAY_KEY || '',
-  },
-  googleMaps: {
-    apiKey: process.env.GOOGLE_MAPS_API_KEY || '',
-  },
-
-  // App Limits
-  limits: {
-    maxImageSize: 5 * 1024 * 1024, // 5MB
-    maxImages: 5,
-    sessionTimeout: 30 * 60 * 1000, // 30 minutes
-  },
+  // API Configuration
+  apiBaseUrl: 'https://6dd3d902766b.ngrok-free.app/api',
+  apiTimeout: 30000, // 30 seconds
 
   // Storage Keys
   storageKeys: {
-    authToken: '@seedsync:auth_token',
-    refreshToken: '@seedsync:refresh_token',
-    userData: '@seedsync:user_data',
-    language: '@seedsync:language',
-    theme: '@seedsync:theme',
+    authToken: 'auth_token',
+    refreshToken: 'refresh_token',
+    userData: 'user_data',
+    language: 'app_language',
+    theme: 'app_theme',
   },
-} as const;
 
-export const INDIAN_STATES = [
-  'Andhra Pradesh',
-  'Arunachal Pradesh',
-  'Assam',
-  'Bihar',
-  'Chhattisgarh',
-  'Goa',
-  'Gujarat',
-  'Haryana',
-  'Himachal Pradesh',
-  'Jharkhand',
-  'Karnataka',
-  'Kerala',
-  'Madhya Pradesh',
-  'Maharashtra',
-  'Manipur',
-  'Meghalaya',
-  'Mizoram',
-  'Nagaland',
-  'Odisha',
-  'Punjab',
-  'Rajasthan',
-  'Sikkim',
-  'Tamil Nadu',
-  'Telangana',
-  'Tripura',
-  'Uttar Pradesh',
-  'Uttarakhand',
-  'West Bengal',
-] as const;
+  // App Settings
+  defaultLanguage: 'en',
+  supportedLanguages: ['en', 'hi', 'gu', 'mr'],
+  
+  // Validation
+  passwordMinLength: 8,
+  otpLength: 6,
+  phoneNumberLength: 10,
+
+  // Timeouts
+  otpExpirySeconds: 300, // 5 minutes
+  sessionTimeout: 3600, // 1 hour
+} as const;

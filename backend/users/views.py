@@ -26,6 +26,7 @@ from .serializers import (
     FPORegistrationStep2Serializer,
     FPORegistrationStep3Serializer,
     FPORegistrationStep4Serializer,
+    PhoneNumberSerializer,
 )
 from logistics.models import Warehouse, Vehicle
 
@@ -137,18 +138,20 @@ from .serializers import (
     FarmerProfileListSerializer,
     FarmerDashboardSerializer,
 )
-
+from rest_framework import serializers
 User = get_user_model()
 
 
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+from datetime import date, datetime
+from decimal import Decimal
 
 def serialize_for_session(data):
     """
-    Convert all Decimal objects to strings for session storage.
-    Django sessions can't serialize Decimal objects directly.
+    Convert all Decimal and date/datetime objects to strings for session storage.
+    Django sessions can't serialize these objects directly.
     """
     if isinstance(data, dict):
         return {key: serialize_for_session(value) for key, value in data.items()}
@@ -156,34 +159,48 @@ def serialize_for_session(data):
         return [serialize_for_session(item) for item in data]
     elif isinstance(data, Decimal):
         return str(data)
+    elif isinstance(data, (date, datetime)):
+        return data.isoformat()  # Convert date/datetime to ISO string
     return data
 
 
-def deserialize_from_session(data, decimal_fields=None):
+def deserialize_from_session(data, decimal_fields=None, date_fields=None):
     """
-    Convert string Decimals back to Decimal type.
+    Convert string Decimals and dates back to their proper types.
     
     Args:
         data: The data to deserialize
         decimal_fields: List of field names that should be Decimal
+        date_fields: List of field names that should be date
     """
     if decimal_fields is None:
         decimal_fields = []
+    if date_fields is None:
+        date_fields = []
     
     if isinstance(data, dict):
         result = {}
         for key, value in data.items():
+            # Convert Decimal fields
             if key in decimal_fields and value is not None and value != '':
                 try:
                     result[key] = Decimal(str(value))
                 except (ValueError, TypeError):
                     result[key] = value
+            # Convert date fields
+            elif key in date_fields and value is not None and value != '':
+                try:
+                    from datetime import datetime
+                    result[key] = datetime.fromisoformat(value).date()
+                except (ValueError, TypeError):
+                    result[key] = value
             else:
-                result[key] = deserialize_from_session(value, decimal_fields)
+                result[key] = deserialize_from_session(value, decimal_fields, date_fields)
         return result
     elif isinstance(data, list):
-        return [deserialize_from_session(item, decimal_fields) for item in data]
+        return [deserialize_from_session(item, decimal_fields, date_fields) for item in data]
     return data
+
 
 
 def get_client_ip(request):
@@ -201,22 +218,46 @@ def get_client_ip(request):
 # ============================================================================
 
 class CustomTokenObtainPairView(TokenObtainPairView):
-    """Custom JWT Login with approval check"""
+    """Custom JWT Login - Supports username or phone_number"""
     serializer_class = CustomTokenObtainPairSerializer
     
     def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
+        """Handle login request"""
+        serializer = self.get_serializer(data=request.data)
         
-        if response.status_code == 200:
-            # Update login stats
-            username = request.data.get('username')
-            user = User.objects.get(username=username)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except serializers.ValidationError as e:
+            # Return custom error format
+            return Response(
+                e.detail,
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Get validated data (includes tokens and user info)
+        response_data = serializer.validated_data
+        
+        # Update login stats
+        phone_number = request.data.get('phone_number')
+        username = request.data.get('username')
+        
+        # Find user by phone or username
+        try:
+            if phone_number:
+                cleaned_number = phone_number.replace('+91', '').replace(' ', '').replace('-', '').strip()
+                user = User.objects.get(phone_number__icontains=cleaned_number)
+            else:
+                user = User.objects.get(username=username)
+            
+            # Update login metadata
             user.login_count += 1
             user.last_login_ip = get_client_ip(request)
-            user.save(update_fields=['login_count', 'last_login_ip'])
+            user.save(update_fields=['login_count', 'last_login_ip', 'last_login'])
+            
+        except User.DoesNotExist:
+            pass  # User should exist if we got this far
         
-        return response
-
+        return Response(response_data, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -360,42 +401,103 @@ def verify_otp(request):
         otp = serializer.validated_data['otp']
         
         # Get stored OTP from session
-        stored_otp = request.session.get(f'otp_{phone_number}')
+        session_key = f'verify_phone_otp_{phone_number}'
+        session_time_key = f'verify_phone_otp_{phone_number}_time'
         
-        if not stored_otp:
+        stored_otp = request.session.get(session_key)
+        otp_time_str = request.session.get(session_time_key)
+        
+        if not stored_otp or not otp_time_str:
             return Response({
                 'detail': 'OTP not found or expired. Please request a new OTP.',
+                'error_code': 'OTP_EXPIRED',
+                'verified': False
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check OTP expiration (5 minutes)
+        from datetime import timedelta
+        otp_time = timezone.datetime.fromisoformat(otp_time_str)
+        
+        if timezone.now() - otp_time > timedelta(minutes=5):
+            # Clear expired OTP
+            request.session.pop(session_key, None)
+            request.session.pop(session_time_key, None)
+            request.session.modified = True
+            
+            return Response({
+                'detail': 'OTP has expired. Please request a new OTP.',
+                'error_code': 'OTP_EXPIRED',
                 'verified': False
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Verify OTP
-        if stored_otp == otp:
-            # Mark as verified in session
-            request.session[f'phone_verified_{phone_number}'] = True
-            request.session.modified = True
-            
-            # Mark phone as verified if user exists
-            user = User.objects.filter(phone_number__icontains=phone_number).first()
-            if user:
-                user.phone_verified = True
-                user.save(update_fields=['phone_verified'])
-            
-            # Clear OTP from session
-            request.session.pop(f'otp_{phone_number}', None)
-            request.session.pop(f'otp_{phone_number}_purpose', None)
-            request.session.pop(f'otp_{phone_number}_time', None)
-            request.session.modified = True
-            
+        if stored_otp != otp:
             return Response({
-                'detail': 'OTP verified successfully',
-                'verified': True,
-                'phone_number': phone_number
-            }, status=status.HTTP_200_OK)
+                'detail': 'Invalid OTP. Please try again.',
+                'error_code': 'INVALID_OTP',
+                'verified': False
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Mark phone as verified in session
+        request.session[f'phone_verified_{phone_number}'] = True
+        request.session[f'phone_verified_{phone_number}_time'] = str(timezone.now())
+        
+        # Clear used OTP
+        request.session.pop(session_key, None)
+        request.session.pop(session_time_key, None)
+        request.session.modified = True
         
         return Response({
-            'detail': 'Invalid OTP. Please try again.',
-            'verified': False
-        }, status=status.HTTP_400_BAD_REQUEST)
+            'detail': 'Phone number verified successfully',
+            'verified': True,
+            'phone_number': phone_number,
+            'next_step': '/api/users/farmer-registration/step1/',
+            'message': 'You can now proceed with registration'
+        }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_phone(request):
+    """
+    Send OTP to phone number for verification
+    Used in registration flows to verify phone ownership
+    """
+    serializer = PhoneNumberSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        phone_number = serializer.validated_data['phone_number']
+        
+        # Check if phone already registered
+        if User.objects.filter(phone_number__icontains=phone_number).exists():
+            return Response({
+                'detail': 'This phone number is already registered. Please login instead.',
+                'error_code': 'PHONE_ALREADY_REGISTERED'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Generate 6-digit OTP
+        otp = str(random.randint(100000, 999999))
+        
+        # Store OTP in session with timestamp
+        session_key = f'verify_phone_otp_{phone_number}'
+        session_time_key = f'verify_phone_otp_{phone_number}_time'
+        
+        request.session[session_key] = otp
+        request.session[session_time_key] = str(timezone.now())
+        request.session.modified = True
+        
+        # TODO: Send OTP via SMS Service (Twilio, MSG91, AWS SNS, etc.)
+        # Example: send_sms(phone_number, f"Your SeedSync OTP is: {otp}. Valid for 5 minutes.")
+        
+        return Response({
+            'detail': 'OTP sent successfully to your mobile number',
+            'phone_number': phone_number,
+            'otp': otp,  # ⚠️ REMOVE THIS IN PRODUCTION!
+            'expires_in': 300,  # 5 minutes in seconds
+            'message': f'Please enter the 6-digit OTP sent to +91-{phone_number}'
+        }, status=status.HTTP_200_OK)
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -461,90 +563,6 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
-    @action(detail=False, methods=['post'], url_path='verify-phone')
-    def verify_phone(self, request):
-        """Step 0: Send OTP for phone verification"""
-        phone_number = request.data.get('phone_number')
-        
-        if not phone_number:
-            return Response({
-                'detail': 'Phone number is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Clean phone number
-        import re
-        cleaned_number = phone_number.replace('+91', '').replace(' ', '').replace('-', '')
-        
-        # Validate format
-        if not re.match(r'^[6-9]\d{9}$', cleaned_number):
-            return Response({
-                'detail': 'Invalid phone number format'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Check if phone already registered
-        if User.objects.filter(phone_number__icontains=cleaned_number).exists():
-            return Response({
-                'detail': 'This phone number is already registered. Please login instead.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Generate OTP
-        otp = str(random.randint(100000, 999999))
-        
-        # Store OTP in session
-        request.session[f'farmer_otp_{cleaned_number}'] = otp
-        request.session[f'farmer_otp_{cleaned_number}_time'] = str(timezone.now())
-        request.session.modified = True
-        
-        # TODO: Send OTP via SMS
-        
-        return Response({
-            'detail': 'OTP sent successfully to your mobile number',
-            'phone_number': cleaned_number,
-            'otp': otp,  # Remove in production!
-            'expires_in': 300  # 5 minutes
-        }, status=status.HTTP_200_OK)
-    
-    @action(detail=False, methods=['post'], url_path='verify-otp')
-    def verify_otp(self, request):
-        """Verify OTP for phone number"""
-        serializer = FarmerRegistrationPhoneVerifySerializer(data=request.data)
-        
-        if serializer.is_valid():
-            phone_number = serializer.validated_data['phone_number']
-            otp = serializer.validated_data['otp']
-            
-            # Get stored OTP from session
-            stored_otp = request.session.get(f'farmer_otp_{phone_number}')
-            
-            if not stored_otp:
-                return Response({
-                    'detail': 'OTP not found or expired. Please request a new OTP.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Verify OTP
-            if stored_otp == otp:
-                # Mark as verified
-                request.session[f'farmer_phone_verified_{phone_number}'] = True
-                request.session.modified = True
-                
-                # Clear OTP
-                request.session.pop(f'farmer_otp_{phone_number}', None)
-                request.session.pop(f'farmer_otp_{phone_number}_time', None)
-                
-                return Response({
-                    'detail': 'Phone number verified successfully',
-                    'verified': True,
-                    'phone_number': phone_number,
-                    'next_step': '/api/users/farmer-registration/step1/'
-                }, status=status.HTTP_200_OK)
-            
-            return Response({
-                'detail': 'Invalid OTP. Please try again.',
-                'verified': False
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
     @action(detail=False, methods=['post'], url_path='step1')
     def step1(self, request):
         """Step 1: Personal Details"""
@@ -553,11 +571,12 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
         if serializer.is_valid():
             phone_number = serializer.validated_data['phone_number']
             
-            # Check if phone is verified
-            if not request.session.get(f'farmer_phone_verified_{phone_number}'):
+            # Check if phone is verified (from unified verify-phone endpoint)
+            if not request.session.get(f'phone_verified_{phone_number}'):
                 return Response({
                     'detail': 'Please verify your phone number first',
-                    'error_code': 'PHONE_NOT_VERIFIED'
+                    'error_code': 'PHONE_NOT_VERIFIED',
+                    'required_step': '/api/users/verify-phone/'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             # Store in session (serialize Decimals to strings)
@@ -582,7 +601,8 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
         if 'farmer_step1' not in request.session:
             return Response({
                 'detail': 'Please complete Step 1 first',
-                'error_code': 'STEP1_REQUIRED'
+                'error_code': 'STEP1_REQUIRED',
+                'required_step': '/api/users/farmer-registration/step1/'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = FarmerRegistrationStep2Serializer(data=request.data)
@@ -610,7 +630,8 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
         if 'farmer_step2' not in request.session:
             return Response({
                 'detail': 'Please complete Step 2 first',
-                'error_code': 'STEP2_REQUIRED'
+                'error_code': 'STEP2_REQUIRED',
+                'required_step': '/api/users/farmer-registration/step2/'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = FarmerRegistrationStep3Serializer(data=request.data)
@@ -622,7 +643,18 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
                 step2_data = request.session.get('farmer_step2', {})
                 step3_data = serializer.validated_data
                 
-                # Define Decimal fields for deserialization
+                # Get phone number from step 1
+                phone_number = step1_data.get('phone_number')
+                
+                # Double-check phone verification
+                if not request.session.get(f'phone_verified_{phone_number}'):
+                    return Response({
+                        'detail': 'Phone verification expired. Please verify again.',
+                        'error_code': 'PHONE_VERIFICATION_EXPIRED'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Define field types for deserialization
+                step1_date_fields = ['date_of_birth']  # ← ADD THIS
                 step2_decimal_fields = [
                     'total_land_area',
                     'expected_annual_production',
@@ -630,15 +662,13 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
                     'longitude'
                 ]
                 
-                # Convert string Decimals back to Decimal type
-                step2_data = deserialize_from_session(step2_data, step2_decimal_fields)
+                # Convert strings back to proper types
+                step1_data = deserialize_from_session(step1_data, date_fields=step1_date_fields)  # ← UPDATE
+                step2_data = deserialize_from_session(step2_data, decimal_fields=step2_decimal_fields)
                 
                 # Extract password
                 password = step3_data.pop('password')
                 step3_data.pop('password_confirm')
-                
-                # Get phone number from step 1
-                phone_number = step1_data.get('phone_number')
                 
                 # Generate unique username
                 username = f"farmer_{uuid.uuid4().hex[:8]}"
@@ -651,8 +681,8 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
                     last_name=step1_data.get('last_name', ''),
                     email=step1_data.get('email', ''),
                     role='FARMER',
-                    approval_status='APPROVED',  # Farmers are auto-approved
-                    phone_verified=True  # Phone verified via OTP
+                    approval_status='APPROVED',
+                    phone_verified=True
                 )
                 user.set_password(password)
                 user.save()
@@ -666,7 +696,7 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
                     farmer_id=farmer_id,
                     # Step 1 fields
                     father_husband_name=step1_data.get('father_husband_name'),
-                    date_of_birth=step1_data.get('date_of_birth'),
+                    date_of_birth=step1_data.get('date_of_birth'),  # Now properly deserialized
                     gender=step1_data.get('gender'),
                     # Step 2 fields
                     village=step2_data.get('village'),
@@ -688,11 +718,18 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
                 )
                 
                 # Clear session data
-                for key in ['farmer_step1', 'farmer_step2', f'farmer_phone_verified_{phone_number}']:
+                keys_to_clear = [
+                    'farmer_step1',
+                    'farmer_step2',
+                    f'phone_verified_{phone_number}',
+                    f'phone_verified_{phone_number}_time'
+                ]
+                
+                for key in keys_to_clear:
                     request.session.pop(key, None)
                 request.session.modified = True
                 
-                # Generate JWT tokens for immediate login
+                # Generate JWT tokens
                 from rest_framework_simplejwt.tokens import RefreshToken
                 refresh = RefreshToken.for_user(user)
                 
@@ -713,15 +750,18 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
                         'phone_number': user.phone_number,
                         'email': user.email or '',
                         'role': user.role,
+                        'role_display': user.get_role_display(),
                         'farmer_id': farmer_id,
                         'profile_completed': farmer_profile.profile_completed,
                         'profile_completion_percentage': farmer_profile.profile_completion_percentage,
+                        'approval_status': user.approval_status,
+                        'is_approved': user.is_approved,
+                        'phone_verified': user.phone_verified,
                     },
                     'redirect_to': '/farmer/dashboard'
                 }, status=status.HTTP_201_CREATED)
                 
             except Exception as e:
-                # Log the error for debugging
                 import traceback
                 print(f"Farmer Registration Error: {str(e)}")
                 traceback.print_exc()
@@ -732,62 +772,75 @@ class FarmerRegistrationViewSet(viewsets.ViewSet):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['get'], url_path='progress')
-    def progress(self, request):
-        """Get current registration progress"""
-        step1_data = request.session.get('farmer_step1')
-        step2_data = request.session.get('farmer_step2')
         
-        # Check phone verification
-        phone_verified = False
-        if step1_data:
+        @action(detail=False, methods=['get'], url_path='progress')
+        def progress(self, request):
+            """Get current registration progress"""
+            step1_data = request.session.get('farmer_step1')
+            step2_data = request.session.get('farmer_step2')
+            
+            # Check phone verification
+            phone_verified = False
+            phone_number = None
+            
+            if step1_data:
+                phone_number = step1_data.get('phone_number')
+                phone_verified = request.session.get(f'phone_verified_{phone_number}', False)
+            
+            progress = {
+                'phone_verified': phone_verified,
+                'step1_completed': step1_data is not None,
+                'step2_completed': step2_data is not None,
+                'current_step': 0,
+                'step1_data': step1_data,
+                'step2_data': step2_data,
+                'phone_number': phone_number,
+            }
+            
+            # Determine current step
+            if step2_data:
+                progress['current_step'] = 3
+                progress['next_step'] = '/api/users/farmer-registration/step3/'
+            elif step1_data:
+                progress['current_step'] = 2
+                progress['next_step'] = '/api/users/farmer-registration/step2/'
+            elif phone_verified:
+                progress['current_step'] = 1
+                progress['next_step'] = '/api/users/farmer-registration/step1/'
+            else:
+                progress['current_step'] = 0
+                progress['next_step'] = '/api/users/verify-phone/'
+            
+            return Response(progress, status=status.HTTP_200_OK)
+        
+        @action(detail=False, methods=['post'], url_path='clear-session')
+        def clear_session(self, request):
+            """Clear registration session (for testing/restart)"""
+            # Get phone number to clear verification
+            step1_data = request.session.get('farmer_step1', {})
             phone_number = step1_data.get('phone_number')
-            phone_verified = request.session.get(f'farmer_phone_verified_{phone_number}', False)
-        
-        progress = {
-            'phone_verified': phone_verified,
-            'step1_completed': step1_data is not None,
-            'step2_completed': step2_data is not None,
-            'current_step': 0,
-            'step1_data': step1_data,
-            'step2_data': step2_data,
-        }
-        
-        # Determine current step
-        if step2_data:
-            progress['current_step'] = 3
-        elif step1_data:
-            progress['current_step'] = 2
-        elif phone_verified:
-            progress['current_step'] = 1
-        
-        return Response(progress, status=status.HTTP_200_OK)
-    
-    @action(detail=False, methods=['post'], url_path='clear-session')
-    def clear_session(self, request):
-        """Clear registration session (for testing/restart)"""
-        # Get phone number to clear verification
-        step1_data = request.session.get('farmer_step1', {})
-        phone_number = step1_data.get('phone_number')
-        
-        # Clear all farmer registration related session keys
-        keys_to_clear = ['farmer_step1', 'farmer_step2']
-        if phone_number:
-            keys_to_clear.extend([
-                f'farmer_otp_{phone_number}',
-                f'farmer_otp_{phone_number}_time',
-                f'farmer_phone_verified_{phone_number}'
-            ])
-        
-        for key in keys_to_clear:
-            request.session.pop(key, None)
-        request.session.modified = True
-        
-        return Response({
-            'detail': 'Registration session cleared successfully'
-        }, status=status.HTTP_200_OK)
-
+            
+            # Clear all farmer registration related session keys
+            keys_to_clear = ['farmer_step1', 'farmer_step2']
+            
+            if phone_number:
+                keys_to_clear.extend([
+                    f'phone_verified_{phone_number}',
+                    f'phone_verified_{phone_number}_time',
+                    # Also clear OTP keys if they exist
+                    f'verify_phone_otp_{phone_number}',
+                    f'verify_phone_otp_{phone_number}_time',
+                ])
+            
+            for key in keys_to_clear:
+                request.session.pop(key, None)
+            request.session.modified = True
+            
+            return Response({
+                'detail': 'Registration session cleared successfully',
+                'cleared_keys': len(keys_to_clear),
+                'restart_from': '/api/users/verify-phone/'
+            }, status=status.HTTP_200_OK)
 
 # ============================================================================
 # FARMER PROFILE VIEWS

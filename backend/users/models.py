@@ -296,16 +296,14 @@ class FarmerProfile(TimeStampedModel):
     
     # GPS Location (Auto-captured from mobile app)
     latitude = models.DecimalField(
-        max_digits=9, 
-        decimal_places=6, 
+        max_digits=10, decimal_places=7, 
         null=True, 
         blank=True,
         help_text="Auto-captured from phone GPS"
     )
     
     longitude = models.DecimalField(
-        max_digits=9, 
-        decimal_places=6, 
+        max_digits=10, decimal_places=7,
         null=True, 
         blank=True,
         help_text="Auto-captured from phone GPS"
@@ -546,6 +544,9 @@ class FarmerProfile(TimeStampedModel):
     def can_receive_payment(self):
         """Check if farmer can receive payments"""
         return self.bank_details_added or bool(self.upi_id)
+
+
+
 
 
 class FPOProfile(TimeStampedModel):

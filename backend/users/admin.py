@@ -993,9 +993,9 @@ class FarmerProfileAdmin(admin.ModelAdmin):
         stars += '☆' * empty_stars
         
         return format_html(
-            '{} <small>({:.1f}/5.0 from {} ratings)</small>',
+            '{} <small>({} from {} ratings)</small>',
             stars,
-            rating,
+            round(rating, 1),  # Round instead of format
             obj.total_ratings
         )
     rating_display.short_description = 'Rating'

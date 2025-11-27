@@ -1,54 +1,51 @@
-import { useEffect } from 'react';
-import { Slot } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
 
-// Keep splash screen visible while loading
 SplashScreen.preventAutoHideAsync();
 
-// Create React Query client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    },
-  },
-});
-
 export default function RootLayout() {
+  const [appIsReady, setAppIsReady] = useState(false);
+  const { loadUser, isLoading } = useAuthStore();
+
   const [fontsLoaded] = useFonts({
-    // Add custom fonts here if needed
+    // Add your custom fonts here if needed
   });
 
-  const loadUser = useAuthStore((state) => state.loadUser);
-
   useEffect(() => {
-    // Load user on app start
-    loadUser();
+    async function prepare() {
+      try {
+        // Load user session
+        await loadUser();
+      } catch (e) {
+        console.warn(e);
+      } finally {
+        setAppIsReady(true);
+      }
+    }
+
+    prepare();
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded) {
+    if (appIsReady && fontsLoaded) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [appIsReady, fontsLoaded]);
 
-  if (!fontsLoaded) {
+  if (!appIsReady || !fontsLoaded) {
     return null;
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <Slot />
-        </QueryClientProvider>
-      </SafeAreaProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(farmer)" />
+      </Stack>
     </GestureHandlerRootView>
   );
 }

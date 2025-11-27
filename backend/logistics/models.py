@@ -36,8 +36,8 @@ class Warehouse(TimeStampedModel):
     state = models.CharField(max_length=100)
     district = models.CharField(max_length=100)
     pincode = models.CharField(max_length=6)
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=9, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=9, null=True, blank=True)
     
     # Details
     warehouse_type = models.CharField(max_length=20, choices=WAREHOUSE_TYPE)
@@ -207,8 +207,8 @@ class GPSTrackingLog(TimeStampedModel):
     
     shipment = models.ForeignKey(Shipment, on_delete=models.CASCADE, related_name='tracking_logs')
     
-    latitude = models.DecimalField(max_digits=9, decimal_places=6)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    latitude = models.DecimalField(max_digits=9, decimal_places=9)
+    longitude = models.DecimalField(max_digits=9, decimal_places=9)
     speed = models.DecimalField(max_digits=5, decimal_places=2, null=True, help_text="km/h")
     
     # Additional data

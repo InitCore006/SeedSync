@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { User } from '@/types/auth.types';
 import { authService } from '@/services/auth.service';
-import { setTokens, clearTokens } from '@lib/api/client';
-import { userStorage } from '@lib/utils/storage';
+import { setTokens, clearTokens } from '@/lib/api/client';
+import { userStorage } from '@/lib/utils/storage';
+import { router } from 'expo-router';
 
 interface AuthState {
   // State
@@ -31,13 +32,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // ============================================================================
   // LOGIN
   // ============================================================================
-  login: async (username: string, password: string) => {
+  login: async (phoneNumber: string, password: string) => {
     set({ isLoading: true, error: null });
 
     try {
-      const response = await authService.login({ username, password });
+      const response = await authService.login({
+        phone_number: phoneNumber,  // Send phone_number, not username
+        password,
+      });
 
-      // Save tokens
+      // Check if farmer account
+      if (response.user.role !== 'FARMER') {
+        set({
+          isLoading: false,
+          error: 'This app is only for farmers. Please use the web platform.',
+        });
+        return;
+      }
+
+      // Save tokens (response has access/refresh directly, not nested)
       await setTokens(response.access, response.refresh);
 
       // Save user data
@@ -49,6 +62,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
         error: null,
       });
+
+      // Navigate to dashboard
+      router.replace('/(farmer)');
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.detail ||
@@ -65,7 +81,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw error;
     }
   },
-
   // ============================================================================
   // LOGOUT
   // ============================================================================
@@ -73,13 +88,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      // Call logout API
       await authService.logout();
     } catch (error) {
       console.error('Logout API error:', error);
-      // Continue with local logout even if API fails
     } finally {
-      // Clear tokens and user data
       await clearTokens();
       await userStorage.clearUser();
 
@@ -89,6 +101,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
         error: null,
       });
+
+      router.replace('/(auth)/welcome');
     }
   },
 
@@ -99,7 +113,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      // Try to get user from storage
       const storedUser = await userStorage.getUser();
 
       if (storedUser) {
@@ -126,7 +139,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error('Load user error:', error);
 
-      // Clear invalid session
       await clearTokens();
       await userStorage.clearUser();
 
@@ -146,10 +158,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (currentUser) {
       const newUser = { ...currentUser, ...updatedUser };
-
-      // Update storage
       userStorage.saveUser(newUser);
-
       set({ user: newUser });
     }
   },

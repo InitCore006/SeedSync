@@ -33,88 +33,132 @@ User = get_user_model()
 # ============================================================================
 
 class PhoneNumberSerializer(serializers.Serializer):
-    """Simple phone number validation"""
+    """Simple phone number validation for OTP sending"""
     
-    phone_number = serializers.CharField(required=True, max_length=15)
+    phone_number = serializers.CharField(
+        required=True,
+        max_length=15,
+        help_text="10-digit Indian mobile number"
+    )
     
     def validate_phone_number(self, value):
+        """Validate and clean Indian phone number"""
         import re
-        cleaned_number = value.replace('+91', '').replace(' ', '').replace('-', '')
         
+        # Remove country code, spaces, dashes
+        cleaned_number = value.replace('+91', '').replace(' ', '').replace('-', '').strip()
+        
+        # Validate format: Must start with 6-9, exactly 10 digits
         if not re.match(r'^[6-9]\d{9}$', cleaned_number):
             raise serializers.ValidationError(
-                "Invalid phone number. Must be a valid 10-digit Indian mobile number."
+                "Invalid phone number. Must be a valid 10-digit Indian mobile number starting with 6-9."
             )
         
         return cleaned_number
-
 
 # ============================================================================
 # JWT TOKEN SERIALIZERS
 # ============================================================================
 
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import serializers
+from django.contrib.auth import authenticate
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Custom JWT Token with user details and approval status"""
+    """Custom JWT serializer that accepts phone_number or username"""
+    
+    username_field = 'username'  # Keep this for compatibility
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make username not required, we'll handle it manually
+        self.fields['username'].required = False
+        # Add phone_number field
+        self.fields['phone_number'] = serializers.CharField(required=False)
     
     def validate(self, attrs):
-        data = super().validate(attrs)
+        """
+        Custom validation to support both username and phone_number login
+        """
+        # Get credentials
+        username = attrs.get('username')
+        phone_number = attrs.get('phone_number')
+        password = attrs.get('password')
         
-        # Check if user can login
-        if not self.user.can_login:
-            if self.user.role == 'GOVERNMENT':
-                raise serializers.ValidationError({
-                    'detail': 'Your government account is inactive. Please contact admin.',
-                    'approval_status': self.user.approval_status
-                })
-            elif not self.user.is_approved:
-                raise serializers.ValidationError({
-                    'detail': 'Your account is pending approval. Please wait for admin verification.',
-                    'approval_status': self.user.approval_status
-                })
+        # Require either username or phone_number
+        if not username and not phone_number:
+            raise serializers.ValidationError({
+                'detail': 'Either username or phone_number is required'
+            })
         
-        # Add custom user data
-        data['user'] = {
-            'id': str(self.user.id),
-            'username': self.user.username,
-            'email': self.user.email or '',
-            'full_name': self.user.get_full_name(),
-            'role': self.user.role,
-            'role_display': self.user.get_role_display(),
-            'approval_status': self.user.approval_status,
-            'is_approved': self.user.is_approved,
-            'phone_verified': self.user.phone_verified,
-            'email_verified': self.user.email_verified,
-            'preferred_language': self.user.preferred_language,
-            'profile_picture': self.user.profile_picture.url if self.user.profile_picture else None
-        }
-        
-        # Add role-specific data for farmers
-        if self.user.role == 'FARMER':
+        # If phone_number provided, find user and use their username
+        if phone_number:
+            # Clean phone number
+            import re
+            cleaned_number = phone_number.replace('+91', '').replace(' ', '').replace('-', '').strip()
+            
             try:
-                farmer_profile = self.user.farmer_profile
-                data['user']['farmer_id'] = farmer_profile.farmer_id
-                data['user']['profile_completed'] = farmer_profile.profile_completed
-                data['user']['profile_completion_percentage'] = farmer_profile.profile_completion_percentage
-                data['user']['location'] = farmer_profile.location_display
-            except FarmerProfile.DoesNotExist:
-                data['user']['profile_completed'] = False
-                data['user']['profile_completion_percentage'] = 0
+                user = User.objects.get(phone_number__icontains=cleaned_number)
+                username = user.username
+            except User.DoesNotExist:
+                raise serializers.ValidationError({
+                    'detail': 'No account found with this phone number'
+                })
         
-        # Add role-specific dashboard URL
-        dashboard_mapping = {
-            'FARMER': '/farmer/dashboard',  # Mobile app home
-            'FPO': '/fpo/dashboard',
-            'PROCESSOR': '/processor/dashboard',
-            'RETAILER': '/retailer/dashboard',
-            'LOGISTICS': '/logistics/dashboard',
-            'WAREHOUSE': '/warehouse/dashboard',
-            'GOVERNMENT': '/government/dashboard',
+        # Authenticate user
+        user = authenticate(
+            request=self.context.get('request'),
+            username=username,
+            password=password
+        )
+        
+        if not user:
+            raise serializers.ValidationError({
+                'detail': 'Incorrect password. Please try again.'
+            })
+        
+        # Check if user is active
+        if not user.is_active:
+            raise serializers.ValidationError({
+                'detail': 'This account has been deactivated. Please contact support.'
+            })
+        
+        # Check approval status for non-farmers
+        if user.role != 'FARMER' and not user.is_approved:
+            raise serializers.ValidationError({
+                'detail': f'Your {user.get_role_display()} account is pending approval. Please wait for admin approval.'
+            })
+        
+        # Check if farmer profile exists
+        if user.role == 'FARMER':
+            if not hasattr(user, 'farmer_profile'):
+                raise serializers.ValidationError({
+                    'detail': 'Farmer profile not found. Please complete registration.'
+                })
+        
+        # Generate tokens using parent method
+        refresh = self.get_token(user)
+        
+        # Prepare response data
+        data = {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
         }
-        data['redirect_to'] = dashboard_mapping.get(self.user.role, '/')
+        
+        # Add user data
+        from .serializers import UserSerializer
+        data['user'] = UserSerializer(user).data
+        
+        # Add role-specific data
+        if user.role == 'FARMER' and hasattr(user, 'farmer_profile'):
+            data['farmer_profile'] = {
+                'farmer_id': user.farmer_profile.farmer_id,
+                'profile_completed': user.farmer_profile.profile_completed,
+                'profile_completion_percentage': user.farmer_profile.profile_completion_percentage,
+            }
+            data['redirect_to'] = '/farmer/dashboard'
         
         return data
-
-
 # ============================================================================
 # PASSWORD MANAGEMENT SERIALIZERS
 # ============================================================================
@@ -262,16 +306,22 @@ class VerifyOTPSerializer(serializers.Serializer):
     """Verify OTP"""
     
     phone_number = serializers.CharField(required=True, max_length=15)
-    otp = serializers.CharField(required=True, max_length=6, min_length=6)
+    otp = serializers.CharField(required=True, min_length=6, max_length=6)
     
     def validate_phone_number(self, value):
         """Clean phone number"""
-        return value.replace('+91', '').replace(' ', '').replace('-', '')
+        import re
+        cleaned_number = value.replace('+91', '').replace(' ', '').replace('-', '').strip()
+        
+        if not re.match(r'^[6-9]\d{9}$', cleaned_number):
+            raise serializers.ValidationError("Invalid phone number format")
+        
+        return cleaned_number
     
     def validate_otp(self, value):
         """Validate OTP format"""
-        if not value.isdigit():
-            raise serializers.ValidationError("OTP must contain only digits.")
+        if not value.isdigit() or len(value) != 6:
+            raise serializers.ValidationError("OTP must be exactly 6 digits")
         return value
 
 
@@ -403,14 +453,12 @@ class FarmerRegistrationStep2Serializer(serializers.Serializer):
     latitude = serializers.DecimalField(
         required=False,
         allow_null=True,
-        max_digits=9,
-        decimal_places=6
+        max_digits=10, decimal_places=7,
     )
     longitude = serializers.DecimalField(
         required=False,
         allow_null=True,
-        max_digits=9,
-        decimal_places=6
+        max_digits=10, decimal_places=7,
     )
     
     # Farm Details
@@ -749,6 +797,12 @@ class FarmerDashboardSerializer(serializers.ModelSerializer):
         """Calculate this month's revenue"""
         # TODO: Calculate from transactions
         return 0.00
+
+
+
+
+
+
 
 # ============================================================================
 # FPO REGISTRATION SERIALIZERS

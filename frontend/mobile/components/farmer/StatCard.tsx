@@ -1,107 +1,97 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@lib/constants/colors';
-import { typography } from '@lib/constants/typography';
-import { spacing, borderRadius, shadows } from '@lib/constants/spacing';
+import { View, Text, StyleSheet } from 'react-native';
+import { colors } from '@/lib/constants/colors';
+import { typography } from '@/lib/constants/typography';
+import { spacing } from '@/lib/constants/spacing';
 
 interface StatCardProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  iconColor?: string;
-  label: string;
-  value: string | number;
+  title: string;
+  value: string;
+  unit?: string;
+  icon: string;
   trend?: {
     value: number;
     isPositive: boolean;
-  };
-  style?: ViewStyle;
+  } | null;
 }
 
-export const StatCard: React.FC<StatCardProps> = ({
-  icon,
-  iconColor = colors.primary[500],
-  label,
-  value,
-  trend,
-  style,
-}) => {
+export default function StatCard({ title, value, unit, icon, trend }: StatCardProps) {
   return (
-    <View style={[styles.card, style]}>
-      <View style={[styles.iconContainer, { backgroundColor: `${iconColor}15` }]}>
-        <Ionicons name={icon} size={24} color={iconColor} />
+    <View style={styles.container}>
+      <View style={styles.iconContainer}>
+        <Text style={styles.icon}>{icon}</Text>
       </View>
-
       <View style={styles.content}>
-        <Text style={styles.label}>{label}</Text>
-        <Text style={styles.value}>{value}</Text>
-
+        <Text style={styles.title}>{title}</Text>
+        <View style={styles.valueContainer}>
+          <Text style={styles.value}>{value}</Text>
+          {unit && <Text style={styles.unit}> {unit}</Text>}
+        </View>
         {trend && (
           <View style={styles.trendContainer}>
-            <Ionicons
-              name={trend.isPositive ? 'trending-up' : 'trending-down'}
-              size={14}
-              color={trend.isPositive ? colors.success : colors.error}
-            />
-            <Text
-              style={[
-                styles.trendText,
-                { color: trend.isPositive ? colors.success : colors.error },
-              ]}
-            >
-              {trend.value}%
+            <Text style={[styles.trend, { color: trend.isPositive ? colors.success : colors.error }]}>
+              {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value).toFixed(1)}%
             </Text>
           </View>
         )}
       </View>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  card: {
+  container: {
+    flex: 1,
+    minWidth: '48%',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background.default,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    ...shadows.sm,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-
   iconContainer: {
     width: 48,
     height: 48,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
+    borderRadius: 24,
+    backgroundColor: `${colors.primary}15`,
     justifyContent: 'center',
-    marginRight: spacing.md,
+    alignItems: 'center',
+    marginRight: spacing.sm,
   },
-
+  icon: {
+    fontSize: 24,
+  },
   content: {
     flex: 1,
   },
-
-  label: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.regular,
+  title: {
+    ...typography.caption,
     color: colors.text.secondary,
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
-
-  value: {
-    fontSize: typography.fontSize.xl,
-    fontFamily: typography.fontFamily.bold,
-    color: colors.text.primary,
-  },
-
-  trendContainer: {
+  valueContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
+    alignItems: 'baseline',
+  },
+  value: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  unit: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  trendContainer: {
     marginTop: spacing.xs,
   },
-
-  trendText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.semibold,
+  trend: {
+    ...typography.caption,
+    fontWeight: '600',
   },
 });

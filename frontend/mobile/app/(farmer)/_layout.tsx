@@ -1,25 +1,28 @@
+import React from 'react';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@lib/constants/colors';
-import { typography } from '@lib/constants/typography';
+import { colors } from '@/lib/constants/colors';
+import { typography } from '@/lib/constants/typography';
 
 export default function FarmerLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary[500],
-        tabBarInactiveTintColor: colors.gray[400],
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.text.secondary,
         tabBarStyle: {
-          backgroundColor: colors.background.default,
-          borderTopColor: colors.border.light,
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
           paddingBottom: 8,
           paddingTop: 8,
-          height: 60,
+          height: 65,
         },
         tabBarLabelStyle: {
-          fontSize: typography.fontSize.xs,
-          fontFamily: typography.fontFamily.medium,
+          ...typography.caption,
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 4,
         },
       }}
     >
@@ -28,34 +31,34 @@ export default function FarmerLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+            <TabIcon icon="🏠" color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="lots"
+        name="crops"
         options={{
-          title: 'My Lots',
+          title: 'Crops',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cube" size={size} color={color} />
+            <TabIcon icon="🌾" color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="market"
+        name="ai-assistant"
+        options={{
+          title: 'AI',
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon icon="🤖" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="marketplace"
         options={{
           title: 'Market',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trending-up" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="transactions"
-        options={{
-          title: 'Transactions',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet" size={size} color={color} />
+            <TabIcon icon="🛒" color={color} />
           ),
         }}
       />
@@ -64,10 +67,16 @@ export default function FarmerLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+            <TabIcon icon="👤" color={color} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const TabIcon = ({ icon, color }: { icon: string; color: string }) => (
+  <span style={{ fontSize: 24, filter: color === colors.primary ? 'none' : 'grayscale(100%)' }}>
+    {icon}
+  </span>
+);
