@@ -3,7 +3,7 @@ import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Lot } from '@/types/farmer.types';
 import { colors } from '@lib/constants/colors';
-import { typography } from '@lib/constants/typography';
+import { typography, fontFamily, fontSize } from '@lib/constants/typography';
 import { spacing, borderRadius, shadows } from '@lib/constants/spacing';
 import { formatCurrency, formatQuantity, formatDate } from '@lib/utils/format';
 
@@ -113,7 +113,7 @@ export const LotCard: React.FC<LotCardProps> = ({ lot, onPress }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.lg,
     ...shadows.md,
     marginBottom: spacing.md,
@@ -149,8 +149,8 @@ const styles = StyleSheet.create({
   },
 
   statusText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.semibold,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.semibold,
     color: colors.text.inverse,
     textTransform: 'uppercase',
   },
@@ -166,8 +166,8 @@ const styles = StyleSheet.create({
   },
 
   gradeText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.semibold,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.semibold,
     color: colors.text.inverse,
   },
 
@@ -184,14 +184,14 @@ const styles = StyleSheet.create({
 
   cropName: {
     flex: 1,
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.semibold,
+    fontSize: fontSize.base,
+    fontFamily: fontFamily.semibold,
     color: colors.text.primary,
   },
 
   lotNumber: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
     color: colors.gray[500],
     marginLeft: spacing.sm,
   },
@@ -209,14 +209,14 @@ const styles = StyleSheet.create({
   },
 
   infoText: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.medium,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
     color: colors.text.primary,
   },
 
   priceText: {
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.bold,
+    fontSize: fontSize.base,
+    fontFamily: fontFamily.bold,
     color: colors.secondary[500],
   },
 
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border.light,
+    borderTopColor: colors.borderLight,
   },
 
   footerItem: {
@@ -238,14 +238,14 @@ const styles = StyleSheet.create({
 
   footerText: {
     flex: 1,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
     color: colors.gray[600],
   },
 
   dateText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
     color: colors.gray[500],
   },
 
@@ -257,8 +257,8 @@ const styles = StyleSheet.create({
   },
 
   viewsText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
     color: colors.gray[500],
   },
 });

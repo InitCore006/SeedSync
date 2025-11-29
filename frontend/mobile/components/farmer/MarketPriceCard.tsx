@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MarketPrice } from '@/types/farmer.types';
 import { colors } from '@lib/constants/colors';
-import { typography } from '@lib/constants/typography';
+import { typography, fontFamily, fontSize,fontWeight } from '@lib/constants/typography';
 import { spacing, borderRadius, shadows } from '@lib/constants/spacing';
 import { formatCurrency, formatDate } from '@lib/utils/format';
 
@@ -89,7 +89,7 @@ export const MarketPriceCard: React.FC<MarketPriceCardProps> = ({ price }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     ...shadows.sm,
@@ -108,14 +108,14 @@ const styles = StyleSheet.create({
   },
 
   cropName: {
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.semibold,
+    fontSize: fontSize.base,
+    fontFamily: fontFamily.semibold,
     color: colors.text.primary,
   },
 
   variety: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
     color: colors.text.secondary,
     marginTop: spacing.xs,
   },
@@ -130,8 +130,8 @@ const styles = StyleSheet.create({
   },
 
   trendText: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.semibold,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.semibold,
   },
 
   locationRow: {
@@ -142,8 +142,8 @@ const styles = StyleSheet.create({
   },
 
   locationText: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
     color: colors.gray[600],
   },
 
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: colors.border.light,
+    borderColor: colors.borderLight,
     marginBottom: spacing.sm,
   },
 
@@ -165,30 +165,30 @@ const styles = StyleSheet.create({
   modalPriceItem: {
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: colors.border.light,
+    borderColor: colors.borderLight,
   },
 
   priceLabel: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
     color: colors.text.secondary,
     marginBottom: spacing.xs,
   },
 
   priceValue: {
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.semibold,
+    fontSize: fontSize.base,
+    fontFamily: fontFamily.semibold,
     color: colors.text.primary,
   },
 
   modalPrice: {
-    fontSize: typography.fontSize.lg,
+    fontSize: fontSize.lg,
     color: colors.primary[500],
   },
 
   dateText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
     color: colors.gray[500],
     textAlign: 'right',
   },

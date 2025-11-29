@@ -9,9 +9,9 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@lib/constants/colors';
-import { typography } from '@lib/constants/typography';
-import { spacing, borderRadius } from '@lib/constants/spacing';
+import { colors } from '@/lib/constants/colors';
+import { spacing, borderRadius } from '@/lib/constants/spacing';
+import { typography } from '@/lib/constants/typography';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -25,7 +25,7 @@ interface InputProps extends TextInputProps {
   disabled?: boolean;
 }
 
-export const Input: React.FC<InputProps> = ({
+export default function Input({
   label,
   error,
   helperText,
@@ -37,7 +37,7 @@ export const Input: React.FC<InputProps> = ({
   disabled = false,
   secureTextEntry,
   ...props
-}) => {
+}: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
@@ -67,7 +67,7 @@ export const Input: React.FC<InputProps> = ({
           <Ionicons
             name={leftIcon}
             size={20}
-            color={error ? colors.error : isFocused ? colors.primary[500] : colors.gray[400]}
+            color={error ? colors.error : isFocused ? colors.primary : colors.gray[400]}
             style={styles.leftIcon}
           />
         )}
@@ -114,7 +114,7 @@ export const Input: React.FC<InputProps> = ({
       )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -122,8 +122,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.medium,
+    ...typography.label,
     color: colors.text.primary,
     marginBottom: spacing.xs,
   },
@@ -135,16 +134,16 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border.light,
+    borderColor: colors.border,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     minHeight: 48,
   },
 
   inputContainerFocused: {
-    borderColor: colors.primary[500],
+    borderColor: colors.primary,
     borderWidth: 2,
   },
 
@@ -159,8 +158,7 @@ const styles = StyleSheet.create({
 
   input: {
     flex: 1,
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.regular,
+    ...typography.body,
     color: colors.text.primary,
     paddingVertical: spacing.sm,
   },
@@ -183,8 +181,7 @@ const styles = StyleSheet.create({
   },
 
   helperText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    ...typography.caption,
     color: colors.gray[600],
     marginTop: spacing.xs,
   },
@@ -193,3 +190,6 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
 });
+
+// Named export for backward compatibility
+export { Input };

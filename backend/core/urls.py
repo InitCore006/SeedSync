@@ -1,61 +1,97 @@
 """
-URL configuration for core project.
+URL Configuration for SeedSync - AI-Enabled Oilseed Value Chain Platform
+Smart India Hackathon 2024
+Ministry of Agriculture & Farmers Welfare
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/4.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from rest_framework_simplejwt.views import TokenRefreshView
-from users.views import CustomTokenObtainPairView
+from django.views.generic import TemplateView
+from rest_framework import permissions
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
     SpectacularRedocView,
 )
-# Customize admin site
+
+# ==============================================================================
+# ADMIN CUSTOMIZATION
+# ==============================================================================
+
 admin.site.site_header = "SeedSync Platform Administration"
-admin.site.site_title = "SeedSync Admin"
-admin.site.index_title = "Oilseed Value Chain Management"
+admin.site.site_title = "SeedSync Admin Portal"
+admin.site.index_title = "AI-Enabled Oilseed Value Chain Management"
+
+# ==============================================================================
+# API URL PATTERNS
+# ==============================================================================
 
 urlpatterns = [
+    # ==============================================================================
+    # ADMIN INTERFACE
+    # ==============================================================================
     path('admin/', admin.site.urls),
-
-    # Authentication
-    path('api/users/auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/users/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
-    # App APIs
-    path('api/users/', include('users.urls')),
-    path('api/advisory/', include('advisory.urls')),
-    path('api/marketplace/', include('marketplace.urls')),
-    path('api/traceability/', include('traceability.urls')),
-    path('api/logistics/', include('logistics.urls')),
-    path('api/integration/', include('integration.urls')),
-    
-     # OPENAPI SCHEMA
+    # ==============================================================================
+    # API DOCUMENTATION (Swagger & ReDoc)
+    # ==============================================================================
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-
-    # SWAGGER UI
-    path('api/docs/swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-
-    # REDOC UI
-    path('api/docs/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc-ui'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/docs/swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui-alt'),
+    path('api/docs/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    
+    # ==============================================================================
+    # AUTHENTICATION & USER MANAGEMENT (Phase 1 - Week 1)
+    # ==============================================================================
+   # path('api/auth/', include('apps.users.urls')),  # JWT auth, register, login, logout
+    
+    # ==============================================================================
+    # CORE FOUNDATION APPS (Phase 1 - Week 1)
+    # ==============================================================================
+    # path('api/farmers/', include('apps.farmers.urls')),  # Farmer profiles, farms
+    # path('api/fpos/', include('apps.fpos.urls')),  # FPO management, membership
+    # path('api/crops/', include('apps.crops.urls')),  # Crop master, prices, MSP
+    # path('api/advisories/', include('apps.advisories.urls')),  # AI advisories, weather, pest detection
+    
+    # ==============================================================================
+    # AI & ANALYTICS APPS (Phase 1 - Week 1)
+    # ==============================================================================
+    # path('api/demand-supply/', include('apps.demand_supply.urls')),  # Forecasting, market trends
+    # path('api/analytics/', include('apps.analytics.urls')),  # Dashboards, KPIs, reports
+    
+    # ==============================================================================
+    # OPERATIONS & SUPPLY CHAIN APPS (Phase 2 - Week 2)
+    # ==============================================================================
+    # path('api/procurement/', include('apps.procurement.urls')),  # Purchase orders, bidding
+    # path('api/logistics/', include('apps.logistics.urls')),  # Shipments, vehicles, routes
+    # path('api/warehouses/', include('apps.warehouses.urls')),  # Storage, inventory
+    # path('api/processing/', include('apps.processing.urls')),  # Processing units, production
+    
+    # ==============================================================================
+    # INNOVATION & DIFFERENTIATION APPS (Phase 3 - Week 3)
+    # ==============================================================================
+    # path('api/blockchain/', include('apps.blockchain.urls')),  # Traceability, QR codes
+    # path('api/marketplace/', include('apps.marketplace.urls')),  # Listings, orders
+    # path('api/finance/', include('apps.finance.urls')),  # Credit, loans, insurance
+    # path('api/policy/', include('apps.policy_dashboard.urls')),  # Government dashboards
+    
+    # ==============================================================================
+    # SUPPORT & INTEGRATION APPS (Phase 4 - Week 4)
+    # ==============================================================================
+    # path('api/notifications/', include('apps.notifications.urls')),  # Alerts, messages
+    # path('api/integrations/', include('apps.integrations.urls')),  # External APIs
+    # path('api/compliance/', include('apps.compliance.urls')),  # Certificates, audits
 ]
 
-# Serve media files in development
+# ==============================================================================
+# MEDIA & STATIC FILES (Development Only)
+# ==============================================================================
+
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    

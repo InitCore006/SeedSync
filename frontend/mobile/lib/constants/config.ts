@@ -1,6 +1,6 @@
 export const APP_CONFIG = {
   // API Configuration
-  apiBaseUrl: 'https://6dd3d902766b.ngrok-free.app/api',
+  apiBaseUrl: 'https://93d45b794895.ngrok-free.app/api',
   apiTimeout: 30000, // 30 seconds
 
   // Storage Keys
@@ -24,4 +24,11 @@ export const APP_CONFIG = {
   // Timeouts
   otpExpirySeconds: 300, // 5 minutes
   sessionTimeout: 3600, // 1 hour
+
+  limits: {
+    maxImageSize: 5 * 1024 * 1024, // 5MB
+    maxVideoSize: 50 * 1024 * 1024, // 50MB
+    maxDocumentSize: 10 * 1024 * 1024, // 10MB
+    maxImagesPerUpload: 10,
+  },
 } as const;

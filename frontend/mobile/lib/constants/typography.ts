@@ -24,7 +24,7 @@ export const fontSize = {
 } as const;
 
 // Font Weights
-export const fontWeight = {
+export const fontWeight: Record<string, TextStyle['fontWeight']> = {
   normal: '400',
   medium: '500',
   semibold: '600',

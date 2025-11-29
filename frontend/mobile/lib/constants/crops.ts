@@ -1,3 +1,27 @@
+export const CEREAL_CROPS = [
+  {
+    id: 'rice',
+    name: 'Rice',
+    nameHindi: 'चावल',
+    icon: '🌾',
+    varieties: ['Basmati', 'Sona Masuri', 'IR64', 'Swarna'],
+  },
+  {
+    id: 'wheat',
+    name: 'Wheat',
+    nameHindi: 'गेहूं',
+    icon: '🌾',
+    varieties: ['PBW 343', 'HD 2967', 'WH 1105', 'Lok 1'],
+  },
+  {
+    id: 'maize',
+    name: 'Maize',
+    nameHindi: 'मक्का',
+    icon: '🌽',
+    varieties: ['DHM 117', 'PMH 1', 'Vivek Hybrid 9'],
+  },
+] as const;
+
 export const OILSEED_CROPS = [
   {
     id: 'groundnut',
@@ -114,6 +138,55 @@ export const OILSEED_CROPS = [
       'DCH 519',
     ],
   },
+] as const;
+
+export const PULSES_CROPS = [
+  {
+    id: 'chickpea',
+    name: 'Chickpea',
+    nameHindi: 'चना',
+    icon: '🫘',
+    varieties: ['JG 11', 'JG 14', 'Pusa 372', 'Virat'],
+  },
+  {
+    id: 'pigeon_pea',
+    name: 'Pigeon Pea',
+    nameHindi: 'अरहर',
+    icon: '🫘',
+    varieties: ['Asha', 'Narendra Arhar 1', 'UPAS 120'],
+  },
+] as const;
+
+export const VEGETABLE_CROPS = [
+  {
+    id: 'tomato',
+    name: 'Tomato',
+    nameHindi: 'टमाटर',
+    icon: '🍅',
+    varieties: ['Pusa Ruby', 'Arka Vikas', 'Hisar Arun'],
+  },
+  {
+    id: 'potato',
+    name: 'Potato',
+    nameHindi: 'आलू',
+    icon: '🥔',
+    varieties: ['Kufri Jyoti', 'Kufri Pukhraj', 'Kufri Chandramukhi'],
+  },
+  {
+    id: 'onion',
+    name: 'Onion',
+    nameHindi: 'प्याज',
+    icon: '🧅',
+    varieties: ['Nasik Red', 'Pusa Red', 'Agrifound Light Red'],
+  },
+] as const;
+
+// Combine all crops
+export const CROPS = [
+  ...CEREAL_CROPS,
+  ...OILSEED_CROPS,
+  ...PULSES_CROPS,
+  ...VEGETABLE_CROPS,
 ] as const;
 
 export const QUALITY_GRADES = [

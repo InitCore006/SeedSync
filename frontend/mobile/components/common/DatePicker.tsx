@@ -10,15 +10,15 @@ import {
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@lib/constants/colors';
-import { typography } from '@lib/constants/typography';
-import { spacing, borderRadius } from '@lib/constants/spacing';
-import { formatDate } from '@lib/utils/format';
+import { colors } from '@/lib/constants/colors';
+import { spacing, borderRadius } from '@/lib/constants/spacing';
+import { typography } from '@/lib/constants/typography';
+
 
 interface DatePickerProps {
   label?: string;
-  value?: Date;
-  onChange: (date: Date) => void;
+  value?: string; // Changed to string (ISO format: YYYY-MM-DD)
+  onChange: (date: string) => void; // Changed to return string
   mode?: 'date' | 'time' | 'datetime';
   minimumDate?: Date;
   maximumDate?: Date;
@@ -29,7 +29,7 @@ interface DatePickerProps {
   placeholder?: string;
 }
 
-export const DatePicker: React.FC<DatePickerProps> = ({
+export default function DatePicker({
   label,
   value,
   onChange,
@@ -41,9 +41,12 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   disabled = false,
   containerStyle,
   placeholder = 'Select date',
-}) => {
+}: DatePickerProps) {
   const [show, setShow] = useState(false);
-  const [tempDate, setTempDate] = useState(value || new Date());
+  
+  // Convert string to Date or use current date
+  const dateValue = value ? new Date(value) : new Date();
+  const [tempDate, setTempDate] = useState(dateValue);
 
   const handleChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
@@ -53,27 +56,32 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     if (event.type === 'set' && selectedDate) {
       setTempDate(selectedDate);
       if (Platform.OS === 'android') {
-        onChange(selectedDate);
+        // Convert Date to ISO string (YYYY-MM-DD)
+        const isoDate = selectedDate.toISOString().split('T')[0];
+        onChange(isoDate);
       }
     }
   };
 
   const handleConfirm = () => {
-    onChange(tempDate);
+    // Convert Date to ISO string (YYYY-MM-DD)
+    const isoDate = tempDate.toISOString().split('T')[0];
+    onChange(isoDate);
     setShow(false);
   };
 
   const handleCancel = () => {
-    setTempDate(value || new Date());
+    setTempDate(dateValue);
     setShow(false);
   };
 
+  // Format display value
   const displayValue = value
-    ? mode === 'date'
-      ? formatDate(value)
-      : mode === 'time'
-      ? formatDate(value, 'hh:mm a')
-      : formatDate(value, 'dd MMM yyyy, hh:mm a')
+    ? new Date(value).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
     : placeholder;
 
   return (
@@ -95,11 +103,12 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         ]}
         onPress={() => !disabled && setShow(true)}
         disabled={disabled}
+        activeOpacity={0.7}
       >
         <Ionicons
           name="calendar-outline"
           size={20}
-          color={value ? colors.primary[500] : colors.gray[400]}
+          color={value ? colors.primary : colors.gray[400]}
         />
         <Text
           style={[
@@ -114,7 +123,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
       {/* Error Text */}
       {error && <Text style={styles.errorText}>{error}</Text>}
 
-      {/* Date Picker */}
+      {/* iOS Date Picker Modal */}
       {show && Platform.OS === 'ios' && (
         <Modal visible transparent animationType="slide">
           <View style={styles.modalOverlay}>
@@ -141,6 +150,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         </Modal>
       )}
 
+      {/* Android Date Picker */}
       {show && Platform.OS === 'android' && (
         <DateTimePicker
           value={tempDate}
@@ -153,7 +163,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
       )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -161,8 +171,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.medium,
+    ...typography.label,
     color: colors.text.primary,
     marginBottom: spacing.xs,
   },
@@ -174,13 +183,13 @@ const styles = StyleSheet.create({
   dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border.light,
+    borderColor: colors.border,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     minHeight: 48,
-    gap: spacing.md,
+    gap: spacing.sm,
   },
 
   dateButtonError: {
@@ -194,30 +203,28 @@ const styles = StyleSheet.create({
 
   dateText: {
     flex: 1,
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.regular,
+    ...typography.body,
     color: colors.text.primary,
   },
 
   placeholderText: {
-    color: colors.gray[400],
+    color: colors.text.secondary,
   },
 
   errorText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    ...typography.captionSmall,
     color: colors.error,
     marginTop: spacing.xs,
   },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
 
   modalContent: {
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius['2xl'],
     borderTopRightRadius: borderRadius['2xl'],
   },
@@ -227,18 +234,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    borderBottomColor: colors.border,
   },
 
   cancelButton: {
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.regular,
+    ...typography.body,
     color: colors.gray[600],
   },
 
   confirmButton: {
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.semibold,
-    color: colors.primary[500],
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.primary,
   },
 });

@@ -9,14 +9,16 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@lib/constants/colors';
-import { typography } from '@lib/constants/typography';
-import { spacing, borderRadius } from '@lib/constants/spacing';
+import {typography } from '@/lib/constants/typography';
+import { colors } from '@/lib/constants/colors';
+import { borderRadius, spacing } from '@/lib/constants/spacing';
+
 
 export interface SelectOption {
   label: string;
   value: string;
   icon?: string;
+  description?: string;
 }
 
 interface SelectProps {
@@ -24,30 +26,30 @@ interface SelectProps {
   placeholder?: string;
   value?: string;
   options: SelectOption[];
-  onSelect: (value: string) => void;
+  onValueChange: (value: string) => void; // Changed from onSelect to onValueChange
   error?: string;
   required?: boolean;
   disabled?: boolean;
   containerStyle?: ViewStyle;
 }
 
-export const Select: React.FC<SelectProps> = ({
+export default function Select({
   label,
   placeholder = 'Select an option',
   value,
   options,
-  onSelect,
+  onValueChange, // Using onValueChange
   error,
   required = false,
   disabled = false,
   containerStyle,
-}) => {
+}: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const selectedOption = options.find((opt) => opt.value === value);
 
   const handleSelect = (selectedValue: string) => {
-    onSelect(selectedValue);
+    onValueChange(selectedValue); // Call onValueChange
     setIsOpen(false);
   };
 
@@ -70,19 +72,25 @@ export const Select: React.FC<SelectProps> = ({
         ]}
         onPress={() => !disabled && setIsOpen(true)}
         disabled={disabled}
+        activeOpacity={0.7}
       >
-        <Text
-          style={[
-            styles.selectText,
-            !selectedOption && styles.placeholderText,
-          ]}
-        >
-          {selectedOption ? selectedOption.label : placeholder}
-        </Text>
+        <View style={styles.selectContent}>
+          {selectedOption?.icon && (
+            <Text style={styles.selectedIcon}>{selectedOption.icon}</Text>
+          )}
+          <Text
+            style={[
+              styles.selectText,
+              !selectedOption && styles.placeholderText,
+            ]}
+          >
+            {selectedOption ? selectedOption.label : placeholder}
+          </Text>
+        </View>
         <Ionicons
-          name="chevron-down"
+          name={isOpen ? 'chevron-up' : 'chevron-down'}
           size={20}
-          color={colors.gray[400]}
+          color={disabled ? colors.gray[400] : colors.text.secondary}
         />
       </TouchableOpacity>
 
@@ -101,11 +109,14 @@ export const Select: React.FC<SelectProps> = ({
           activeOpacity={1}
           onPress={() => setIsOpen(false)}
         >
-          <View style={styles.modalContent}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
             {/* Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{label || 'Select Option'}</Text>
-              <TouchableOpacity onPress={() => setIsOpen(false)}>
+              <TouchableOpacity 
+                onPress={() => setIsOpen(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <Ionicons name="close" size={24} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
@@ -114,6 +125,7 @@ export const Select: React.FC<SelectProps> = ({
             <FlatList
               data={options}
               keyExtractor={(item) => item.value}
+              showsVerticalScrollIndicator={false}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[
@@ -121,21 +133,27 @@ export const Select: React.FC<SelectProps> = ({
                     item.value === value && styles.selectedOption,
                   ]}
                   onPress={() => handleSelect(item.value)}
+                  activeOpacity={0.7}
                 >
                   {item.icon && <Text style={styles.optionIcon}>{item.icon}</Text>}
-                  <Text
-                    style={[
-                      styles.optionText,
-                      item.value === value && styles.selectedOptionText,
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
+                  <View style={styles.optionContent}>
+                    <Text
+                      style={[
+                        styles.optionText,
+                        item.value === value && styles.selectedOptionText,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                    {item.description && (
+                      <Text style={styles.optionDescription}>{item.description}</Text>
+                    )}
+                  </View>
                   {item.value === value && (
                     <Ionicons
-                      name="checkmark"
-                      size={20}
-                      color={colors.primary[500]}
+                      name="checkmark-circle"
+                      size={22}
+                      color={colors.primary}
                     />
                   )}
                 </TouchableOpacity>
@@ -146,7 +164,7 @@ export const Select: React.FC<SelectProps> = ({
       </Modal>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -154,8 +172,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.medium,
+    ...typography.label,
     color: colors.text.primary,
     marginBottom: spacing.xs,
   },
@@ -168,9 +185,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border.light,
+    borderColor: colors.border,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     minHeight: 48,
@@ -185,32 +202,41 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 
+  selectContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+
+  selectedIcon: {
+    fontSize: 20,
+  },
+
   selectText: {
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.regular,
+    ...typography.body,
     color: colors.text.primary,
     flex: 1,
   },
 
   placeholderText: {
-    color: colors.gray[400],
+    color: colors.text.secondary,
   },
 
   errorText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    ...typography.captionSmall,
     color: colors.error,
     marginTop: spacing.xs,
   },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
 
   modalContent: {
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius['2xl'],
     borderTopRightRadius: borderRadius['2xl'],
     maxHeight: '70%',
@@ -222,12 +248,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    borderBottomColor: colors.border,
   },
 
   modalTitle: {
-    fontSize: typography.fontSize.lg,
-    fontFamily: typography.fontFamily.semibold,
+    ...typography.h4,
     color: colors.text.primary,
   },
 
@@ -236,27 +261,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    borderBottomColor: colors.borderLight,
     gap: spacing.md,
   },
 
   selectedOption: {
-    backgroundColor: colors.primary[50],
+    backgroundColor: `${colors.primary}10`,
   },
 
   optionIcon: {
-    fontSize: typography.fontSize['2xl'],
+    fontSize: 24,
+  },
+
+  optionContent: {
+    flex: 1,
   },
 
   optionText: {
-    flex: 1,
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.regular,
+    ...typography.body,
     color: colors.text.primary,
   },
 
   selectedOptionText: {
-    fontFamily: typography.fontFamily.semibold,
-    color: colors.primary[500],
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+
+  optionDescription: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: 2,
   },
 });

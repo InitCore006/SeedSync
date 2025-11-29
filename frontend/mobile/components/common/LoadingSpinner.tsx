@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, ViewStyle } from 'react-native';
 import { colors } from '@lib/constants/colors';
-import { typography } from '@lib/constants/typography';
+import { typography, fontFamily, fontSize } from '@lib/constants/typography';
 import { spacing } from '@lib/constants/spacing';
 
 interface LoadingSpinnerProps {
@@ -38,13 +38,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.background,
   },
 
   message: {
     marginTop: spacing.md,
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.base,
+    fontFamily: fontFamily.regular,
     color: colors.text.secondary,
     textAlign: 'center',
   },

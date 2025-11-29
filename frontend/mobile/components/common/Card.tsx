@@ -1,62 +1,41 @@
+import { colors } from '@/lib/constants/colors';
+import { borderRadius, spacing } from '@/lib/constants/spacing';
 import React from 'react';
-import { View, StyleSheet, ViewStyle, TouchableOpacity, TouchableOpacityProps } from 'react-native';
-import { colors } from '@lib/constants/colors';
-import { spacing, borderRadius, shadows } from '@lib/constants/spacing';
+import { View, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
 
-interface CardProps extends TouchableOpacityProps {
+
+interface CardProps {
   children: React.ReactNode;
-  variant?: 'default' | 'outlined' | 'elevated';
-  padding?: keyof typeof spacing;
-  style?: ViewStyle;
   onPress?: () => void;
+  style?: ViewStyle;
+  elevated?: boolean;
 }
 
-export const Card: React.FC<CardProps> = ({
-  children,
-  variant = 'default',
-  padding = 'md',
-  style,
-  onPress,
-  ...props
-}) => {
-  const cardStyles: ViewStyle[] = [
-    styles.base,
-    styles[variant],
-    { padding: spacing[padding] },
-    style,
-  ];
-
-  if (onPress) {
-    return (
-      <TouchableOpacity style={cardStyles} onPress={onPress} activeOpacity={0.7} {...props}>
-        {children}
-      </TouchableOpacity>
-    );
-  }
+export default function Card({ children, onPress, style, elevated = true }: CardProps) {
+  const Container = onPress ? TouchableOpacity : View;
 
   return (
-    <View style={cardStyles} {...props}>
+    <Container
+      style={[styles.card, elevated && styles.elevated, style]}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+    >
       {children}
-    </View>
+    </Container>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  base: {
+  card: {
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    backgroundColor: colors.background.default,
+    padding: spacing.md,
   },
-
-  default: {
-    ...shadows.sm,
-  },
-
-  outlined: {
-    borderWidth: 1,
-    borderColor: colors.border.light,
-  },
-
   elevated: {
-    ...shadows.lg,
+    elevation: 2,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
 });

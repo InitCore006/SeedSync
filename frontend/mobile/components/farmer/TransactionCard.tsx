@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Transaction } from '@/types/farmer.types';
 import { colors } from '@lib/constants/colors';
-import { typography } from '@lib/constants/typography';
+import { typography, fontFamily, fontSize } from '@lib/constants/typography';
 import { spacing, borderRadius, shadows } from '@lib/constants/spacing';
 import { formatCurrency, formatDate } from '@lib/utils/format';
 
@@ -112,7 +112,7 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, o
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     ...shadows.sm,
@@ -131,14 +131,14 @@ const styles = StyleSheet.create({
   },
 
   transactionId: {
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.semibold,
+    fontSize: fontSize.base,
+    fontFamily: fontFamily.semibold,
     color: colors.text.primary,
   },
 
   buyerName: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
     color: colors.text.secondary,
     marginTop: spacing.xs,
   },
@@ -150,19 +150,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: colors.border.light,
+    borderColor: colors.borderLight,
     marginBottom: spacing.sm,
   },
 
   lotText: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.medium,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
     color: colors.text.primary,
   },
 
   quantityText: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
     color: colors.text.secondary,
   },
 
@@ -178,33 +178,33 @@ const styles = StyleSheet.create({
   },
 
   amountLabel: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular,
     color: colors.text.secondary,
   },
 
   amountValue: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.medium,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.medium,
     color: colors.text.primary,
   },
 
   totalRow: {
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderColor: colors.border.light,
+    borderColor: colors.border,
     marginTop: spacing.xs,
   },
 
   totalLabel: {
-    fontSize: typography.fontSize.base,
-    fontFamily: typography.fontFamily.semibold,
+    fontSize: fontSize.base,
+    fontFamily: fontFamily.semibold,
     color: colors.text.primary,
   },
 
   totalValue: {
-    fontSize: typography.fontSize.lg,
-    fontFamily: typography.fontFamily.bold,
+    fontSize: fontSize.lg,
+    fontFamily: fontFamily.bold,
     color: colors.primary[500],
   },
 
@@ -215,8 +215,8 @@ const styles = StyleSheet.create({
   },
 
   dateText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
     color: colors.gray[500],
   },
 
@@ -227,14 +227,14 @@ const styles = StyleSheet.create({
   },
 
   paidText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.medium,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.medium,
     color: colors.success,
   },
 
   utrText: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
     color: colors.gray[500],
     marginTop: spacing.xs,
   },
