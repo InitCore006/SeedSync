@@ -1,118 +1,157 @@
 export interface User {
-
   id: string;
-  username: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  full_name: string;
   phone_number: string;
-  role: 'FARMER' | 'FPO' | 'PROCESSOR' | 'RETAILER' | 'LOGISTICS' | 'WAREHOUSE' | 'GOVERNMENT';
-  role_display: string;
-  approval_status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
-  is_approved: boolean;
-  phone_verified: boolean;
-  email_verified: boolean;
-  preferred_language: string;
-  profile_picture: string | null;
+  full_name: string;
+  email?: string;
+  role: 'farmer' | 'fpo' | 'processor' | 'buyer' | 'admin';
   is_active: boolean;
+  is_phone_verified: boolean;
+  is_email_verified: boolean;
+  preferred_language: string;
   date_joined: string;
   last_login: string | null;
-  login_count: number;
-  
-  // Farmer-specific fields
-  farmer_id?: string;
-  profile_completed?: boolean;
-  profile_completion_percentage?: number;
-  location?: string;
 }
 
+export interface UserProfile {
+  id: string;
+  user: string;
+  date_of_birth: string | null;
+  gender: 'M' | 'F' | 'O' | null;
+  address_line1: string;
+  address_line2: string;
+  village: string;
+  block: string;
+  district: string;
+  state: string;
+  pincode: string;
+  bank_name: string;
+  account_number: string;
+  ifsc_code: string;
+  account_holder_name: string;
+  education_level: string;
+}
+
+export interface Farmer {
+  id: string;
+  user: string;
+  farmer_id: string;
+  total_land_area: number;
+  irrigated_land: number;
+  rain_fed_land: number;
+  farmer_category: 'marginal' | 'small' | 'semi_medium' | 'medium' | 'large';
+  caste_category: 'general' | 'obc' | 'sc' | 'st';
+  has_kisan_credit_card: boolean;
+  kcc_number: string;
+  has_pmfby_insurance: boolean;
+  pmfby_policy_number: string;
+  has_pm_kisan: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================================
+// LOGIN
+// ============================================================================
+
 export interface LoginRequest {
-  phone_number?: string;  // Make optional
-  username?: string;       // Make optional
+  phone_number: string;
   password: string;
 }
 
 export interface LoginResponse {
-  access: string;         // Changed from tokens.access
-  refresh: string;        // Changed from tokens.refresh
+  access: string;
+  refresh: string;
   user: User;
-  farmer_profile?: {
-    farmer_id: string;
-    profile_completed: boolean;
-    profile_completion_percentage: number;
-  };
-  redirect_to?: string;
+  message: string;
 }
 
 // ============================================================================
-// UNIFIED OTP SYSTEM
+// PHONE VERIFICATION (No OTP Model - Uses Cache)
 // ============================================================================
 
 export interface SendOTPRequest {
   phone_number: string;
-  purpose: 'REGISTRATION' | 'LOGIN' | 'PASSWORD_RESET' | 'PHONE_VERIFICATION';
 }
 
 export interface SendOTPResponse {
-  detail: string;
-  phone_number: string;
-  purpose: string;
-  otp?: string; // Only in development
-  expires_in: number;
   message: string;
+  otp?: string; // Only in development
 }
 
 export interface VerifyOTPRequest {
   phone_number: string;
   otp: string;
-  purpose: 'REGISTRATION' | 'LOGIN' | 'PASSWORD_RESET' | 'PHONE_VERIFICATION';
 }
 
 export interface VerifyOTPResponse {
-  detail: string;
-  verified: boolean;
-  phone_number: string;
-  purpose: string;
-  next_step?: string;
-  message?: string;
-}
-
-// Verify Phone (Registration specific)
-export interface VerifyPhoneRequest {
-  phone_number: string;
-}
-
-export interface VerifyPhoneResponse {
-  detail: string;
-  phone_number: string;
-  otp?: string; // Only in development
-  expires_in: number;
   message: string;
-}
-
-export interface VerifyPhoneOTPRequest {
-  phone_number: string;
-  otp: string;
-}
-
-export interface VerifyPhoneOTPResponse {
-  detail: string;
   verified: boolean;
-  phone_number: string;
-  next_step: string;
-  message: string;
 }
 
 // ============================================================================
-// PASSWORD MANAGEMENT
+// FARMER REGISTRATION (Single Step)
 // ============================================================================
 
-export interface ChangePasswordRequest {
-  old_password: string;
-  new_password: string;
-  new_password_confirm: string;
+export interface FarmerRegistrationRequest {
+  // User fields
+  phone_number: string;
+  password: string;
+  password_confirm: string;
+  full_name: string;
+  email?: string;
+  preferred_language?: string;
+  
+  // Profile fields
+  date_of_birth?: string;
+  gender?: 'M' | 'F' | 'O';
+  address_line1?: string;
+  address_line2?: string;
+  village?: string;
+  block?: string;
+  district: string;
+  state: string;
+  pincode: string;
+  
+  // Bank details (optional)
+  bank_name?: string;
+  account_number?: string;
+  ifsc_code?: string;
+  account_holder_name?: string;
+  education_level?: string;
+  
+  // Farmer fields
+  total_land_area: number;
+  irrigated_land?: number;
+  rain_fed_land?: number;
+  farmer_category?: 'marginal' | 'small' | 'semi_medium' | 'medium' | 'large';
+  caste_category?: 'general' | 'obc' | 'sc' | 'st';
+  
+  // Government schemes (optional)
+  has_kisan_credit_card?: boolean;
+  kcc_number?: string;
+  has_pmfby_insurance?: boolean;
+  pmfby_policy_number?: string;
+  has_pm_kisan?: boolean;
 }
+
+export interface FarmerRegistrationResponse {
+  message: string;
+  farmer_id: string;
+  user: {
+    id: string;
+    phone_number: string;
+    full_name: string;
+    role: string;
+  };
+  tokens: {
+    refresh: string;
+    access: string;
+  };
+}
+
+// ============================================================================
+// PASSWORD RESET
+// ============================================================================
 
 export interface PasswordResetRequest {
   phone_number: string;
@@ -125,48 +164,16 @@ export interface PasswordResetConfirm {
   new_password_confirm: string;
 }
 
+export interface PasswordResetResponse {
+  message: string;
+}
+
 // ============================================================================
-// FARMER REGISTRATION
+// CHANGE PASSWORD
 // ============================================================================
 
-export interface FarmerRegistrationStep1 {
-  phone_number: string;
-  first_name: string;
-  last_name?: string;
-  father_husband_name: string;
-  date_of_birth?: string;
-  gender: 'M' | 'F' | 'O';
-  email?: string;
-}
-
-export interface FarmerRegistrationStep2 {
-  village: string;
-  district: string;
-  state: string;
-  pincode: string;
-  latitude?: number;
-  longitude?: number;
-  total_land_area: number;
-  primary_crops: string[];
-  expected_annual_production: number;
-}
-
-export interface FarmerRegistrationStep3 {
-  bank_account_number?: string;
-  ifsc_code?: string;
-  bank_name?: string;
-  branch_name?: string;
-  account_holder_name?: string;
-  upi_id?: string;
-  password: string;
-  password_confirm: string;
-}
-
-export interface RegistrationProgressResponse {
-  phone_verified: boolean;
-  step1_completed: boolean;
-  step2_completed: boolean;
-  current_step: number;
-  step1_data: FarmerRegistrationStep1 | null;
-  step2_data: FarmerRegistrationStep2 | null;
+export interface ChangePasswordRequest {
+  old_password: string;
+  new_password: string;
+  new_password_confirm: string;
 }

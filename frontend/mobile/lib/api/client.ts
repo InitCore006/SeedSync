@@ -31,22 +31,48 @@ export const getRefreshToken = async (): Promise<string | null> => {
   }
 };
 
-export const setTokens = async (accessToken: string, refreshToken: string): Promise<void> => {
+export const setTokens = async (accessToken: string, refreshToken: string) => {
   try {
-    await SecureStore.setItemAsync(APP_CONFIG.storageKeys.authToken, accessToken);
-    await SecureStore.setItemAsync(APP_CONFIG.storageKeys.refreshToken, refreshToken);
+    // ✅ Store as individual strings, not objects
+    await SecureStore.setItemAsync('access_token', accessToken);
+    await SecureStore.setItemAsync('refresh_token', refreshToken);
+    
+    // Set axios default header
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+    
+    console.log('✅ Tokens stored successfully');
   } catch (error) {
-    console.error('Error setting tokens:', error);
+    console.error('❌ Error setting tokens:', error);
     throw error;
   }
 };
 
-export const clearTokens = async (): Promise<void> => {
+export const getTokens = async () => {
   try {
-    await SecureStore.deleteItemAsync(APP_CONFIG.storageKeys.authToken);
-    await SecureStore.deleteItemAsync(APP_CONFIG.storageKeys.refreshToken);
+    const accessToken = await SecureStore.getItemAsync('access_token');
+    const refreshToken = await SecureStore.getItemAsync('refresh_token');
+    
+    return {
+      accessToken,
+      refreshToken,
+    };
   } catch (error) {
-    console.error('Error clearing tokens:', error);
+    console.error('❌ Error getting tokens:', error);
+    return { accessToken: null, refreshToken: null };
+  }
+};
+
+export const removeTokens = async () => {
+  try {
+    await SecureStore.deleteItemAsync('access_token');
+    await SecureStore.deleteItemAsync('refresh_token');
+    
+    // Remove from axios headers
+    delete apiClient.defaults.headers.common['Authorization'];
+    
+    console.log('✅ Tokens removed successfully');
+  } catch (error) {
+    console.error('❌ Error removing tokens:', error);
   }
 };
 
@@ -158,7 +184,7 @@ apiClient.interceptors.response.use(
       const refreshToken = await getRefreshToken();
 
       if (!refreshToken) {
-        await clearTokens();
+        await removeTokens();
         processQueue(error, null);
         isRefreshing = false;
         return Promise.reject(error);
@@ -183,7 +209,7 @@ apiClient.interceptors.response.use(
 
         return apiClient(originalRequest);
       } catch (refreshError) {
-        await clearTokens();
+        await removeTokens();
         processQueue(refreshError as AxiosError, null);
         isRefreshing = false;
         return Promise.reject(refreshError);

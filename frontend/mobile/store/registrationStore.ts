@@ -1,9 +1,5 @@
 import { create } from 'zustand';
-import {
-  FarmerRegistrationStep1,
-  FarmerRegistrationStep2,
-  FarmerRegistrationStep3,
-} from '@/types/auth.types';
+import { FarmerRegistrationRequest } from '@/types/auth.types';
 import { authService } from '@/services/auth.service';
 import { setTokens } from '@/lib/api/client';
 import { userStorage } from '@/lib/utils/storage';
@@ -14,259 +10,269 @@ interface RegistrationState {
   currentStep: number;
   phoneNumber: string;
   phoneVerified: boolean;
-  step1Data: FarmerRegistrationStep1 | null;
-  step2Data: FarmerRegistrationStep2 | null;
+  
+  // Form Data (split across steps)
+  personalInfo: {
+    fullName: string;
+    email: string;
+    password: string;
+    dateOfBirth: string | null;
+    gender: 'M' | 'F' | 'O';
+    preferredLanguage: string;
+    educationLevel: string;
+  };
+  
+  addressInfo: {
+    addressLine1: string;
+    addressLine2: string;
+    village: string;
+    block: string;
+    district: string;
+    state: string;
+    pincode: string;
+  };
+  
+  farmInfo: {
+    totalLandArea: string;
+    irrigatedLand: string;
+    rainFedLand: string;
+    farmerCategory: 'marginal' | 'small' | 'semi_medium' | 'medium' | 'large';
+    casteCategory: 'general' | 'obc' | 'sc' | 'st';
+    isFPOMember: boolean;
+    primaryFPO: string;
+  };
+  
+  bankInfo: {
+    bankName: string;
+    accountNumber: string;
+    ifscCode: string;
+    accountHolderName: string;
+  };
+  
+  govtSchemes: {
+    hasKCC: boolean;
+    kccNumber: string;
+    hasPMFBY: boolean;
+    pmfbyPolicy: string;
+  };
+  
   isLoading: boolean;
   error: string | null;
 
   // Actions
   setPhoneNumber: (phone: string) => void;
-  setPhoneVerified: (verified: boolean) => void;
-  sendPhoneOTP: (phone: string) => Promise<void>;
-  verifyPhoneOTP: (otp: string) => Promise<void>;
-  submitStep1: (data: FarmerRegistrationStep1) => Promise<void>;
-  submitStep2: (data: FarmerRegistrationStep2) => Promise<void>;
-  submitStep3: (data: FarmerRegistrationStep3) => Promise<void>;
-  loadProgress: () => Promise<void>;
-  clearRegistration: () => Promise<void>;
+  sendOTP: (phone: string) => Promise<void>;
+  verifyOTP: (otp: string) => Promise<void>;
+  
+  // Step Navigation
+  setCurrentStep: (step: number) => void;
+  nextStep: () => void;
+  previousStep: () => void;
+  
+  // Form Updates
+  updatePersonalInfo: (data: Partial<RegistrationState['personalInfo']>) => void;
+  updateAddressInfo: (data: Partial<RegistrationState['addressInfo']>) => void;
+  updateFarmInfo: (data: Partial<RegistrationState['farmInfo']>) => void;
+  updateBankInfo: (data: Partial<RegistrationState['bankInfo']>) => void;
+  updateGovtSchemes: (data: Partial<RegistrationState['govtSchemes']>) => void;
+  
+  // Registration
+  registerFarmer: () => Promise<void>;
   clearError: () => void;
+  resetRegistration: () => void;
 }
 
+const initialPersonalInfo = {
+  fullName: '',
+  email: '',
+  password: '',
+  dateOfBirth: null,
+  gender: 'M' as const,
+  preferredLanguage: 'en',
+  educationLevel: '',
+};
+
+const initialAddressInfo = {
+  addressLine1: '',
+  addressLine2: '',
+  village: '',
+  block: '',
+  district: '',
+  state: '',
+  pincode: '',
+};
+
+const initialFarmInfo = {
+  totalLandArea: '',
+  irrigatedLand: '0',
+  rainFedLand: '0',
+  farmerCategory: 'marginal' as const,
+  casteCategory: 'general' as const,
+  isFPOMember: false,
+  primaryFPO: '',
+};
+
+const initialBankInfo = {
+  bankName: '',
+  accountNumber: '',
+  ifscCode: '',
+  accountHolderName: '',
+};
+
+const initialGovtSchemes = {
+  hasKCC: false,
+  kccNumber: '',
+  hasPMFBY: false,
+  pmfbyPolicy: '',
+};
+
 export const useRegistrationStore = create<RegistrationState>((set, get) => ({
-  // ============================================================================
-  // INITIAL STATE
-  // ============================================================================
-  currentStep: 0,
+  // Initial State
+  currentStep: 1,
   phoneNumber: '',
   phoneVerified: false,
-  step1Data: null,
-  step2Data: null,
+  personalInfo: initialPersonalInfo,
+  addressInfo: initialAddressInfo,
+  farmInfo: initialFarmInfo,
+  bankInfo: initialBankInfo,
+  govtSchemes: initialGovtSchemes,
   isLoading: false,
   error: null,
 
-  // ============================================================================
-  // SETTERS
-  // ============================================================================
-  setPhoneNumber: (phone: string) => {
-    set({ phoneNumber: phone });
-  },
+  // Basic Actions
+  setPhoneNumber: (phone: string) => set({ phoneNumber: phone }),
+  clearError: () => set({ error: null }),
+  
+  resetRegistration: () => set({
+    currentStep: 1,
+    phoneNumber: '',
+    phoneVerified: false,
+    personalInfo: initialPersonalInfo,
+    addressInfo: initialAddressInfo,
+    farmInfo: initialFarmInfo,
+    bankInfo: initialBankInfo,
+    govtSchemes: initialGovtSchemes,
+    error: null,
+  }),
 
-  setPhoneVerified: (verified: boolean) => {
-    set({ phoneVerified: verified });
-  },
+  // Step Navigation
+  setCurrentStep: (step: number) => set({ currentStep: step }),
+  nextStep: () => set((state) => ({ currentStep: state.currentStep + 1 })),
+  previousStep: () => set((state) => ({ currentStep: Math.max(1, state.currentStep - 1) })),
 
-  clearError: () => {
-    set({ error: null });
-  },
+  // Form Updates
+  updatePersonalInfo: (data) => set((state) => ({
+    personalInfo: { ...state.personalInfo, ...data }
+  })),
+  
+  updateAddressInfo: (data) => set((state) => ({
+    addressInfo: { ...state.addressInfo, ...data }
+  })),
+  
+  updateFarmInfo: (data) => set((state) => ({
+    farmInfo: { ...state.farmInfo, ...data }
+  })),
+  
+  updateBankInfo: (data) => set((state) => ({
+    bankInfo: { ...state.bankInfo, ...data }
+  })),
+  
+  updateGovtSchemes: (data) => set((state) => ({
+    govtSchemes: { ...state.govtSchemes, ...data }
+  })),
 
-  // ============================================================================
-  // PHONE VERIFICATION (Using verify-phone endpoint)
-  // ============================================================================
-  sendPhoneOTP: async (phone: string) => {
+  // Phone Verification
+  sendOTP: async (phone: string) => {
     set({ isLoading: true, error: null });
-
     try {
-      // Use verify-phone endpoint (checks if already registered + sends OTP)
-      const response = await authService.verifyPhone({
-        phone_number: phone,
-      });
-
-      set({
-        phoneNumber: phone,
-        isLoading: false,
-      });
-
-      console.log('✅ OTP sent successfully:', response);
+      const response = await authService.sendOTP({ phone_number: phone });
+      set({ phoneNumber: phone, isLoading: false });
+      console.log('✅ OTP sent:', response.message);
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail ||
-        error.message ||
-        'Failed to send OTP. Please try again.';
-
-      set({
-        isLoading: false,
-        error: errorMessage,
-      });
-
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to send OTP';
+      set({ isLoading: false, error: errorMessage });
       throw error;
     }
   },
 
-  verifyPhoneOTP: async (otp: string) => {
+  verifyOTP: async (otp: string) => {
     const { phoneNumber } = get();
     set({ isLoading: true, error: null });
-
     try {
-      // Use unified verify-otp with purpose: REGISTRATION
-      const response = await authService.verifyOTP({
-        phone_number: phoneNumber,
-        otp,
-        purpose: 'REGISTRATION',
-      });
-
+      const response = await authService.verifyRegistrationOTP({ phone_number: phoneNumber, otp });
       if (response.verified) {
-        set({
-          phoneVerified: true,
-          currentStep: 1,
-          isLoading: false,
-        });
-
+        set({ phoneVerified: true, isLoading: false, currentStep: 1 });
         router.push('/(auth)/registration/step1-personal');
-      } else {
-        throw new Error('OTP verification failed');
       }
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail ||
-        error.message ||
-        'Invalid OTP. Please try again.';
-
-      set({
-        isLoading: false,
-        error: errorMessage,
-      });
-
+      const errorMessage = error.response?.data?.error || error.message || 'Invalid OTP';
+      set({ isLoading: false, error: errorMessage });
       throw error;
     }
   },
 
-  // ============================================================================
-  // REGISTRATION STEPS
-  // ============================================================================
-  submitStep1: async (data: FarmerRegistrationStep1) => {
+  // Final Registration
+  registerFarmer: async () => {
+    const { phoneNumber, personalInfo, addressInfo, farmInfo, bankInfo, govtSchemes } = get();
     set({ isLoading: true, error: null });
 
-    try {
-      await authService.farmerRegistrationStep1(data);
+    const registrationData: FarmerRegistrationRequest = {
+      // User fields
+      phone_number: phoneNumber,
+      password: personalInfo.password,
+      password_confirm: personalInfo.password,
+      full_name: personalInfo.fullName.trim(),
+      email: personalInfo.email.trim() || undefined,
+      preferred_language: personalInfo.preferredLanguage,
 
-      set({
-        step1Data: data,
-        currentStep: 2,
-        isLoading: false,
-      });
+      // Profile fields
+      date_of_birth: personalInfo.dateOfBirth || undefined,
+      gender: personalInfo.gender,
+      address_line1: addressInfo.addressLine1.trim(),
+      address_line2: addressInfo.addressLine2.trim(),
+      village: addressInfo.village.trim(),
+      block: addressInfo.block.trim(),
+      district: addressInfo.district.trim(),
+      state: addressInfo.state,
+      pincode: addressInfo.pincode.trim(),
 
-      router.push('/(auth)/registration/step2-location');
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail ||
-        'Failed to save personal details. Please try again.';
+      // Bank details
+      bank_name: bankInfo.bankName.trim() || undefined,
+      account_number: bankInfo.accountNumber.trim() || undefined,
+      ifsc_code: bankInfo.ifscCode.trim().toUpperCase() || undefined,
+      account_holder_name: bankInfo.accountHolderName.trim() || undefined,
+      education_level: personalInfo.educationLevel || undefined,
 
-      set({
-        isLoading: false,
-        error: errorMessage,
-      });
+      // Farmer fields
+      total_land_area: parseFloat(farmInfo.totalLandArea),
+      irrigated_land: parseFloat(farmInfo.irrigatedLand) || 0,
+      rain_fed_land: parseFloat(farmInfo.rainFedLand) || 0,
+      farmer_category: farmInfo.farmerCategory,
+      caste_category: farmInfo.casteCategory,
 
-      throw error;
-    }
-  },
+      // FPO membership
+      is_fpo_member: farmInfo.isFPOMember,
+      primary_fpo: farmInfo.isFPOMember && farmInfo.primaryFPO ? farmInfo.primaryFPO : undefined,
 
-  submitStep2: async (data: FarmerRegistrationStep2) => {
-    set({ isLoading: true, error: null });
-
-    try {
-      await authService.farmerRegistrationStep2(data);
-
-      set({
-        step2Data: data,
-        currentStep: 3,
-        isLoading: false,
-      });
-
-      router.push('/(auth)/registration/step3-banking');
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail ||
-        'Failed to save farm details. Please try again.';
-
-      set({
-        isLoading: false,
-        error: errorMessage,
-      });
-
-      throw error;
-    }
-  },
-
-  submitStep3: async (data: FarmerRegistrationStep3) => {
-    set({ isLoading: true, error: null });
+      // Government schemes
+      has_kisan_credit_card: govtSchemes.hasKCC,
+      kcc_number: govtSchemes.hasKCC ? govtSchemes.kccNumber.trim() : undefined,
+      has_pmfby_insurance: govtSchemes.hasPMFBY,
+      pmfby_policy_number: govtSchemes.hasPMFBY ? govtSchemes.pmfbyPolicy.trim() : undefined,
+      has_pm_kisan: false,
+    };
 
     try {
-      const response = await authService.farmerRegistrationStep3(data);
-
-      // Save tokens
+      const response = await authService.registerFarmer(registrationData);
       await setTokens(response.tokens.access, response.tokens.refresh);
-
-      // Save user data
       await userStorage.saveUser(response.user);
-
-      // Clear registration data
-      set({
-        currentStep: 0,
-        phoneNumber: '',
-        phoneVerified: false,
-        step1Data: null,
-        step2Data: null,
-        isLoading: false,
-      });
-
+      
+      set({ isLoading: false });
       router.replace('/(auth)/registration/success');
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail ||
-        'Registration failed. Please try again.';
-
-      set({
-        isLoading: false,
-        error: errorMessage,
-      });
-
+      const errorMessage = error.response?.data?.detail || error.response?.data?.error || 'Registration failed';
+      set({ isLoading: false, error: errorMessage });
       throw error;
-    }
-  },
-
-  // ============================================================================
-  // LOAD PROGRESS
-  // ============================================================================
-  loadProgress: async () => {
-    set({ isLoading: true });
-
-    try {
-      const progress = await authService.getRegistrationProgress();
-
-      set({
-        phoneVerified: progress.phone_verified,
-        step1Data: progress.step1_data,
-        step2Data: progress.step2_data,
-        currentStep: progress.current_step,
-        isLoading: false,
-      });
-    } catch (error) {
-      console.error('Failed to load registration progress:', error);
-      set({ isLoading: false });
-    }
-  },
-
-  // ============================================================================
-  // CLEAR REGISTRATION
-  // ============================================================================
-  clearRegistration: async () => {
-    set({ isLoading: true });
-
-    try {
-      await authService.clearRegistrationSession();
-
-      set({
-        currentStep: 0,
-        phoneNumber: '',
-        phoneVerified: false,
-        step1Data: null,
-        step2Data: null,
-        isLoading: false,
-        error: null,
-      });
-    } catch (error) {
-      console.error('Failed to clear registration:', error);
-      set({ isLoading: false });
     }
   },
 }));

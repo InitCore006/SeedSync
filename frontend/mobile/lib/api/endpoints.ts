@@ -1,36 +1,30 @@
 export const API_ENDPOINTS = {
   // Authentication
   AUTH: {
-    LOGIN: '/users/token/',
-    REFRESH: '/users/token/refresh/',
+    LOGIN: '/users/login/',
     LOGOUT: '/users/logout/',
-    CHANGE_PASSWORD: '/users/change-password/',
-    PASSWORD_RESET_REQUEST: '/users/password-reset/request/',
-    PASSWORD_RESET_CONFIRM: '/users/password-reset/confirm/',
+    REFRESH: '/users/token/refresh/',
+    
+    // Phone Verification (uses cache, no OTP model)
     SEND_OTP: '/users/send-otp/',
-    VERIFY_OTP: '/users/verify-otp/',
-    VERIFY_PHONE: '/users/verify-phone/',
+    VERIFY_REGISTRATION_OTP: '/users/verify-registration-otp/',
+    
+    // Password
+    CHANGE_PASSWORD: '/users/change-password/',
+    PASSWORD_RESET_REQUEST: '/users/password-reset/',
+    PASSWORD_RESET_CONFIRM: '/users/password-reset/confirm/',
   },
 
   // User Profile
   USER: {
     PROFILE: '/users/profile/',
-    DASHBOARD_STATS: '/users/dashboard-stats/',
+    UPDATE_PROFILE: '/users/profile/update/',
   },
 
-  // Farmer Registration
-  FARMER_REGISTRATION: {
-    STEP1: '/users/farmer-registration/step1/',
-    STEP2: '/users/farmer-registration/step2/',
-    STEP3: '/users/farmer-registration/step3/',
-    PROGRESS: '/users/farmer-registration/progress/',
-    CLEAR_SESSION: '/users/farmer-registration/clear-session/',
-  },
-
-  // Farmer Profile
+  // Farmer Registration (Single endpoint)
   FARMER: {
-    MY_PROFILE: '/users/farmer-profiles/my-profile/',
-    MY_DASHBOARD: '/users/farmer-profiles/my-dashboard/',
-    UPDATE_PROFILE: '/users/farmer-profiles/update-profile/',
+    REGISTER: '/farmers/register/',
+    PROFILE: '/farmers/profile/',
+    UPDATE_PROFILE: '/farmers/profile/update/',
   },
 } as const;

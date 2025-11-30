@@ -82,15 +82,45 @@ export const appStorage = {
 // ============================================================================
 
 export const userStorage = {
+  USER_KEY: '@user_data',
+
   async saveUser(user: User): Promise<void> {
-    await appStorage.setItem(APP_CONFIG.storageKeys.userData, user);
+    try {
+      await AsyncStorage.setItem(this.USER_KEY, JSON.stringify(user));
+    } catch (error) {
+      console.error('Error saving user:', error);
+      throw error;
+    }
   },
 
   async getUser(): Promise<User | null> {
-    return await appStorage.getItem(APP_CONFIG.storageKeys.userData);
+    try {
+      const userData = await AsyncStorage.getItem(this.USER_KEY);
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Error getting user:', error);
+      return null;
+    }
   },
 
   async clearUser(): Promise<void> {
-    await appStorage.removeItem(APP_CONFIG.storageKeys.userData);
+    try {
+      await AsyncStorage.removeItem(this.USER_KEY);
+    } catch (error) {
+      console.error('Error clearing user:', error);
+    }
+  },
+
+  async updateUser(updates: Partial<User>): Promise<void> {
+    try {
+      const currentUser = await this.getUser();
+      if (currentUser) {
+        const updatedUser = { ...currentUser, ...updates };
+        await this.saveUser(updatedUser);
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
+    }
   },
 };

@@ -7,7 +7,15 @@ import { colors } from '@/lib/constants/colors';
 export default function Index() {
   const { isAuthenticated, isLoading, user } = useAuthStore();
 
+  console.log('📍 Index Screen - Auth State:', {
+    isAuthenticated,
+    isLoading,
+    hasUser: !!user,
+    userRole: user?.role,
+  });
+
   if (isLoading) {
+    console.log('⏳ Still loading...');
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -16,12 +24,13 @@ export default function Index() {
   }
 
   if (isAuthenticated && user) {
+    console.log('✅ Redirecting to dashboard');
     return <Redirect href="/(farmer)/dashboard" />;
   }
 
+  console.log('🔐 Redirecting to welcome');
   return <Redirect href="/(auth)/welcome" />;
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,

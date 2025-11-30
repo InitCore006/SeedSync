@@ -47,12 +47,12 @@ urlpatterns = [
     # ==============================================================================
     # AUTHENTICATION & USER MANAGEMENT (Phase 1 - Week 1)
     # ==============================================================================
-   # path('api/auth/', include('apps.users.urls')),  # JWT auth, register, login, logout
+    path('api/users/', include('apps.users.urls')),  # JWT auth, register, login, logout
     
     # ==============================================================================
     # CORE FOUNDATION APPS (Phase 1 - Week 1)
     # ==============================================================================
-    # path('api/farmers/', include('apps.farmers.urls')),  # Farmer profiles, farms
+    path('api/farmers/', include('apps.farmers.urls')),  # Farmer profiles, farms
     # path('api/fpos/', include('apps.fpos.urls')),  # FPO management, membership
     # path('api/crops/', include('apps.crops.urls')),  # Crop master, prices, MSP
     # path('api/advisories/', include('apps.advisories.urls')),  # AI advisories, weather, pest detection
