@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.html import format_html
-from .models import User, UserProfile, KYCDocument, RolePermission
+from .models import User, UserProfile
 
 
 @admin.register(User)
@@ -74,55 +74,4 @@ class UserProfileAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(KYCDocument)
-class KYCDocumentAdmin(admin.ModelAdmin):
-    list_display = ['user', 'document_type', 'document_number', 'verification_badge', 'uploaded_at']
-    list_filter = ['verification_status', 'document_type', 'uploaded_at']
-    search_fields = ['user__full_name', 'document_number']
-    readonly_fields = ['uploaded_at', 'updated_at']
-    
-    fieldsets = (
-        ('Document Details', {
-            'fields': ('user', 'document_type', 'document_number', 'document_file')
-        }),
-        ('Verification', {
-            'fields': ('verification_status', 'verified_by', 'verified_at', 'rejection_reason')
-        }),
-        ('Timestamps', {
-            'fields': ('uploaded_at', 'updated_at')
-        }),
-    )
-    
-    def verification_badge(self, obj):
-        colors = {
-            'pending': 'orange',
-            'verified': 'green',
-            'rejected': 'red'
-        }
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span>',
-            colors.get(obj.verification_status, 'gray'),
-            obj.get_verification_status_display()
-        )
-    
-    verification_badge.short_description = 'Status'
 
-
-@admin.register(RolePermission)
-class RolePermissionAdmin(admin.ModelAdmin):
-    list_display = ['role', 'permissions_summary']
-    
-    def permissions_summary(self, obj):
-        permissions = []
-        if obj.can_create_fpo:
-            permissions.append('Create FPO')
-        if obj.can_view_analytics:
-            permissions.append('View Analytics')
-        if obj.can_approve_kyc:
-            permissions.append('Approve KYC')
-        if obj.can_manage_procurement:
-            permissions.append('Manage Procurement')
-        
-        return ', '.join(permissions) if permissions else 'No special permissions'
-    
-    permissions_summary.short_description = 'Permissions'

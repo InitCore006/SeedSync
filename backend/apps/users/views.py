@@ -12,12 +12,10 @@ from datetime import timedelta
 import random
 import logging
 
-from .models import User, UserProfile, KYCDocument, RolePermission
+from .models import User, UserProfile
 from .serializers import (
     UserSerializer, UserListSerializer, RegisterSerializer,
-    LoginSerializer, ChangePasswordSerializer, UserProfileSerializer,
-    KYCDocumentSerializer, KYCVerificationSerializer,
-    RolePermissionSerializer, PhoneVerificationSerializer,
+    LoginSerializer, ChangePasswordSerializer, UserProfileSerializer,PhoneVerificationSerializer,
     VerifyOTPSerializer, ForgotPasswordSerializer,
     ResetPasswordSerializer, UserStatsSerializer
 )
@@ -153,7 +151,7 @@ class UserViewSet(viewsets.ModelViewSet):
         queryset = User.objects.select_related('profile').all()
         
         # Non-admin users can only see themselves
-        if user.role not in ['admin', 'govt_official']:
+        if user.role not in ['admin']:
             return queryset.filter(id=user.id)
         
         # Filters
@@ -280,78 +278,6 @@ class UserViewSet(viewsets.ModelViewSet):
         })
         serializer.is_valid()
         
-        return Response(serializer.data)
-
-
-# ==================== KYC Management Views ====================
-
-class KYCDocumentViewSet(viewsets.ModelViewSet):
-    """
-    KYC Document management
-    """
-    queryset = KYCDocument.objects.all()
-    serializer_class = KYCDocumentSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        """Filter KYC documents based on user role"""
-        user = self.request.user
-        
-        if user.role in ['admin', 'govt_official']:
-            return KYCDocument.objects.select_related('user', 'verified_by').all()
-        
-        # Regular users can only see their own KYC
-        return KYCDocument.objects.filter(user=user)
-    
-    def perform_create(self, serializer):
-        """Set user when creating KYC document"""
-        serializer.save(user=self.request.user)
-    
-    @action(detail=True, methods=['post'], permission_classes=[IsKYCVerifier])
-    def verify(self, request, pk=None):
-        """
-        Verify KYC document
-        POST /api/kyc/{id}/verify/
-        """
-        kyc_document = self.get_object()
-        serializer = KYCVerificationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        kyc_document.verification_status = serializer.validated_data['verification_status']
-        kyc_document.verified_by = request.user
-        kyc_document.verified_at = timezone.now()
-        
-        if serializer.validated_data['verification_status'] == 'rejected':
-            kyc_document.rejection_reason = serializer.validated_data.get('rejection_reason', '')
-        
-        kyc_document.save()
-        
-        # Update user KYC status if all documents verified
-        user = kyc_document.user
-        all_verified = not user.kyc_documents.filter(
-            verification_status__in=['pending', 'rejected']
-        ).exists()
-        
-        if all_verified and user.kyc_documents.filter(verification_status='verified').count() >= 2:
-            user.is_kyc_verified = True
-            user.save()
-        
-        return Response({
-            'kyc_document': KYCDocumentSerializer(kyc_document).data,
-            'message': f'KYC document {serializer.validated_data["verification_status"]}'
-        })
-    
-    @action(detail=False, methods=['get'], permission_classes=[IsKYCVerifier])
-    def pending(self, request):
-        """
-        Get pending KYC documents
-        GET /api/kyc/pending/
-        """
-        pending_kyc = KYCDocument.objects.filter(
-            verification_status='pending'
-        ).select_related('user')
-        
-        serializer = self.get_serializer(pending_kyc, many=True)
         return Response(serializer.data)
 
 
@@ -502,12 +428,7 @@ class ResetPasswordView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 
-# ==================== Role Permission Views ====================
 
-class RolePermissionViewSet(viewsets.ModelViewSet):
-    """
-    Role Permission management (Admin only)
-    """
-    queryset = RolePermission.objects.all()
-    serializer_class = RolePermissionSerializer
-    permission_classes = [IsAdmin]
+
+
+

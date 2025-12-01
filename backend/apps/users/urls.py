@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     RegisterView, LoginView, LogoutView, ChangePasswordView,
-    UserViewSet, KYCDocumentViewSet, RolePermissionViewSet,
+    UserViewSet,
     PhoneVerificationView, VerifyRegistrationOTPView,
     ForgotPasswordView, ResetPasswordView
 )
@@ -12,8 +12,6 @@ from .views import (
 # Router for ViewSets
 router = DefaultRouter()
 router.register(r'', UserViewSet, basename='user')
-router.register(r'kyc', KYCDocumentViewSet, basename='kyc')
-router.register(r'roles', RolePermissionViewSet, basename='role')
 
 urlpatterns = [
     # Authentication

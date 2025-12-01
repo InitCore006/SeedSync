@@ -63,37 +63,9 @@ INSTALLED_APPS = [
     'apps.users',
     'apps.farmers',
     'apps.fpos',  # Farmer Producer Organizations
-    'apps.crops',
-    'apps.advisories',
+    'apps.retailers',
+    'apps.processors',
     
-    # ==============================================================================
-    # AI & ANALYTICS APPS (Phase 1)
-    # ==============================================================================
-    'apps.demand_supply',
-    'apps.analytics',
-    
-    # ==============================================================================
-    # OPERATIONS & SUPPLY CHAIN APPS (Phase 2)
-    # ==============================================================================
-    'apps.procurement',
-    'apps.logistics',
-    'apps.warehouses',
-    'apps.processing',
-    
-    # ==============================================================================
-    # INNOVATION & DIFFERENTIATION APPS (Phase 3)
-    # ==============================================================================
-    'apps.blockchain',
-    'apps.marketplace',
-    'apps.finance',
-    'apps.policy_dashboard',
-    
-    # ==============================================================================
-    # SUPPORT & INTEGRATION APPS (Phase 4)
-    # ==============================================================================
-    'apps.notifications',
-    'apps.integrations',
-    'apps.compliance',  # Optional
 ]
 
 # ==============================================================================
@@ -103,7 +75,6 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # Must be at top
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # For serving static files
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -149,18 +120,6 @@ DATABASES = {
     }
 }
 
-# Uncomment for PostgreSQL + PostGIS (Production-ready)
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.contrib.gis.db.backends.postgis',
-#         'NAME': config('DB_NAME', default='seedsync_db'),
-#         'USER': config('DB_USER', default='postgres'),
-#         'PASSWORD': config('DB_PASSWORD', default='postgres'),
-#         'HOST': config('DB_HOST', default='localhost'),
-#         'PORT': config('DB_PORT', default='5432'),
-#     }
-# }
-
 # ==============================================================================
 # PASSWORD VALIDATION
 # ==============================================================================
@@ -205,8 +164,6 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
-# Serve static files with Whitenoise (production-ready)
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ==============================================================================
 # MEDIA FILES CONFIGURATION
@@ -215,23 +172,10 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Subdirectories for organized media storage
-MEDIA_SUBDIRS = {
-    'PROFILE_PICS': 'profiles/',
-    'KYC_DOCUMENTS': 'kyc/',
-    'FARM_PHOTOS': 'farms/',
-    'CROP_IMAGES': 'crops/',
-    'PEST_DETECTION': 'pest_detection/',
-    'PRODUCT_IMAGES': 'products/',
-    'CERTIFICATES': 'certificates/',
-    'FPO_DOCUMENTS': 'fpo_docs/',
-    'CONTRACTS': 'contracts/',
-}
 
 # ==============================================================================
 # CUSTOM USER MODEL
 # ==============================================================================
-
 
 AUTH_USER_MODEL = 'users.User'
 
@@ -325,36 +269,24 @@ SIMPLE_JWT = {
 # CORS CONFIGURATION (Cross-Origin Resource Sharing)
 # ==============================================================================
 
-# Development: Allow all origins
-CORS_ALLOW_ALL_ORIGINS = True  # DEVELOPMENT ONLY
+# Session Configuration
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_NAME = 'sessionid'
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_SAVE_EVERY_REQUEST = True
 
-# Production: Uncomment and specify exact origins
-# CORS_ALLOWED_ORIGINS = [
-#     "https://seedsync.in",
-#     "https://www.seedsync.in",
-#     "https://admin.seedsync.in",
-# ]
-
+# CORS Configuration
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",      # Vite dev server
-    "http://localhost:3000",      # React dev server
+    "http://localhost:5173",
+    "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
-    "http://localhost:8081",      # Expo mobile app
-    "http://192.168.176.1:8000",  # Your local IP
-    "http://10.0.2.2:8000",       # Android emulator
 ]
 
-CORS_ALLOW_CREDENTIALS = True
-
-CORS_ALLOW_METHODS = [
-    'DELETE',
-    'GET',
-    'OPTIONS',
-    'PATCH',
-    'POST',
-    'PUT',
-]
+CORS_ALLOW_CREDENTIALS = True  # Important for sessions
 
 CORS_ALLOW_HEADERS = [
     'accept',
@@ -368,24 +300,19 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# ==============================================================================
-# CSRF CONFIGURATION
-# ==============================================================================
-
+# CSRF Configuration
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:8081",
-    "http://10.0.2.2:8000",
-    "http://192.168.176.1:8000",
     "http://localhost:5173",
     "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
 ]
 
-# ==============================================================================
-# ADMIN INTERFACE CONFIGURATION
-# ==============================================================================
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_HTTPONLY = False
 
-X_FRAME_OPTIONS = 'SAMEORIGIN'
-SILENCED_SYSTEM_CHECKS = ['security.W019']
+
+
 
 # ==============================================================================
 # DRF SPECTACULAR (API DOCUMENTATION)
@@ -507,59 +434,6 @@ EMAIL_BACKEND = config(
 # DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@seedsync.in')
 
 # ==============================================================================
-# SMS CONFIGURATION (Twilio/MSG91)
-# ==============================================================================
-
-SMS_BACKEND = config('SMS_BACKEND', default='mock')  # mock, twilio, msg91
-TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
-TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
-TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='')
-
-# ==============================================================================
-# EXTERNAL API KEYS (Store in .env file)
-# ==============================================================================
-
-# Weather APIs
-OPENWEATHER_API_KEY = config('OPENWEATHER_API_KEY', default='')
-IMD_API_KEY = config('IMD_API_KEY', default='')
-
-# Satellite Data
-BHUVAN_API_KEY = config('BHUVAN_API_KEY', default='')
-
-# Payment Gateway
-RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='')
-RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET', default='')
-
-# Map Services
-GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
-
-# Government APIs
-AGRISTACK_API_KEY = config('AGRISTACK_API_KEY', default='')
-ENAM_API_KEY = config('ENAM_API_KEY', default='')
-
-# ==============================================================================
-# AI/ML MODEL PATHS
-# ==============================================================================
-
-ML_MODELS_DIR = BASE_DIR / 'ml_models'
-ML_MODELS_DIR.mkdir(exist_ok=True)
-
-ML_MODEL_PATHS = {
-    'PRICE_FORECAST': ML_MODELS_DIR / 'price_forecast_model.pkl',
-    'PEST_DETECTION': ML_MODELS_DIR / 'pest_detection_model.h5',
-    'YIELD_PREDICTION': ML_MODELS_DIR / 'yield_prediction_model.pkl',
-    'CREDIT_SCORING': ML_MODELS_DIR / 'credit_scoring_model.pkl',
-}
-
-# ==============================================================================
-# BLOCKCHAIN CONFIGURATION
-# ==============================================================================
-
-BLOCKCHAIN_NETWORK = config('BLOCKCHAIN_NETWORK', default='local')  # local, testnet, mainnet
-BLOCKCHAIN_PROVIDER_URL = config('BLOCKCHAIN_PROVIDER_URL', default='http://localhost:8545')
-BLOCKCHAIN_CONTRACT_ADDRESS = config('BLOCKCHAIN_CONTRACT_ADDRESS', default='')
-
-# ==============================================================================
 # FILE UPLOAD LIMITS
 # ==============================================================================
 
@@ -570,28 +444,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
 ALLOWED_DOCUMENT_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx']
 
-# ==============================================================================
-# MOBILE APP SPECIFIC SETTINGS
-# ==============================================================================
 
-# Farmer mobile app features
-MOBILE_APP_VERSION = '1.0.0'
-MOBILE_APP_FORCE_UPDATE = False
-MOBILE_APP_MIN_VERSION = '1.0.0'
-
-# Push notification settings (FCM)
-FCM_SERVER_KEY = config('FCM_SERVER_KEY', default='')
-
-# ==============================================================================
-# SECURITY SETTINGS (DEVELOPMENT)
-# ==============================================================================
-
-# In production, set these properly
-SECURE_SSL_REDIRECT = False
-SESSION_COOKIE_SECURE = False
-CSRF_COOKIE_SECURE = False
-SECURE_BROWSER_XSS_FILTER = True
-SECURE_CONTENT_TYPE_NOSNIFF = True
 
 # ==============================================================================
 # DEFAULT PRIMARY KEY FIELD TYPE

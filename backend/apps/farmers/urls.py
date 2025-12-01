@@ -1,24 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    FarmerViewSet,
-    FarmPlotViewSet,
-    CropPlanningViewSet,
-    FPOMembershipViewSet,
     FarmerRegistrationView
 )
-
-# Router for ViewSets
-router = DefaultRouter()
-router.register(r'', FarmerViewSet, basename='farmer')
-router.register(r'plots', FarmPlotViewSet, basename='farm-plot')
-router.register(r'crop-planning', CropPlanningViewSet, basename='crop-planning')
-router.register(r'fpo-memberships', FPOMembershipViewSet, basename='fpo-membership')
 
 urlpatterns = [
     # All routes from router
     path('register/', FarmerRegistrationView.as_view(), name='farmer-register'),
-    path('', include(router.urls)),
 ]
 
 # Available Endpoints:

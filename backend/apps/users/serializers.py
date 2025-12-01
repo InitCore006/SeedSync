@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
-from .models import User, UserProfile, KYCDocument, RolePermission
+from .models import User, UserProfile
 import re
 
 
@@ -219,68 +219,6 @@ class ChangePasswordSerializer(serializers.Serializer):
         user.set_password(self.validated_data['new_password'])
         user.save()
         return user
-
-
-class KYCDocumentSerializer(serializers.ModelSerializer):
-    """KYC Document Serializer"""
-    
-    user_name = serializers.CharField(source='user.full_name', read_only=True)
-    verified_by_name = serializers.CharField(source='verified_by.full_name', read_only=True)
-    
-    class Meta:
-        model = KYCDocument
-        fields = [
-            'id', 'user', 'user_name', 'document_type', 'document_number',
-            'document_file', 'verification_status', 'verified_by',
-            'verified_by_name', 'verified_at', 'rejection_reason',
-            'uploaded_at', 'updated_at'
-        ]
-        read_only_fields = [
-            'id', 'user', 'verification_status', 'verified_by',
-            'verified_at', 'uploaded_at', 'updated_at'
-        ]
-    
-    def validate_document_number(self, value):
-        """Validate document number formats"""
-        document_type = self.initial_data.get('document_type')
-        
-        if document_type == 'aadhaar':
-            if not re.match(r'^\d{12}$', value.replace(' ', '')):
-                raise serializers.ValidationError("Aadhaar must be 12 digits")
-        
-        elif document_type == 'pan':
-            if not re.match(r'^[A-Z]{5}\d{4}[A-Z]$', value.upper()):
-                raise serializers.ValidationError("Invalid PAN format")
-        
-        return value
-
-
-class KYCVerificationSerializer(serializers.Serializer):
-    """KYC Verification by admin"""
-    
-    verification_status = serializers.ChoiceField(
-        choices=['verified', 'rejected'],
-        required=True
-    )
-    rejection_reason = serializers.CharField(
-        required=False,
-        allow_blank=True
-    )
-    
-    def validate(self, attrs):
-        if attrs.get('verification_status') == 'rejected' and not attrs.get('rejection_reason'):
-            raise serializers.ValidationError({
-                "rejection_reason": "Rejection reason is required when rejecting KYC"
-            })
-        return attrs
-
-
-class RolePermissionSerializer(serializers.ModelSerializer):
-    """Role Permission Serializer"""
-    
-    class Meta:
-        model = RolePermission
-        fields = '__all__'
 
 
 class PhoneVerificationSerializer(serializers.Serializer):

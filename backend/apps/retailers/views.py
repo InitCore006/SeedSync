@@ -5,43 +5,27 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import transaction
 from django.db.models import Q, Sum, Count
-from .models import FPO, FPOMembership
+from .models import Retailer
 from .serializers import (
-    FPOSerializer, FPOListSerializer, FPOMembershipSerializer,
-    FPORegistrationStep1Serializer, FPORegistrationStep2Serializer,
-    FPORegistrationStep3Serializer, FPORegistrationCompleteSerializer
-)
-from apps.users.models import User, UserProfile
-
-
-from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.db import transaction
-from django.db.models import Q, Sum, Count
-from .models import FPO, FPOMembership
-from .serializers import (
-    FPOSerializer, FPOListSerializer, FPOMembershipSerializer,
-    FPORegistrationStep1Serializer, FPORegistrationStep2Serializer,
-    FPORegistrationStep3Serializer, FPORegistrationCompleteSerializer
+    RetailerSerializer, RetailerListSerializer,
+    RetailerRegistrationStep1Serializer, RetailerRegistrationStep2Serializer,
+    RetailerRegistrationStep3Serializer, RetailerRegistrationCompleteSerializer
 )
 from apps.users.models import User, UserProfile
 from .utils import (
-    create_registration_token, 
-    store_registration_data, 
+    create_registration_token,
+    store_registration_data,
     get_registration_data,
     clear_registration_data
 )
 
 
-class FPORegistrationStep1View(APIView):
+class RetailerRegistrationStep1View(APIView):
     """Step 1: Create User Account"""
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        serializer = FPORegistrationStep1Serializer(data=request.data)
+        serializer = RetailerRegistrationStep1Serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         # Create registration token
@@ -69,7 +53,7 @@ class FPORegistrationStep1View(APIView):
         }, status=status.HTTP_200_OK)
 
 
-class FPORegistrationStep2View(APIView):
+class RetailerRegistrationStep2View(APIView):
     """Step 2: User Profile Details"""
     permission_classes = [permissions.AllowAny]
     
@@ -89,7 +73,7 @@ class FPORegistrationStep2View(APIView):
                 'error': 'Please complete step 1 first or your session has expired'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        serializer = FPORegistrationStep2Serializer(data=request.data)
+        serializer = RetailerRegistrationStep2Serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         # Store in cache with token
@@ -106,8 +90,8 @@ class FPORegistrationStep2View(APIView):
         }, status=status.HTTP_200_OK)
 
 
-class FPORegistrationStep3View(APIView):
-    """Step 3: FPO Details & Complete Registration"""
+class RetailerRegistrationStep3View(APIView):
+    """Step 3: Retailer Business Details & Complete Registration"""
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
@@ -128,7 +112,7 @@ class FPORegistrationStep3View(APIView):
                 'error': 'Please complete all previous steps or your session has expired'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        serializer = FPORegistrationStep3Serializer(data=request.data)
+        serializer = RetailerRegistrationStep3Serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         # Create everything in a transaction
@@ -140,11 +124,11 @@ class FPORegistrationStep3View(APIView):
                     full_name=step1_data['full_name'],
                     email=step1_data.get('email'),
                     password=step1_data['password'],
-                    role='fpo_admin',
+                    role='retailer',
                     preferred_language=step1_data.get('preferred_language', 'en')
                 )
                 
-                # 2. Create UserProfile
+                # 2. Create UserProfile (only UserProfile fields!)
                 profile = UserProfile.objects.create(
                     user=user,
                     date_of_birth=step2_data.get('date_of_birth'),
@@ -160,24 +144,24 @@ class FPORegistrationStep3View(APIView):
                     account_number=step2_data.get('account_number', ''),
                     ifsc_code=step2_data.get('ifsc_code', ''),
                     account_holder_name=step2_data.get('account_holder_name', ''),
-                    education_level=step2_data.get('education_level', ''),
                 )
                 
-                # 3. Create FPO
-                fpo_data = serializer.validated_data
-                fpo = FPO.objects.create(
-                    owner=user,
-                    name=fpo_data['name'],
-                    district=fpo_data.get('district', step2_data['district']),
-                    state=fpo_data.get('state', step2_data['state']),
-                    pincode=fpo_data.get('pincode', step2_data['pincode']),
-                    contact_person=fpo_data['contact_person'],
-                    contact_phone=fpo_data['contact_phone'],
-                    contact_email=fpo_data['contact_email'],
-                    registration_number=fpo_data['registration_number'],
-                    gstin=fpo_data.get('gstin', ''),
-                    total_land_area=fpo_data['total_land_area'],
-                    monthly_capacity=fpo_data['monthly_capacity'],
+                # 3. Create Retailer (city goes here!)
+                retailer_data = serializer.validated_data
+                retailer = Retailer.objects.create(
+                    user=user,
+                    business_name=retailer_data['business_name'],
+                    retailer_type=retailer_data['retailer_type'],
+                    city=retailer_data['city'],  # From step 3
+                    state=retailer_data.get('state', step2_data['state']),  # Can override from profile
+                    pincode=retailer_data.get('pincode', step2_data['pincode']),
+                    gstin=retailer_data['gstin'],
+                    fssai_license=retailer_data.get('fssai_license', ''),
+                    monthly_requirement=retailer_data['monthly_requirement'],
+                    payment_terms=retailer_data['payment_terms'],
+                    contact_person=retailer_data['contact_person'],
+                    contact_phone=retailer_data['contact_phone'],
+                    contact_email=retailer_data['contact_email'],
                 )
                 
                 # Generate tokens
@@ -187,18 +171,18 @@ class FPORegistrationStep3View(APIView):
                 clear_registration_data(token)
                 
                 return Response({
-                    'message': 'FPO registered successfully! Awaiting verification.',
+                    'message': 'Retailer registered successfully! Awaiting verification.',
                     'user': {
                         'id': str(user.id),
                         'phone_number': user.phone_number,
                         'full_name': user.full_name,
                         'role': user.role,
                     },
-                    'fpo': {
-                        'id': str(fpo.id),
-                        'name': fpo.name,
-                        'fpo_code': fpo.fpo_code,
-                        'is_verified': fpo.is_verified,
+                    'retailer': {
+                        'id': str(retailer.id),
+                        'business_name': retailer.business_name,
+                        'retailer_code': retailer.retailer_code,
+                        'is_verified': retailer.is_verified,
                     },
                     'tokens': {
                         'refresh': str(refresh),
@@ -212,17 +196,13 @@ class FPORegistrationStep3View(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ...existing code for FPORegistrationSingleStepView, FPOViewSet, etc...
-
-
-
-class FPORegistrationSingleStepView(APIView):
-    """Single-step FPO Registration (All data at once)"""
+class RetailerRegistrationSingleStepView(APIView):
+    """Single-step Retailer Registration (All data at once)"""
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        """Complete FPO registration in one go"""
-        serializer = FPORegistrationCompleteSerializer(data=request.data)
+        """Complete Retailer registration in one go"""
+        serializer = RetailerRegistrationCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         data = serializer.validated_data
@@ -235,46 +215,59 @@ class FPORegistrationSingleStepView(APIView):
                     full_name=data['full_name'],
                     email=data.get('email', ''),
                     password=data['password'],
-                    role='fpo_admin',
+                    role='retailer',
                     preferred_language=data.get('preferred_language', 'en')
                 )
                 
-                # 2. Create UserProfile
+                # 2. Create UserProfile (only profile fields)
                 profile_data = data['profile']
                 profile = UserProfile.objects.create(
                     user=user,
-                    **profile_data
+                    date_of_birth=profile_data.get('date_of_birth'),
+                    gender=profile_data.get('gender'),
+                    address_line1=profile_data.get('address_line1', ''),
+                    address_line2=profile_data.get('address_line2', ''),
+                    village=profile_data.get('village', ''),
+                    block=profile_data.get('block', ''),
+                    district=profile_data['district'],
+                    state=profile_data['state'],
+                    pincode=profile_data['pincode'],
+                    bank_name=profile_data.get('bank_name', ''),
+                    account_number=profile_data.get('account_number', ''),
+                    ifsc_code=profile_data.get('ifsc_code', ''),
+                    account_holder_name=profile_data.get('account_holder_name', ''),
                 )
                 
-                # 3. Create FPO
-                fpo_data = data['fpo']
-                fpo = FPO.objects.create(
-                    owner=user,
-                    name=fpo_data['name'],
-                    district=fpo_data.get('district', profile_data['district']),
-                    state=fpo_data.get('state', profile_data['state']),
-                    pincode=fpo_data.get('pincode', profile_data['pincode']),
-                    contact_person=fpo_data['contact_person'],
-                    contact_phone=fpo_data['contact_phone'],
-                    contact_email=fpo_data['contact_email'],
-                    registration_number=fpo_data['registration_number'],
-                    gstin=fpo_data.get('gstin', ''),
-                    total_land_area=fpo_data['total_land_area'],
-                    monthly_capacity=fpo_data['monthly_capacity'],
+                # 3. Create Retailer
+                retailer_data = data['retailer']
+                retailer = Retailer.objects.create(
+                    user=user,
+                    business_name=retailer_data['business_name'],
+                    retailer_type=retailer_data['retailer_type'],
+                    city=retailer_data['city'],
+                    state=retailer_data.get('state', profile_data['state']),
+                    pincode=retailer_data.get('pincode', profile_data['pincode']),
+                    gstin=retailer_data['gstin'],
+                    fssai_license=retailer_data.get('fssai_license', ''),
+                    monthly_requirement=retailer_data['monthly_requirement'],
+                    payment_terms=retailer_data['payment_terms'],
+                    contact_person=retailer_data['contact_person'],
+                    contact_phone=retailer_data['contact_phone'],
+                    contact_email=retailer_data['contact_email'],
                 )
                 
                 # Generate tokens
                 refresh = RefreshToken.for_user(user)
                 
                 return Response({
-                    'message': 'FPO registered successfully! Awaiting verification.',
+                    'message': 'Retailer registered successfully! Awaiting verification.',
                     'user': {
                         'id': str(user.id),
                         'phone_number': user.phone_number,
                         'full_name': user.full_name,
                         'role': user.role,
                     },
-                    'fpo': FPOSerializer(fpo).data,
+                    'retailer': RetailerSerializer(retailer).data,
                     'tokens': {
                         'refresh': str(refresh),
                         'access': str(refresh.access_token),
@@ -287,130 +280,86 @@ class FPORegistrationSingleStepView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-class FPOViewSet(viewsets.ModelViewSet):
-    """FPO CRUD Operations"""
-    queryset = FPO.objects.select_related('owner').all()
-    serializer_class = FPOSerializer
+# ...existing RetailerViewSet code...
+
+
+class RetailerViewSet(viewsets.ModelViewSet):
+    """Retailer CRUD Operations"""
+    queryset = Retailer.objects.select_related('user').all()
+    serializer_class = RetailerSerializer
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         """Filter based on role"""
         user = self.request.user
-        queryset = FPO.objects.select_related('owner')
+        queryset = Retailer.objects.select_related('user')
         
-        # FPO admin sees only their FPO
-        if user.role == 'fpo_admin':
-            return queryset.filter(owner=user)
-        
-        # Farmers see FPOs they can join
-        if user.role == 'farmer':
-            if hasattr(user, 'profile'):
-                queryset = queryset.filter(
-                    state=user.profile.state,
-                    district=user.profile.district,
-                    is_active=True
-                )
+        # Retailer sees only their profile
+        if user.role == 'retailer':
+            return queryset.filter(user=user)
         
         # Filters
         state = self.request.query_params.get('state')
-        district = self.request.query_params.get('district')
+        city = self.request.query_params.get('city')
+        retailer_type = self.request.query_params.get('retailer_type')
         is_verified = self.request.query_params.get('is_verified')
         search = self.request.query_params.get('search')
         
         if state:
             queryset = queryset.filter(state__iexact=state)
-        if district:
-            queryset = queryset.filter(district__iexact=district)
+        if city:
+            queryset = queryset.filter(city__iexact=city)
+        if retailer_type:
+            queryset = queryset.filter(retailer_type=retailer_type)
         if is_verified is not None:
             queryset = queryset.filter(is_verified=is_verified.lower() == 'true')
         if search:
             queryset = queryset.filter(
-                Q(name__icontains=search) |
-                Q(fpo_code__icontains=search)
+                Q(business_name__icontains=search) |
+                Q(retailer_code__icontains=search)
             )
         
         return queryset
     
     def get_serializer_class(self):
         if self.action == 'list':
-            return FPOListSerializer
-        return FPOSerializer
+            return RetailerListSerializer
+        return RetailerSerializer
     
     @action(detail=False, methods=['get'])
-    def my_fpo(self, request):
-        """Get current user's FPO"""
+    def my_profile(self, request):
+        """Get current retailer's profile"""
         try:
-            fpo = FPO.objects.get(owner=request.user)
-            serializer = self.get_serializer(fpo)
+            retailer = Retailer.objects.get(user=request.user)
+            serializer = self.get_serializer(retailer)
             return Response(serializer.data)
-        except FPO.DoesNotExist:
+        except Retailer.DoesNotExist:
             return Response({
-                'error': 'You do not own any FPO'
+                'error': 'Retailer profile not found'
             }, status=status.HTTP_404_NOT_FOUND)
-    
-    @action(detail=True, methods=['get'])
-    def members(self, request, pk=None):
-        """Get FPO members"""
-        fpo = self.get_object()
-        memberships = FPOMembership.objects.filter(
-            fpo=fpo, is_active=True
-        ).select_related('farmer')
-        serializer = FPOMembershipSerializer(memberships, many=True)
-        return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
     def verify(self, request, pk=None):
-        """Verify FPO (admin only)"""
+        """Verify retailer (admin only)"""
         if request.user.role != 'admin':
             return Response({
                 'error': 'Admin access required'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        fpo = self.get_object()
-        fpo.is_verified = True
-        fpo.save()
+        retailer = self.get_object()
+        retailer.is_verified = True
+        retailer.save()
         
         return Response({
-            'message': f'FPO {fpo.name} verified successfully'
+            'message': f'Retailer {retailer.business_name} verified'
         })
     
     @action(detail=False, methods=['get'])
     def statistics(self, request):
-        """FPO statistics"""
-        stats = FPO.objects.aggregate(
-            total_fpos=Count('id'),
-            verified_fpos=Count('id', filter=Q(is_verified=True)),
-            total_members=Sum('total_members'),
-            total_land=Sum('total_land_area'),
-            total_capacity=Sum('monthly_capacity')
+        """Retailer statistics"""
+        stats = Retailer.objects.aggregate(
+            total_retailers=Count('id'),
+            verified_retailers=Count('id', filter=Q(is_verified=True)),
+            total_requirement=Sum('monthly_requirement')
         )
         return Response(stats)
-
-
-class FPOMembershipViewSet(viewsets.ModelViewSet):
-    """FPO Membership Management"""
-    queryset = FPOMembership.objects.select_related('fpo', 'farmer').all()
-    serializer_class = FPOMembershipSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        """Filter based on role"""
-        user = self.request.user
-        queryset = FPOMembership.objects.select_related('fpo', 'farmer')
-        
-        if user.role == 'farmer':
-            return queryset.filter(farmer=user)
-        
-        if user.role == 'fpo_admin':
-            return queryset.filter(fpo__owner=user)
-        
-        return queryset
-    
-    @action(detail=False, methods=['get'])
-    def my_memberships(self, request):
-        """Get current farmer's FPO memberships"""
-        memberships = FPOMembership.objects.filter(
-            farmer=request.user, is_active=True
-        ).select_related('fpo')
-        serializer = self.get_serializer(memberships, many=True)
-        return Response(serializer.data)

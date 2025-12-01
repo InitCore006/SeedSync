@@ -4,28 +4,6 @@ from django.utils.html import format_html
 from apps.fpos.models import FPO
 from .models import Farmer
 
-@admin.register(FPO)
-class FPOAdmin(admin.ModelAdmin):
-    list_display = [
-        'name', 
-        'registration_number',
-        'district',
-        'state',
-        'is_active',
-        'created_at'
-    ]
-
-    search_fields = [
-        'name',
-        'registration_number',
-        'district',
-        'state'
-    ]
-
-    list_filter = ['state', 'is_active']
-
-    ordering = ['name']
-
 
 @admin.register(Farmer)
 class FarmerAdmin(admin.ModelAdmin):

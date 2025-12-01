@@ -33,7 +33,7 @@ class IsKYCVerifier(permissions.BasePermission):
     """
     
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role in ['admin', 'govt_official']
+        return request.user.is_authenticated and request.user.role in ['admin']
 
 
 class IsFPOAdmin(permissions.BasePermission):
