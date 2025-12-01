@@ -57,15 +57,14 @@ function App() {
       <BrowserRouter>
         <AuthInitializer>
           <Routes>
-            {/* ========== PUBLIC ROUTES WITH MainLayout ========== */}
-            <Route element={<MainLayout><div /></MainLayout>}>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/register/fpo" element={<FPORegistrationPage />} />
-              <Route path="/register/retailer" element={<RetailerRegistrationPage />} />
-              <Route path="/register/processor" element={<ProcessorRegistrationPage />} />
-              <Route path="/unauthorized" element={<UnauthorizedPage />} />
-            </Route>
+                  <Route path="/" element={<MainLayout><LandingPage /></MainLayout>} />
+            <Route path="/login" element={<MainLayout><LoginPage /></MainLayout>} />
+            <Route path="/register" element={<MainLayout><RegisterPage /></MainLayout>} />
+            <Route path="/register/fpo" element={<MainLayout><FPORegistrationPage /></MainLayout>} />
+            <Route path="/register/retailer" element={<MainLayout><RetailerRegistrationPage /></MainLayout>} />
+            <Route path="/register/processor" element={<MainLayout><ProcessorRegistrationPage /></MainLayout>} />
+        <Route path="/unauthorized" element={<MainLayout><UnauthorizedPage /></MainLayout>} />
+
 
             {/* ========== AUTH ROUTES (No Layout) ========== */}
             <Route path="/login" element={<LoginPage />} />
