@@ -1,31 +1,40 @@
-import React from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
-import { useAuth } from '@hooks/useAuth'
-import { LoadingSpinner } from '@components/common/LoadingSpinner'
+import React, { useEffect } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuthStore } from '@/store/authStore';
 
 interface ProtectedRouteProps {
-  children: React.ReactNode
-  requiredRole?: string[]
+  children: React.ReactNode;
+  allowedRoles?: string[];
 }
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-  children,
-  requiredRole,
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
+  children, 
+  allowedRoles 
 }) => {
-  const { isAuthenticated, isLoading, user } = useAuth()
-  const location = useLocation()
+  const { isAuthenticated, user, loadUser, isLoading } = useAuthStore();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (isAuthenticated && !user) {
+      loadUser();
+    }
+  }, [isAuthenticated, user, loadUser]);
 
   if (isLoading) {
-    return <LoadingSpinner fullScreen text="Loading..." />
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-600"></div>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (requiredRole && user && !requiredRole.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
-  return <>{children}</>
-}
+  return <>{children}</>;
+};
