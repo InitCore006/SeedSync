@@ -15,5 +15,3 @@ username - admin
 email - admin@gmail.com
 password - 0987poiu
 
-For 
-
