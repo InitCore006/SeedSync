@@ -1,246 +1,393 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { CurrentWeather } from '@/types/weather.types';
-import { colors } from '@/lib/constants/colors';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, withOpacity } from '@/lib/constants/colors';
 import { typography } from '@/lib/constants/typography';
 import { spacing } from '@/lib/constants/spacing';
+import { weatherService, WeatherData } from '@/services/weather.service';
 
 interface WeatherCardProps {
-  weather: CurrentWeather;
-  locationName: string;
+  onMenuPress?: () => void;
+  onNotificationPress?: () => void;
 }
 
-const WeatherCard: React.FC<WeatherCardProps> = ({ weather, locationName }) => {
-  const getWeatherIcon = (main: string) => {
-    const icons: { [key: string]: string } = {
-      Clear: '☀️',
-      Clouds: '☁️',
-      Rain: '🌧️',
-      Drizzle: '🌦️',
-      Thunderstorm: '⛈️',
-      Snow: '❄️',
-      Mist: '🌫️',
-      Smoke: '💨',
-      Haze: '🌫️',
-      Dust: '🌪️',
-      Fog: '🌫️',
-    };
-    return icons[main] || '🌤️';
+export default function WeatherCard({ onMenuPress, onNotificationPress }: WeatherCardProps) {
+  const insets = useSafeAreaInsets();
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchWeather();
+  }, []);
+
+  const fetchWeather = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setError('Location permission required');
+        setLoading(false);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      
+      const { latitude, longitude } = location.coords;
+      console.log('Current Coordinates:', { latitude, longitude });
+
+      const weatherData = await weatherService.getWeatherByCoords({ latitude, longitude });
+      setWeather(weatherData);
+      setLoading(false);
+    } catch (err) {
+      console.error('Weather fetch error:', err);
+      setError('Unable to fetch weather');
+      setLoading(false);
+    }
   };
 
-  const getUVIndexColor = (index: number) => {
-    if (index <= 2) return colors.success;
-    if (index <= 5) return colors.warning;
-    if (index <= 7) return colors.error;
-    return '#9C27B0';
+  const getWeatherIcon = (condition: string): keyof typeof Ionicons.glyphMap => {
+    const lowerCondition = condition.toLowerCase();
+    if (lowerCondition.includes('rain')) return 'rainy';
+    if (lowerCondition.includes('cloud')) return 'cloudy';
+    if (lowerCondition.includes('clear')) return 'sunny';
+    if (lowerCondition.includes('storm')) return 'thunderstorm';
+    if (lowerCondition.includes('snow')) return 'snow';
+    if (lowerCondition.includes('mist') || lowerCondition.includes('fog')) return 'cloudy';
+    return 'partly-sunny';
   };
 
-  const getUVIndexLabel = (index: number) => {
-    if (index <= 2) return 'Low';
-    if (index <= 5) return 'Moderate';
-    if (index <= 7) return 'High';
-    if (index <= 10) return 'Very High';
-    return 'Extreme';
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
   };
+
+  if (loading) {
+    return (
+      <LinearGradient
+        colors={[colors.primary, colors.primaryDark]}
+        style={[styles.container, { paddingTop: insets.top }]}
+      >
+        <View style={styles.header}>
+          <Pressable style={styles.iconButton} onPress={onMenuPress}>
+            <Ionicons name="menu" size={24} color={colors.white} />
+          </Pressable>
+          <Pressable style={styles.iconButton} onPress={onNotificationPress}>
+            <Ionicons name="notifications-outline" size={24} color={colors.white} />
+            <View style={styles.notificationBadge}>
+              <Text style={styles.badgeText}>3</Text>
+            </View>
+          </Pressable>
+        </View>
+
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.white} />
+          <Text style={styles.loadingText}>Loading weather...</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  if (error || !weather) {
+    return (
+      <LinearGradient
+        colors={[colors.primary, colors.primaryDark]}
+        style={[styles.container, { paddingTop: insets.top }]}
+      >
+        <View style={styles.header}>
+          <Pressable style={styles.iconButton} onPress={onMenuPress}>
+            <Ionicons name="menu" size={24} color={colors.white} />
+          </Pressable>
+          <Pressable style={styles.iconButton} onPress={onNotificationPress}>
+            <Ionicons name="notifications-outline" size={24} color={colors.white} />
+          </Pressable>
+        </View>
+
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={40} color={colors.white} />
+          <Text style={styles.errorText}>{error || 'Unable to load weather'}</Text>
+          <Pressable style={styles.retryButton} onPress={fetchWeather}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </Pressable>
+        </View>
+      </LinearGradient>
+    );
+  }
 
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={[colors.primary, colors.primaryLight, colors.primaryDark]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.container, { paddingTop: insets.top }]}
+    >
+      {/* Header Icons */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.location}>{locationName}</Text>
-          <Text style={styles.condition}>
-            {weather.conditions[0]?.description || 'Clear'}
-          </Text>
-        </View>
-        <Text style={styles.weatherIcon}>
-          {getWeatherIcon(weather.conditions[0]?.main || 'Clear')}
-        </Text>
+        <Pressable 
+          style={({ pressed }) => [
+            styles.iconButton,
+            pressed && styles.iconButtonPressed
+          ]} 
+          onPress={onMenuPress}
+        >
+          <Ionicons name="menu" size={24} color={colors.white} />
+        </Pressable>
+        <Pressable 
+          style={({ pressed }) => [
+            styles.iconButton,
+            pressed && styles.iconButtonPressed
+          ]} 
+          onPress={onNotificationPress}
+        >
+          <Ionicons name="notifications-outline" size={24} color={colors.white} />
+          <View style={styles.notificationBadge}>
+            <Text style={styles.badgeText}>3</Text>
+          </View>
+        </Pressable>
       </View>
 
-      <View style={styles.temperatureContainer}>
-        <Text style={styles.temperature}>{Math.round(weather.temperature)}°</Text>
-        <Text style={styles.feelsLike}>Feels like {Math.round(weather.feelsLike)}°</Text>
-      </View>
-
-      <View style={styles.detailsGrid}>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailIcon}>💧</Text>
-          <Text style={styles.detailLabel}>Humidity</Text>
-          <Text style={styles.detailValue}>{weather.humidity}%</Text>
+      {/* Main Content */}
+      <View style={styles.content}>
+        {/* Greeting & Location */}
+        <View style={styles.topSection}>
+          <Text style={styles.greeting}>{getGreeting()}</Text>
+          <View style={styles.locationContainer}>
+            <Ionicons name="location" size={14} color={withOpacity(colors.white, 0.9)} />
+            <Text style={styles.locationText}>{weather.location}</Text>
+          </View>
         </View>
 
-        <View style={styles.detailItem}>
-          <Text style={styles.detailIcon}>💨</Text>
-          <Text style={styles.detailLabel}>Wind</Text>
-          <Text style={styles.detailValue}>{weather.windSpeed} km/h</Text>
+        {/* Weather Main */}
+        <View style={styles.mainWeather}>
+          <View style={styles.leftSection}>
+            <View style={styles.temperatureRow}>
+              <Text style={styles.temperature}>{weather.temperature}°</Text>
+              <Ionicons 
+                name={getWeatherIcon(weather.condition)} 
+                size={64} 
+                color={colors.white} 
+              />
+            </View>
+            <Text style={styles.condition}>{weather.condition}</Text>
+            <Text style={styles.feelsLike}>Feels like {weather.feelsLike}°C</Text>
+          </View>
+
+          {/* Weather Details Grid */}
+          <View style={styles.detailsGrid}>
+            <View style={styles.detailBox}>
+              <Ionicons name="water-outline" size={18} color={colors.white} />
+              <Text style={styles.detailValue}>{weather.humidity}%</Text>
+              <Text style={styles.detailLabel}>Humidity</Text>
+            </View>
+            <View style={styles.detailBox}>
+              <Ionicons name="speedometer-outline" size={18} color={colors.white} />
+              <Text style={styles.detailValue}>{weather.windSpeed}</Text>
+              <Text style={styles.detailLabel}>km/h</Text>
+            </View>
+          </View>
         </View>
 
-        <View style={styles.detailItem}>
-          <Text style={styles.detailIcon}>🌡️</Text>
-          <Text style={styles.detailLabel}>Pressure</Text>
-          <Text style={styles.detailValue}>{weather.pressure} mb</Text>
-        </View>
-
-        <View style={styles.detailItem}>
-          <Text style={styles.detailIcon}>☀️</Text>
-          <Text style={styles.detailLabel}>UV Index</Text>
-          <Text style={[styles.detailValue, { color: getUVIndexColor(weather.uvIndex) }]}>
-            {weather.uvIndex} ({getUVIndexLabel(weather.uvIndex)})
-          </Text>
-        </View>
-      </View>
-
-      {weather.rainfall !== undefined && weather.rainfall > 0 && (
-        <View style={styles.rainfallContainer}>
-          <Text style={styles.rainfallIcon}>🌧️</Text>
-          <Text style={styles.rainfallText}>
-            Rainfall: {weather.rainfall.toFixed(1)} mm
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.sunContainer}>
-        <View style={styles.sunItem}>
-          <Text style={styles.sunIcon}>🌅</Text>
-          <Text style={styles.sunLabel}>Sunrise</Text>
-          <Text style={styles.sunTime}>
-            {new Date(weather.sunrise).toLocaleTimeString('en-IN', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </Text>
-        </View>
-
-        <View style={styles.sunDivider} />
-
-        <View style={styles.sunItem}>
-          <Text style={styles.sunIcon}>🌇</Text>
-          <Text style={styles.sunLabel}>Sunset</Text>
-          <Text style={styles.sunTime}>
-            {new Date(weather.sunset).toLocaleTimeString('en-IN', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+        {/* Farming Tip */}
+        <View style={styles.tipContainer}>
+          <Ionicons name="bulb-outline" size={16} color={colors.white} />
+          <Text style={styles.tipText}>
+            {weatherService.getFarmingTip(weather.condition, weather.temperature, weather.humidity)}
           </Text>
         </View>
       </View>
-    </View>
+    </LinearGradient>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  location: {
-    ...typography.h3,
-    color: colors.text.primary,
-    marginBottom: 4,
-  },
-  condition: {
-    ...typography.body,
-    color: colors.text.secondary,
-    textTransform: 'capitalize',
-  },
-  weatherIcon: {
-    fontSize: 64,
-  },
-  temperatureContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: spacing.md,
-  },
-  temperature: {
-    fontSize: 72,
-    fontWeight: '700',
-    color: colors.text.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
     marginBottom: spacing.xs,
   },
-  feelsLike: {
+  iconButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+  iconButtonPressed: {
+    backgroundColor: withOpacity(colors.white, 0.2),
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: colors.error,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  badgeText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+  },
+  loadingText: {
     ...typography.body,
-    color: colors.text.secondary,
+    fontSize: 14,
+    color: colors.white,
+    marginTop: spacing.sm,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  errorText: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.white,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  retryButton: {
+    backgroundColor: withOpacity(colors.white, 0.2),
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.white,
+  },
+  retryButtonText: {
+    color: colors.white,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  content: {
+    paddingHorizontal: spacing.lg,
+  },
+  topSection: {
+    marginBottom: spacing.md,
+  },
+  greeting: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.white,
+    marginBottom: spacing.xs,
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationText: {
+    fontSize: 13,
+    color: withOpacity(colors.white, 0.9),
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  mainWeather: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  leftSection: {
+    flex: 1,
+  },
+  temperatureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  temperature: {
+    fontSize: 56,
+    fontWeight: '300',
+    color: colors.white,
+    lineHeight: 56,
+    marginRight: spacing.sm,
+  },
+  condition: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.white,
+    marginBottom: 2,
+  },
+  feelsLike: {
+    fontSize: 13,
+    color: withOpacity(colors.white, 0.85),
+    fontWeight: '400',
   },
   detailsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: spacing.md,
+    gap: spacing.sm,
   },
-  detailItem: {
-    width: '50%',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-  },
-  detailIcon: {
-    fontSize: 28,
-    marginBottom: 4,
-  },
-  detailLabel: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    marginBottom: 2,
-  },
-  detailValue: {
-    ...typography.body,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  rainfallContainer: {
-    flexDirection: 'row',
+  detailBox: {
+    backgroundColor: withOpacity(colors.white, 0.15),
+    borderRadius: 12,
+    padding: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: `${colors.primary}15`,
-    padding: spacing.sm,
-    borderRadius: 8,
-    marginBottom: spacing.md,
+    minWidth: 70,
   },
-  rainfallIcon: {
-    fontSize: 20,
-    marginRight: spacing.xs,
-  },
-  rainfallText: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  sunContainer: {
-    flexDirection: 'row',
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  sunItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  sunIcon: {
-    fontSize: 28,
-    marginBottom: 4,
-  },
-  sunLabel: {
-    ...typography.caption,
-    color: colors.text.secondary,
+  detailValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.white,
+    marginTop: 4,
     marginBottom: 2,
   },
-  sunTime: {
-    ...typography.body,
-    fontWeight: '600',
-    color: colors.text.primary,
+  detailLabel: {
+    fontSize: 10,
+    color: withOpacity(colors.white, 0.8),
+    fontWeight: '500',
   },
-  sunDivider: {
-    width: 1,
-    backgroundColor: colors.border,
+  tipContainer: {
+    flexDirection: 'row',
+    backgroundColor: withOpacity(colors.white, 0.15),
+    borderRadius: 10,
+    padding: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.secondary,
+    alignItems: 'center',
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.white,
+    marginLeft: spacing.xs,
+    lineHeight: 16,
+    fontWeight: '500',
   },
 });
-
-export default WeatherCard;

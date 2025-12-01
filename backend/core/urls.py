@@ -56,6 +56,7 @@ urlpatterns = [
     path('api/fpos/', include('apps.fpos.urls')),
     path('api/processors/', include('apps.processors.urls')),
     path('api/retailers/', include('apps.retailers.urls')),
+    path('api/crops/', include('apps.crops.urls')),
 ]
 
 # ==============================================================================

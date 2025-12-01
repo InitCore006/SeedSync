@@ -1,126 +1,112 @@
 export interface Crop {
   id: string;
-  farmerId: string;
-  name: string;
+  crop_id: string;
+  crop_type: 'groundnut' | 'mustard' | 'sunflower' | 'soybean' | 'sesame' | 'safflower' | 'castor' | 'linseed' | 'niger';
+  crop_type_display: string;
   variety: string;
-  category: 'oilseed' | 'pulse' | 'cereal' | 'vegetable' | 'fruit' | 'cash_crop';
-  plantingDate: string; // ISO date
-  expectedHarvestDate: string; // ISO date
-  actualHarvestDate?: string; // ISO date
-  area: number; // in acres
-  areaUnit: 'acre' | 'hectare' | 'bigha';
-  fieldLocation: {
-    latitude: number;
-    longitude: number;
-    address: string;
-    surveyNumber?: string;
-  };
-  status: 'planning' | 'planted' | 'growing' | 'flowering' | 'harvesting' | 'harvested' | 'failed';
-  soilType: string;
-  irrigationType: 'drip' | 'sprinkler' | 'flood' | 'rainfed';
-  seedSource: string;
-  seedCost: number;
-  expectedYield: number; // in quintals
-  actualYield?: number; // in quintals
-  growthStage: {
-    current: string;
-    percentage: number;
-    daysRemaining: number;
-  };
-  healthScore: number; // 0-100
-  riskFactors: RiskFactor[];
-  weather: WeatherData;
-  images: string[];
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
+  planted_area: number;
+  planting_date: string;
+  expected_harvest_date: string;
+  actual_harvest_date?: string;
+  latitude?: number;
+  longitude?: number;
+  location_address: string;
+  district: string;
+  state: string;
+  status: 'planted' | 'growing' | 'flowering' | 'matured' | 'harvested' | 'processed' | 'sold';
+  status_display: string;
+  estimated_yield?: number;
+  actual_yield?: number;
+  oil_content_percentage?: number;
+  moisture_content?: number;
+  quality_grade?: string;
+  blockchain_hash?: string;
+  farmer_name: string;
+  fpo_name?: string;
+  days_since_planting: number;
+  days_until_harvest: number;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface RiskFactor {
+export interface CropInput {
   id: string;
-  type: 'pest' | 'disease' | 'weather' | 'soil' | 'nutrient';
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  title: string;
-  description: string;
-  detectedAt: string;
-  resolved: boolean;
-  recommendations: string[];
-}
-
-export interface WeatherData {
-  temperature: number;
-  humidity: number;
-  rainfall: number;
-  windSpeed: number;
-  forecast: {
-    date: string;
-    condition: 'sunny' | 'cloudy' | 'rainy' | 'stormy';
-    temperature: number;
-    rainfall: number;
-  }[];
-}
-
-export interface CropActivity {
-  id: string;
-  cropId: string;
-  type: 'irrigation' | 'fertilizer' | 'pesticide' | 'weeding' | 'inspection' | 'harvesting' | 'other';
-  title: string;
-  description: string;
-  date: string;
+  crop: string;
+  input_type: 'fertilizer' | 'pesticide' | 'herbicide' | 'seed' | 'irrigation';
+  input_type_display: string;
+  input_name: string;
+  quantity: number;
+  unit: string;
+  application_date: string;
   cost?: number;
-  quantity?: string;
-  images?: string[];
   notes?: string;
-  performedBy?: string;
-  createdAt: string;
+  added_by_name: string;
+  created_at: string;
+}
+
+export interface CropObservation {
+  id: string;
+  crop: string;
+  observation_date: string;
+  plant_height?: number;
+  leaf_color?: string;
+  pest_infestation: boolean;
+  disease_detected: boolean;
+  disease_name?: string;
+  soil_moisture?: number;
+  temperature?: number;
+  rainfall?: number;
+  image?: string;
+  image_url?: string;
+  ai_analysis_result?: any;
+  notes?: string;
+  recorded_by_name: string;
+  created_at: string;
 }
 
 export interface HarvestRecord {
   id: string;
-  cropId: string;
-  harvestDate: string;
-  quantity: number; // in quintals
-  quality: 'A' | 'B' | 'C';
-  moistureContent: number; // percentage
-  storageLocation?: string;
-  soldQuantity?: number;
-  soldPrice?: number;
-  revenue?: number;
-  images: string[];
-  notes?: string;
-  createdAt: string;
+  crop: string;
+  crop_details: {
+    crop_id: string;
+    crop_type: string;
+    variety: string;
+  };
+  harvest_date: string;
+  total_yield: number;
+  oil_content: number;
+  moisture_level: number;
+  foreign_matter?: number;
+  quality_grade: string;
+  storage_location?: string;
+  storage_method?: string;
+  organic_certified: boolean;
+  certification_number?: string;
+  market_price_per_quintal?: number;
+  total_revenue?: number;
+  harvested_by_name: string;
+  created_at: string;
 }
 
-export interface FarmAnalytics {
-  totalCrops: number;
-  activeCrops: number;
-  totalArea: number;
-  avgYield: number;
-  totalRevenue: number;
-  profitMargin: number;
-  cropPerformance: {
-    cropName: string;
-    yield: number;
-    revenue: number;
-    profitMargin: number;
-  }[];
-  seasonalTrends: {
-    season: string;
-    avgYield: number;
-    revenue: number;
-  }[];
-  soilHealthIndex: number;
-  waterUsageEfficiency: number;
+export interface CropStatistics {
+  total_crops: number;
+  total_area: number;
+  by_status: { [key: string]: number };
+  by_crop_type: { [key: string]: number };
+  active_crops: number;
+  harvested_crops: number;
 }
 
-export interface CropRecommendation {
-  cropName: string;
+export interface CropFormData {
+  crop_type: string;
   variety: string;
-  suitabilityScore: number; // 0-100
-  expectedYield: number;
-  expectedRevenue: number;
-  investmentRequired: number;
-  seasonality: string;
-  reasons: string[];
-  risks: string[];
+  planted_area: number;
+  planting_date: string;
+  expected_harvest_date: string;
+  latitude?: number;
+  longitude?: number;
+  location_address?: string;
+  district: string;
+  state: string;
+  estimated_yield?: number;
 }

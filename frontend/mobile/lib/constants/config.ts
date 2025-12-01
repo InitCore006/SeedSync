@@ -1,6 +1,6 @@
 export const APP_CONFIG = {
   // API Configuration
-  apiBaseUrl: 'https://9124dff4024c.ngrok-free.app/api',
+  apiBaseUrl: 'https://67ad19cbff87.ngrok-free.app/api',
   apiTimeout: 30000, // 30 seconds
 
   // Storage Keys

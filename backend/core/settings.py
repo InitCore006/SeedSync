@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'apps.fpos',  # Farmer Producer Organizations
     'apps.retailers',
     'apps.processors',
+    'apps.crops',
     
 ]
 

@@ -3,7 +3,7 @@ export interface User {
   phone_number: string;
   full_name: string;
   email?: string;
-  role: 'farmer' | 'fpo_admin' | 'processor' | 'retailer' | 'admin';
+  role: 'admin' | 'farmer' | 'fpo_admin' | 'retailer' | 'processor';
   district: string;
   state: string;
   pincode: string;
@@ -150,6 +150,67 @@ export interface ApiResponse<T = any> {
   error?: string;
   message?: string;
 }
+
+
+
+export interface FPO {
+  id: string;
+  name: string;
+  fpo_code: string;
+  owner: string;
+  district: string;
+  state: string;
+  contact_person: string;
+  contact_phone: string;
+  contact_email: string;
+  is_verified: boolean;
+  is_active: boolean;
+  total_land_area: number;
+  monthly_capacity: number;
+}
+
+export interface Retailer {
+  id: string;
+  business_name: string;
+  retailer_code: string;
+  user: string;
+  retailer_type: string;
+  city: string;
+  state: string;
+  gstin: string;
+  is_verified: boolean;
+  is_active: boolean;
+  monthly_requirement: number;
+}
+
+export interface Processor {
+  id: string;
+  company_name: string;
+  processor_code: string;
+  user: string;
+  business_scale: string;
+  city: string;
+  state: string;
+  gstin: string;
+  fssai_license: string;
+  is_verified: boolean;
+  is_active: boolean;
+  monthly_capacity: number;
+  monthly_requirement: number;
+}
+
+export interface DashboardStats {
+  total_users?: number;
+  total_fpos?: number;
+  total_retailers?: number;
+  total_processors?: number;
+  verified_entities?: number;
+  pending_verification?: number;
+  total_capacity?: number;
+  total_requirement?: number;
+}
+
+
 
 // Indian States
 export const INDIAN_STATES = [
