@@ -1,11 +1,11 @@
 export const APP_CONFIG = {
   // API Configuration
-  apiBaseUrl: 'https://67ad19cbff87.ngrok-free.app/api',
+  apiBaseUrl: 'https://94b7d7e8e961.ngrok-free.app/api',
   apiTimeout: 30000, // 30 seconds
 
   // Storage Keys
   storageKeys: {
-    authToken: 'auth_token',
+    authToken: 'access_token',
     refreshToken: 'refresh_token',
     userData: 'user_data',
     language: 'app_language',
@@ -14,10 +14,10 @@ export const APP_CONFIG = {
 
   // App Settings
   defaultLanguage: 'en',
-  supportedLanguages: ['en', 'hi', 'gu', 'mr'],
+  supportedLanguages: ['en', 'hi', 'gu', 'mr', 'te', 'ta', 'kn', 'ml', 'bn', 'pa'],
   
   // Validation
-  passwordMinLength: 8,
+  passwordMinLength: 6,
   otpLength: 6,
   phoneNumberLength: 10,
 

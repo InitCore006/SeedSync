@@ -1,20 +1,78 @@
 export const API_ENDPOINTS = {
+  // ============================================================================
+  // AUTH & USER MANAGEMENT
+  // ============================================================================
   AUTH: {
     LOGIN: '/users/login/',
     LOGOUT: '/users/logout/',
+    REGISTER: '/users/register/',
     SEND_OTP: '/users/send-otp/',
     VERIFY_REGISTRATION_OTP: '/users/verify-registration-otp/',
-    PASSWORD_RESET_REQUEST: '/users/password-reset/',
-    PASSWORD_RESET_CONFIRM: '/users/password-reset-confirm/',
+    FORGOT_PASSWORD: '/users/forgot-password/',
+    RESET_PASSWORD: '/users/reset-password/',
     CHANGE_PASSWORD: '/users/change-password/',
+    TOKEN_REFRESH: '/users/token/refresh/',
   },
+  
   USER: {
-    PROFILE: '/users/profile/',
+    ME: '/users/me/',
+    PROFILE: '/users/me/',
+    UPDATE: '/users/me/',
+    STATISTICS: '/users/statistics/',
   },
+
+  // ============================================================================
+  // FARMER MANAGEMENT
+  // ============================================================================
   FARMER: {
     REGISTER: '/farmers/register/',
-    PROFILE: '/farmers/profile/',
+    ME: '/farmers/me/',
+    DASHBOARD: '/farmers/dashboard/',
+    UPDATE: (id: string) => `/farmers/${id}/`,
+    VERIFY: (id: string) => `/farmers/${id}/verify/`,
+    STATISTICS: '/farmers/statistics/',
+    MAP_DATA: '/farmers/map-data/',
   },
+
+  // ============================================================================
+  // FARM PLOTS
+  // ============================================================================
+  PLOTS: {
+    LIST: '/farmers/plots/',
+    CREATE: '/farmers/plots/',
+    MY_PLOTS: '/farmers/plots/my-plots/',
+    DETAIL: (id: string) => `/farmers/plots/${id}/`,
+    UPDATE: (id: string) => `/farmers/plots/${id}/`,
+    DELETE: (id: string) => `/farmers/plots/${id}/`,
+    UPDATE_LOCATION: (id: string) => `/farmers/plots/${id}/update-location/`,
+  },
+
+  // ============================================================================
+  // CROP PLANNING
+  // ============================================================================
+  CROP_PLANNING: {
+    LIST: '/farmers/crop-planning/',
+    CREATE: '/farmers/crop-planning/',
+    ACTIVE: '/farmers/crop-planning/active/',
+    CALENDAR: '/farmers/crop-planning/calendar/',
+    DETAIL: (id: string) => `/farmers/crop-planning/${id}/`,
+    UPDATE: (id: string) => `/farmers/crop-planning/${id}/`,
+    UPDATE_STATUS: (id: string) => `/farmers/crop-planning/${id}/update-status/`,
+    RECORD_HARVEST: (id: string) => `/farmers/crop-planning/${id}/record-harvest/`,
+  },
+
+  // ============================================================================
+  // FPO MEMBERSHIPS
+  // ============================================================================
+  FPO: {
+    MEMBERSHIPS: '/farmers/fpo-memberships/',
+    MY_MEMBERSHIPS: '/farmers/fpo-memberships/my-memberships/',
+    DETAIL: (id: string) => `/farmers/fpo-memberships/${id}/`,
+  },
+
+  // ============================================================================
+  // CROPS (Keep existing crop endpoints)
+  // ============================================================================
   CROPS: {
     LIST: '/crops/crops/',
     CREATE: '/crops/crops/',

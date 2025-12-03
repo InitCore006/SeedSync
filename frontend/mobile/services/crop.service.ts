@@ -10,12 +10,9 @@ import {
 } from '@/types/crop.types';
 
 export const cropService = {
-  // ==================== CROPS ====================
-  
-  async getAllCrops(): Promise<Crop[]> {
-    const response = await apiClient.get<Crop[]>(API_ENDPOINTS.CROPS.LIST);
-    return response.data;
-  },
+  // ============================================================================
+  // CROP MANAGEMENT
+  // ============================================================================
 
   async getMyCrops(): Promise<Crop[]> {
     const response = await apiClient.get<Crop[]>(API_ENDPOINTS.CROPS.MY_CROPS);
@@ -28,12 +25,18 @@ export const cropService = {
   },
 
   async createCrop(data: CropFormData): Promise<Crop> {
-    const response = await apiClient.post<Crop>(API_ENDPOINTS.CROPS.CREATE, data);
+    const response = await apiClient.post<Crop>(
+      API_ENDPOINTS.CROPS.CREATE,
+      data
+    );
     return response.data;
   },
 
   async updateCrop(id: string, data: Partial<CropFormData>): Promise<Crop> {
-    const response = await apiClient.patch<Crop>(API_ENDPOINTS.CROPS.UPDATE(id), data);
+    const response = await apiClient.patch<Crop>(
+      API_ENDPOINTS.CROPS.UPDATE(id),
+      data
+    );
     return response.data;
   },
 
@@ -42,7 +45,9 @@ export const cropService = {
   },
 
   async getStatistics(): Promise<CropStatistics> {
-    const response = await apiClient.get<CropStatistics>(API_ENDPOINTS.CROPS.STATISTICS);
+    const response = await apiClient.get<CropStatistics>(
+      API_ENDPOINTS.CROPS.STATISTICS
+    );
     return response.data;
   },
 
@@ -55,12 +60,16 @@ export const cropService = {
   },
 
   async getCropTimeline(id: string): Promise<any[]> {
-    const response = await apiClient.get<any[]>(API_ENDPOINTS.CROPS.TIMELINE(id));
+    const response = await apiClient.get<any[]>(
+      API_ENDPOINTS.CROPS.TIMELINE(id)
+    );
     return response.data;
   },
 
-  // ==================== INPUTS ====================
-  
+  // ============================================================================
+  // CROP INPUTS
+  // ============================================================================
+
   async getCropInputs(cropId: string): Promise<CropInput[]> {
     const response = await apiClient.get<CropInput[]>(
       API_ENDPOINTS.CROPS.INPUT_BY_CROP,
@@ -70,7 +79,10 @@ export const cropService = {
   },
 
   async addCropInput(data: Partial<CropInput>): Promise<CropInput> {
-    const response = await apiClient.post<CropInput>(API_ENDPOINTS.CROPS.INPUTS, data);
+    const response = await apiClient.post<CropInput>(
+      API_ENDPOINTS.CROPS.INPUTS,
+      data
+    );
     return response.data;
   },
 
@@ -82,8 +94,10 @@ export const cropService = {
     return response.data;
   },
 
-  // ==================== OBSERVATIONS ====================
-  
+  // ============================================================================
+  // CROP OBSERVATIONS
+  // ============================================================================
+
   async getCropObservations(cropId: string): Promise<CropObservation[]> {
     const response = await apiClient.get<CropObservation[]>(
       API_ENDPOINTS.CROPS.OBSERVATION_BY_CROP,
@@ -93,9 +107,27 @@ export const cropService = {
   },
 
   async addObservation(data: Partial<CropObservation>): Promise<CropObservation> {
+    const formData = new FormData();
+    
+    Object.keys(data).forEach((key) => {
+      const value = data[key as keyof CropObservation];
+      if (value !== undefined && value !== null) {
+        if (key === 'image' && typeof value === 'object') {
+          formData.append(key, value as any);
+        } else {
+          formData.append(key, String(value));
+        }
+      }
+    });
+
     const response = await apiClient.post<CropObservation>(
       API_ENDPOINTS.CROPS.OBSERVATIONS,
-      data
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
     );
     return response.data;
   },
@@ -108,8 +140,10 @@ export const cropService = {
     return response.data;
   },
 
-  // ==================== HARVESTS ====================
-  
+  // ============================================================================
+  // HARVEST RECORDS
+  // ============================================================================
+
   async getHarvestRecords(cropId?: string): Promise<HarvestRecord[]> {
     const response = await apiClient.get<HarvestRecord[]>(
       API_ENDPOINTS.CROPS.HARVESTS,
@@ -127,7 +161,28 @@ export const cropService = {
   },
 
   async getHarvestStatistics(): Promise<any> {
-    const response = await apiClient.get(API_ENDPOINTS.CROPS.HARVEST_STATISTICS);
+    const response = await apiClient.get(
+      API_ENDPOINTS.CROPS.HARVEST_STATISTICS
+    );
+    return response.data;
+  },
+
+  // ============================================================================
+  // TRANSACTIONS
+  // ============================================================================
+
+  async getMyTransactions(): Promise<any[]> {
+    const response = await apiClient.get<any[]>(
+      API_ENDPOINTS.CROPS.MY_TRANSACTIONS
+    );
+    return response.data;
+  },
+
+  async getCropTransactions(cropId: string): Promise<any[]> {
+    const response = await apiClient.get<any[]>(
+      API_ENDPOINTS.CROPS.TRANSACTION_BY_CROP,
+      { params: { crop_id: cropId } }
+    );
     return response.data;
   },
 };

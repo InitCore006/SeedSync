@@ -8,21 +8,55 @@ export const otpSchema = z.string()
   .regex(/^\d{6}$/, 'OTP must contain only digits');
 
 export const passwordSchema = z.string()
-  .min(8, 'Password must be at least 8 characters')
-  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-  .regex(/[0-9]/, 'Password must contain at least one number');
+  .min(6, 'Password must be at least 6 characters')
+  .max(50, 'Password must not exceed 50 characters');
 
 export const loginSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
+  phone_number: phoneSchema,
   password: z.string().min(1, 'Password is required'),
+});
+
+export const registerSchema = z.object({
+  phone_number: phoneSchema,
+  password: passwordSchema,
+  password_confirm: z.string(),
+  full_name: z.string().min(1, 'Full name is required'),
+  email: z.string().email('Invalid email').optional().or(z.literal('')),
+  role: z.enum(['farmer', 'fpo', 'processor', 'buyer']),
+  preferred_language: z.string().optional(),
+}).refine((data) => data.password === data.password_confirm, {
+  message: "Passwords don't match",
+  path: ['password_confirm'],
 });
 
 export const changePasswordSchema = z.object({
   old_password: z.string().min(1, 'Current password is required'),
   new_password: passwordSchema,
-  confirm_password: z.string(),
-}).refine((data) => data.new_password === data.confirm_password, {
+  new_password_confirm: z.string(),
+}).refine((data) => data.new_password === data.new_password_confirm, {
   message: "Passwords don't match",
-  path: ['confirm_password'],
+  path: ['new_password_confirm'],
+});
+
+export const sendOTPSchema = z.object({
+  phone_number: phoneSchema,
+});
+
+export const verifyOTPSchema = z.object({
+  phone_number: phoneSchema,
+  otp: otpSchema,
+});
+
+export const forgotPasswordSchema = z.object({
+  phone_number: phoneSchema,
+});
+
+export const resetPasswordSchema = z.object({
+  phone_number: phoneSchema,
+  otp: otpSchema,
+  new_password: passwordSchema,
+  new_password_confirm: z.string(),
+}).refine((data) => data.new_password === data.new_password_confirm, {
+  message: "Passwords don't match",
+  path: ['new_password_confirm'],
 });

@@ -1,118 +1,151 @@
 import { apiClient } from '@/lib/api/client';
-import { UserProfile, BankDetails, Document, AppSettings } from '@/types/profile.types';
+import { API_ENDPOINTS } from '@/lib/api/endpoints';
+import {
+  UserProfile,
+  FarmerProfile,
+  CompleteProfile,
+  BankDetails,
+  BankDetailsFormData,
+  Document,
+  DocumentUploadData,
+  AppSettings,
+  UpdateUserProfileRequest,
+  UpdateFarmerProfileRequest,
+  ProfileCompletionStatus,
+} from '@/types/profile.types';
 
-class ProfileService {
-  // Profile
-  async getProfile(): Promise<UserProfile> {
-    const response = await apiClient.get('/profile');
-    return response.data;
-  }
+export const profileService = {
+  // ============================================================================
+  // USER PROFILE
+  // ============================================================================
 
-  async updateProfile(data: Partial<UserProfile>): Promise<UserProfile> {
-    const response = await apiClient.put('/profile', data);
+  async getCompleteProfile(): Promise<CompleteProfile> {
+    const response = await apiClient.get('/users/profile/');
     return response.data;
-  }
+  },
+
+  async updateUserProfile(data: UpdateUserProfileRequest): Promise<UserProfile> {
+    const response = await apiClient.patch('/users/profile/', data);
+    return response.data;
+  },
 
   async uploadProfileImage(imageUri: string): Promise<string> {
     const formData = new FormData();
-    formData.append('image', {
+    
+    const filename = imageUri.split('/').pop() || 'profile.jpg';
+    
+    formData.append('profile_picture', {
       uri: imageUri,
       type: 'image/jpeg',
-      name: 'profile.jpg',
+      name: filename,
     } as any);
 
-    const response = await apiClient.post('/profile/image', formData, {
+    const response = await apiClient.patch('/users/profile/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
-    return response.data.imageUrl;
-  }
+    
+    return response.data.profile_picture;
+  },
 
-  // Bank Details
+  // ============================================================================
+  // FARMER PROFILE (Combined Update)
+  // ============================================================================
+
+  async getFarmerProfile(): Promise<FarmerProfile> {
+    const response = await apiClient.get('/farmers/me/');
+    return response.data;
+  },
+
+  async updateFarmerProfile(data: any): Promise<any> {
+    // This endpoint updates user + profile + farmer in one request
+    const response = await apiClient.patch('/farmers/me/', data);
+    return response.data;
+  },
+
+  // ============================================================================
+  // BANK DETAILS
+  // ============================================================================
+
   async getBankDetails(): Promise<BankDetails[]> {
-    const response = await apiClient.get('/profile/bank-details');
+    const response = await apiClient.get('/users/bank-details/');
     return response.data;
-  }
+  },
 
-  async addBankAccount(
-    data: Omit<BankDetails, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
-  ): Promise<BankDetails> {
-    const response = await apiClient.post('/profile/bank-details', data);
+  async addBankAccount(data: BankDetailsFormData): Promise<BankDetails> {
+    const response = await apiClient.post('/users/bank-details/', data);
     return response.data;
-  }
+  },
 
-  async updateBankAccount(id: string, data: Partial<BankDetails>): Promise<BankDetails> {
-    const response = await apiClient.put(`/profile/bank-details/${id}`, data);
+  async updateBankAccount(id: string, data: Partial<BankDetailsFormData>): Promise<BankDetails> {
+    const response = await apiClient.patch(`/users/bank-details/${id}/`, data);
     return response.data;
-  }
+  },
 
   async deleteBankAccount(id: string): Promise<void> {
-    await apiClient.delete(`/profile/bank-details/${id}`);
-  }
+    await apiClient.delete(`/users/bank-details/${id}/`);
+  },
 
   async setPrimaryAccount(id: string): Promise<void> {
-    await apiClient.post(`/profile/bank-details/${id}/set-primary`);
-  }
+    await apiClient.post(`/users/bank-details/${id}/set-primary/`);
+  },
 
-  // Documents
+  // ============================================================================
+  // DOCUMENTS
+  // ============================================================================
+
   async getDocuments(): Promise<Document[]> {
-    const response = await apiClient.get('/profile/documents');
+    const response = await apiClient.get('/users/documents/');
     return response.data;
-  }
+  },
 
-  async uploadDocument(
-    type: string,
-    fileUri: string,
-    documentNumber?: string
-  ): Promise<Document> {
+  async uploadDocument(data: DocumentUploadData): Promise<Document> {
     const formData = new FormData();
-    formData.append('document', {
-      uri: fileUri,
-      type: 'image/jpeg',
-      name: `${type}.jpg`,
-    } as any);
-    formData.append('type', type);
-    if (documentNumber) {
-      formData.append('documentNumber', documentNumber);
+    
+    formData.append('document_type', data.documentType);
+    if (data.documentNumber) {
+      formData.append('document_number', data.documentNumber);
     }
+    formData.append('file', {
+      uri: data.file.uri,
+      type: data.file.type,
+      name: data.file.name,
+    } as any);
 
-    const response = await apiClient.post('/profile/documents', formData, {
+    const response = await apiClient.post('/users/documents/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    
     return response.data;
-  }
+  },
 
   async deleteDocument(id: string): Promise<void> {
-    await apiClient.delete(`/profile/documents/${id}`);
-  }
+    await apiClient.delete(`/users/documents/${id}/`);
+  },
 
-  // Settings
+  // ============================================================================
+  // SETTINGS
+  // ============================================================================
+
   async getSettings(): Promise<AppSettings> {
-    const response = await apiClient.get('/profile/settings');
+    const response = await apiClient.get('/users/settings/');
     return response.data;
-  }
+  },
 
   async updateSettings(settings: Partial<AppSettings>): Promise<AppSettings> {
-    const response = await apiClient.put('/profile/settings', settings);
+    const response = await apiClient.patch('/users/settings/', settings);
     return response.data;
-  }
+  },
 
-  // Support
-  async createSupportTicket(data: {
-    category: string;
-    subject: string;
-    description: string;
-  }): Promise<void> {
-    await apiClient.post('/support/tickets', data);
-  }
+  // ============================================================================
+  // PROFILE COMPLETION
+  // ============================================================================
 
-  async getSupportTickets() {
-    const response = await apiClient.get('/support/tickets');
+  async getProfileCompletion(): Promise<ProfileCompletionStatus> {
+    const response = await apiClient.get('/users/profile/completion/');
     return response.data;
-  }
-}
-
-export const profileService = new ProfileService();
+  },
+};

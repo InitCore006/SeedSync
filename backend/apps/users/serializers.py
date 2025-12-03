@@ -5,6 +5,9 @@ from .models import User, UserProfile
 import re
 
 
+
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     """User Profile Serializer"""
     
@@ -279,3 +282,91 @@ class UserStatsSerializer(serializers.Serializer):
     users_by_role = serializers.DictField()
     users_by_state = serializers.DictField()
     recent_registrations = serializers.IntegerField()
+    
+    
+    
+class UserWithProfileSerializer(serializers.ModelSerializer):
+    """Complete User Serializer with nested profile"""
+    
+    profile = UserProfileSerializer(read_only=True)
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'phone_number', 'email', 'full_name', 'role',
+            'preferred_language', 'is_phone_verified', 'is_email_verified',
+            'is_kyc_verified', 'is_active', 'date_joined', 'last_login',
+            'profile'
+        ]
+        read_only_fields = [
+            'id', 'is_phone_verified', 'is_email_verified', 
+            'is_kyc_verified', 'date_joined', 'last_login', 'role'
+        ]
+    
+    
+    
+class UpdateUserProfileSerializer(serializers.Serializer):
+    """Serializer for updating user + profile in one request"""
+    
+    # User fields
+    full_name = serializers.CharField(max_length=200, required=False)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    preferred_language = serializers.CharField(required=False)
+    
+    # Profile fields
+    date_of_birth = serializers.DateField(required=False, allow_null=True)
+    gender = serializers.ChoiceField(choices=['M', 'F', 'O'], required=False)
+    address_line1 = serializers.CharField(required=False, allow_blank=True)
+    address_line2 = serializers.CharField(required=False, allow_blank=True)
+    village = serializers.CharField(required=False, allow_blank=True)
+    block = serializers.CharField(required=False, allow_blank=True)
+    district = serializers.CharField(required=False, allow_blank=True)
+    state = serializers.CharField(required=False, allow_blank=True)
+    pincode = serializers.CharField(max_length=6, required=False)
+    
+    # Bank details
+    bank_name = serializers.CharField(required=False, allow_blank=True)
+    account_number = serializers.CharField(required=False, allow_blank=True)
+    ifsc_code = serializers.CharField(required=False, allow_blank=True)
+    account_holder_name = serializers.CharField(required=False, allow_blank=True)
+    education_level = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate_pincode(self, value):
+        if value and not re.match(r'^\d{6}$', value):
+            raise serializers.ValidationError("Pincode must be 6 digits")
+        return value
+    
+    def update(self, instance, validated_data):
+        """Update user and profile"""
+        user = instance
+        profile = user.profile
+        
+        # Update user fields
+        user_fields = ['full_name', 'email', 'preferred_language']
+        for field in user_fields:
+            if field in validated_data:
+                setattr(user, field, validated_data[field])
+        user.save()
+        
+        # Update profile fields
+        profile_fields = [
+            'date_of_birth', 'gender', 'address_line1', 'address_line2',
+            'village', 'block', 'district', 'state', 'pincode',
+            'bank_name', 'account_number', 'ifsc_code', 
+            'account_holder_name', 'education_level'
+        ]
+        for field in profile_fields:
+            if field in validated_data:
+                setattr(profile, field, validated_data[field])
+        profile.save()
+        
+        return user
+
+    
+    
+    
+    
+    
+    
+    
+    

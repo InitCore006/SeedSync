@@ -129,6 +129,61 @@ class ChangePasswordView(generics.UpdateAPIView):
         }, status=status.HTTP_200_OK)
 
 
+# ==================== Profile Management ====================
+
+class ProfileView(APIView):
+    """
+    Get and Update User Profile
+    GET    /api/users/profile/ - Get current user profile
+    PATCH  /api/users/profile/ - Update current user profile
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        """Get current user with profile"""
+        serializer = UserWithProfileSerializer(request.user)
+        return Response(serializer.data)
+    
+    def patch(self, request):
+        """Update current user profile"""
+        serializer = UpdateUserProfileSerializer(
+            instance=request.user,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        return Response({
+            'message': 'Profile updated successfully',
+            'data': UserWithProfileSerializer(user).data
+        })
+
+
+class UploadProfileImageView(APIView):
+    """
+    Upload Profile Image
+    POST /api/users/profile/upload-image/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        profile = request.user.profile
+        
+        if 'profile_picture' not in request.FILES:
+            return Response({
+                'error': 'No image file provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        profile.profile_picture = request.FILES['profile_picture']
+        profile.save()
+        
+        return Response({
+            'message': 'Profile image uploaded successfully',
+            'profile_picture': profile.profile_picture.url if profile.profile_picture else None
+        })
+
+
 # ==================== User Management Views ====================
 
 class UserViewSet(viewsets.ModelViewSet):

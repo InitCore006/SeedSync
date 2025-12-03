@@ -4,399 +4,318 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
   TextInput,
-  Pressable,
   Alert,
+  Platform,
+  KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useCrops } from '@/hooks/useCrops';
-import {Button} from '@/components/common/Button';
-import Select from '@/components/common/Select';
-import DatePicker from '@/components/common/DatePicker';
-import {Input} from '@/components/common/Input';
-import {LoadingSpinner} from '@/components/common/LoadingSpinner';
-import { colors } from '@/lib/constants/colors';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
+
+import { useCropStore } from '@/store/cropStore';
+import { colors, withOpacity } from '@/lib/constants/colors';
+import { spacing, borderRadius, shadows } from '@/lib/constants/spacing';
 import { typography } from '@/lib/constants/typography';
-import { spacing } from '@/lib/constants/spacing';
+import { OILSEED_CROPS, INDIAN_STATES } from '@/lib/constants/crops';
+
+import { UpdateCropData } from '@/types/crop.types';
+import { updateCropSchema } from '@/lib/schemas/crop.schemas';
 
 export default function EditCropScreen() {
-  const { cropId } = useLocalSearchParams();
-  const { selectedCrop, fetchCropById, updateCrop, deleteCrop, isLoading } = useCrops();
-  
-  const [formData, setFormData] = useState({
-    name: '',
-    variety: '',
-    category: 'oilseed' as any,
-    plantingDate: '',
-    expectedHarvestDate: '',
-    actualHarvestDate: '',
-    area: '',
-    areaUnit: 'acre' as any,
-    soilType: '',
-    irrigationType: 'drip' as any,
-    seedSource: '',
-    seedCost: '',
-    expectedYield: '',
-    actualYield: '',
-    status: 'planted' as any,
-    notes: '',
-  });
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { selectedCrop, updateCrop, isLoading, fetchCropById } = useCropStore();
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formData, setFormData] = useState<Partial<UpdateCropData>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof UpdateCropData, string>>>({});
+  const [showHarvestDatePicker, setShowHarvestDatePicker] = useState(false);
 
   useEffect(() => {
-    if (cropId) {
-      fetchCropById(cropId as string);
+    if (id) {
+      loadCrop();
     }
-  }, [cropId]);
+  }, [id]);
 
   useEffect(() => {
     if (selectedCrop) {
       setFormData({
-        name: selectedCrop.name,
         variety: selectedCrop.variety,
-        category: selectedCrop.category,
-        plantingDate: selectedCrop.plantingDate,
-        expectedHarvestDate: selectedCrop.expectedHarvestDate,
-        actualHarvestDate: selectedCrop.actualHarvestDate || '',
-        area: selectedCrop.area.toString(),
-        areaUnit: selectedCrop.areaUnit,
-        soilType: selectedCrop.soilType,
-        irrigationType: selectedCrop.irrigationType,
-        seedSource: selectedCrop.seedSource,
-        seedCost: selectedCrop.seedCost.toString(),
-        expectedYield: selectedCrop.expectedYield.toString(),
-        actualYield: selectedCrop.actualYield?.toString() || '',
-        status: selectedCrop.status,
-        notes: selectedCrop.notes || '',
+        planted_area: selectedCrop.planted_area,
+        expected_harvest_date: selectedCrop.expected_harvest_date,
+        estimated_yield: selectedCrop.estimated_yield,
+        location_address: selectedCrop.location_address,
       });
     }
   }, [selectedCrop]);
 
-  const cropCategories = [
-    { label: 'Oilseed', value: 'oilseed' },
-    { label: 'Pulse', value: 'pulse' },
-    { label: 'Cereal', value: 'cereal' },
-    { label: 'Vegetable', value: 'vegetable' },
-    { label: 'Fruit', value: 'fruit' },
-    { label: 'Cash Crop', value: 'cash_crop' },
-  ];
-
-  const areaUnits = [
-    { label: 'Acre', value: 'acre' },
-    { label: 'Hectare', value: 'hectare' },
-    { label: 'Bigha', value: 'bigha' },
-  ];
-
-  const irrigationTypes = [
-    { label: 'Drip Irrigation', value: 'drip' },
-    { label: 'Sprinkler', value: 'sprinkler' },
-    { label: 'Flood Irrigation', value: 'flood' },
-    { label: 'Rainfed', value: 'rainfed' },
-  ];
-
-  const soilTypes = [
-    { label: 'Black Cotton Soil', value: 'Black Cotton Soil' },
-    { label: 'Red Sandy Soil', value: 'Red Sandy Soil' },
-    { label: 'Alluvial Soil', value: 'Alluvial Soil' },
-    { label: 'Laterite Soil', value: 'Laterite Soil' },
-    { label: 'Clay Soil', value: 'Clay Soil' },
-  ];
-
-  const statusOptions = [
-    { label: 'Planning', value: 'planning' },
-    { label: 'Planted', value: 'planted' },
-    { label: 'Growing', value: 'growing' },
-    { label: 'Flowering', value: 'flowering' },
-    { label: 'Harvesting', value: 'harvesting' },
-    { label: 'Harvested', value: 'harvested' },
-    { label: 'Failed', value: 'failed' },
-  ];
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.name.trim()) newErrors.name = 'Crop name is required';
-    if (!formData.variety.trim()) newErrors.variety = 'Variety is required';
-    if (!formData.area || parseFloat(formData.area) <= 0) {
-      newErrors.area = 'Valid area is required';
+  const loadCrop = async () => {
+    if (id) {
+      await fetchCropById(id);
     }
-    if (!formData.expectedHarvestDate) {
-      newErrors.expectedHarvestDate = 'Expected harvest date is required';
-    }
-    if (!formData.soilType) newErrors.soilType = 'Soil type is required';
-    if (!formData.seedSource.trim()) newErrors.seedSource = 'Seed source is required';
-    if (!formData.seedCost || parseFloat(formData.seedCost) <= 0) {
-      newErrors.seedCost = 'Valid seed cost is required';
-    }
-    if (!formData.expectedYield || parseFloat(formData.expectedYield) <= 0) {
-      newErrors.expectedYield = 'Valid expected yield is required';
-    }
+  };
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const handleInputChange = <K extends keyof UpdateCropData>(
+    field: K,
+    value: UpdateCropData[K]
+  ) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const validateForm = (): boolean => {
+    try {
+      updateCropSchema.parse(formData);
+      setErrors({});
+      return true;
+    } catch (error: any) {
+      const validationErrors: Partial<Record<keyof UpdateCropData, string>> = {};
+      error.errors.forEach((err: any) => {
+        const field = err.path[0] as keyof UpdateCropData;
+        validationErrors[field] = err.message;
+      });
+      setErrors(validationErrors);
+      return false;
+    }
   };
 
   const handleSubmit = async () => {
     if (!validateForm()) {
-      Alert.alert('Validation Error', 'Please fill all required fields correctly');
+      Alert.alert('Validation Error', 'Please fix the errors in the form.');
       return;
     }
 
-    if (!cropId) return;
+    if (!id) return;
 
     try {
-      const updates: any = {
-        name: formData.name,
-        variety: formData.variety,
-        category: formData.category,
-        plantingDate: formData.plantingDate,
-        expectedHarvestDate: formData.expectedHarvestDate,
-        area: parseFloat(formData.area),
-        areaUnit: formData.areaUnit,
-        soilType: formData.soilType,
-        irrigationType: formData.irrigationType,
-        seedSource: formData.seedSource,
-        seedCost: parseFloat(formData.seedCost),
-        expectedYield: parseFloat(formData.expectedYield),
-        status: formData.status,
-        notes: formData.notes,
-      };
-
-      if (formData.actualHarvestDate) {
-        updates.actualHarvestDate = formData.actualHarvestDate;
-      }
-
-      if (formData.actualYield) {
-        updates.actualYield = parseFloat(formData.actualYield);
-      }
-
-      await updateCrop(cropId as string, updates);
-
-      Alert.alert('Success', 'Crop updated successfully!', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      await updateCrop(id, formData);
+      Alert.alert(
+        'Success',
+        'Crop updated successfully!',
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update crop');
+      Alert.alert(
+        'Error',
+        error.response?.data?.message || 'Failed to update crop. Please try again.'
+      );
     }
   };
 
-  const handleDelete = () => {
-    Alert.alert(
-      'Delete Crop',
-      'Are you sure you want to delete this crop? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteCrop(cropId as string);
-              Alert.alert('Success', 'Crop deleted successfully!', [
-                { text: 'OK', onPress: () => router.replace('/(farmer)/crops') },
-              ]);
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to delete crop');
-            }
-          },
-        },
-      ]
+  if (!selectedCrop) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading crop details...</Text>
+      </View>
     );
-  };
-
-  if (isLoading && !selectedCrop) {
-    return <LoadingSpinner />;
   }
 
+  const selectedCropType = OILSEED_CROPS.find((c) => c.id === selectedCrop.crop_type);
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
-          <Text style={styles.backButton}>← Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Edit Crop</Text>
-        <Pressable onPress={handleDelete}>
-          <Text style={styles.deleteButton}>🗑️</Text>
-        </Pressable>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Edit Crop</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
-          {/* Crop Details Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Crop Details</Text>
-
-            <Input
-              label="Crop Name *"
-              placeholder="e.g., Soybean, Wheat, Cotton"
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-              error={errors.name}
-            />
-
-            <Input
-              label="Variety *"
-              placeholder="e.g., JS 335, HD 2967"
-              value={formData.variety}
-              onChangeText={(text) => setFormData({ ...formData, variety: text })}
-              error={errors.variety}
-            />
-
-            <Select
-              label="Category *"
-              options={cropCategories}
-              value={formData.category}
-              onValueChange={(value) => setFormData({ ...formData, category: value })}
-            />
-
-            <Select
-              label="Status *"
-              options={statusOptions}
-              value={formData.status}
-              onValueChange={(value) => setFormData({ ...formData, status: value })}
-            />
-          </View>
-
-          {/* Planting Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Planting Information</Text>
-
-            <DatePicker
-              label="Planting Date *"
-              value={formData.plantingDate}
-              onChange={(date) => setFormData({ ...formData, plantingDate: date })}
-            />
-
-            <DatePicker
-              label="Expected Harvest Date *"
-              value={formData.expectedHarvestDate}
-              onChange={(date) => setFormData({ ...formData, expectedHarvestDate: date })}
-              error={errors.expectedHarvestDate}
-            />
-
-            {formData.status === 'harvested' && (
-              <DatePicker
-                label="Actual Harvest Date"
-                value={formData.actualHarvestDate}
-                onChange={(date) => setFormData({ ...formData, actualHarvestDate: date })}
-              />
-            )}
-
-            <View style={styles.row}>
-              <View style={{ flex: 2 }}>
-                <Input
-                  label="Area *"
-                  placeholder="e.g., 5"
-                  keyboardType="decimal-pad"
-                  value={formData.area}
-                  onChangeText={(text) => setFormData({ ...formData, area: text })}
-                  error={errors.area}
-                />
-              </View>
-              <View style={{ flex: 1, marginLeft: spacing.sm }}>
-                <Select
-                  label="Unit *"
-                  options={areaUnits}
-                  value={formData.areaUnit}
-                  onValueChange={(value) => setFormData({ ...formData, areaUnit: value })}
-                />
-              </View>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + spacing.xl },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Crop Info (Read-only) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Crop Information</Text>
+          
+          <View style={styles.readOnlyCard}>
+            <View style={styles.readOnlyRow}>
+              <Text style={styles.readOnlyLabel}>Crop Type</Text>
+              <Text style={styles.readOnlyValue}>{selectedCrop.crop_type_display}</Text>
+            </View>
+            <View style={styles.readOnlyRow}>
+              <Text style={styles.readOnlyLabel}>Crop ID</Text>
+              <Text style={styles.readOnlyValue}>{selectedCrop.crop_id}</Text>
+            </View>
+            <View style={styles.readOnlyRow}>
+              <Text style={styles.readOnlyLabel}>Planting Date</Text>
+              <Text style={styles.readOnlyValue}>
+                {new Date(selectedCrop.planting_date).toLocaleDateString('en-IN')}
+              </Text>
             </View>
           </View>
 
-          {/* Field Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Field Information</Text>
-
-            <Select
-              label="Soil Type *"
-              options={soilTypes}
-              value={formData.soilType}
-              onValueChange={(value) => setFormData({ ...formData, soilType: value })}
-              error={errors.soilType}
-            />
-
-            <Select
-              label="Irrigation Type *"
-              options={irrigationTypes}
-              value={formData.irrigationType}
-              onValueChange={(value) => setFormData({ ...formData, irrigationType: value })}
-            />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Variety <Text style={styles.required}>*</Text>
+            </Text>
+            {selectedCropType ? (
+              <View style={[styles.pickerContainer, errors.variety && styles.inputError]}>
+                <Picker
+                  selectedValue={formData.variety}
+                  onValueChange={(value) => handleInputChange('variety', value)}
+                  style={styles.picker}
+                >
+                  {selectedCropType.varieties.map((variety) => (
+                    <Picker.Item key={variety} label={variety} value={variety} />
+                  ))}
+                </Picker>
+              </View>
+            ) : (
+              <TextInput
+                style={[styles.input, errors.variety && styles.inputError]}
+                placeholder="Enter variety"
+                value={formData.variety}
+                onChangeText={(value) => handleInputChange('variety', value)}
+              />
+            )}
+            {errors.variety && <Text style={styles.errorText}>{errors.variety}</Text>}
           </View>
 
-          {/* Investment & Yield Details */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Investment & Yield</Text>
-
-            <Input
-              label="Seed Source *"
-              placeholder="e.g., Maharashtra State Seeds"
-              value={formData.seedSource}
-              onChangeText={(text) => setFormData({ ...formData, seedSource: text })}
-              error={errors.seedSource}
-            />
-
-            <Input
-              label="Seed Cost (₹) *"
-              placeholder="e.g., 3500"
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Planted Area (acres) <Text style={styles.required}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.input, errors.planted_area && styles.inputError]}
+              placeholder="Enter area in acres"
               keyboardType="decimal-pad"
-              value={formData.seedCost}
-              onChangeText={(text) => setFormData({ ...formData, seedCost: text })}
-              error={errors.seedCost}
+              value={formData.planted_area?.toString() || ''}
+              onChangeText={(value) =>
+                handleInputChange('planted_area', parseFloat(value) || undefined)
+              }
             />
-
-            <Input
-              label="Expected Yield (Quintals) *"
-              placeholder="e.g., 20"
-              keyboardType="decimal-pad"
-              value={formData.expectedYield}
-              onChangeText={(text) => setFormData({ ...formData, expectedYield: text })}
-              error={errors.expectedYield}
-            />
-
-            {formData.status === 'harvested' && (
-              <Input
-                label="Actual Yield (Quintals)"
-                placeholder="e.g., 18.5"
-                keyboardType="decimal-pad"
-                value={formData.actualYield}
-                onChangeText={(text) => setFormData({ ...formData, actualYield: text })}
-              />
+            {errors.planted_area && (
+              <Text style={styles.errorText}>{errors.planted_area}</Text>
             )}
           </View>
 
-          {/* Notes */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Additional Notes</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Estimated Yield (quintals)</Text>
             <TextInput
-              style={styles.textArea}
-              placeholder="Add any additional information..."
-              multiline
-              numberOfLines={4}
-              value={formData.notes}
-              onChangeText={(text) => setFormData({ ...formData, notes: text })}
-              placeholderTextColor={colors.text.secondary}
+              style={styles.input}
+              placeholder="Expected yield"
+              keyboardType="decimal-pad"
+              value={formData.estimated_yield?.toString() || ''}
+              onChangeText={(value) =>
+                handleInputChange('estimated_yield', parseFloat(value) || undefined)
+              }
             />
           </View>
+        </View>
 
-          {/* Submit Button */}
-          <Button
-            title={isLoading ? 'Updating Crop...' : 'Update Crop'}
-            onPress={handleSubmit}
-            disabled={isLoading}
-            style={styles.submitButton}
-          />
+        {/* Schedule */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Harvest Schedule</Text>
 
-          {/* Delete Button */}
-          <Pressable style={styles.dangerButton} onPress={handleDelete}>
-            <Text style={styles.dangerButtonText}>Delete Crop</Text>
-          </Pressable>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Expected Harvest Date</Text>
+            <TouchableOpacity
+              style={[styles.dateButton, errors.expected_harvest_date && styles.inputError]}
+              onPress={() => setShowHarvestDatePicker(true)}
+            >
+              <Ionicons name="calendar-outline" size={20} color={colors.success} />
+              <Text style={styles.dateButtonText}>
+                {formData.expected_harvest_date
+                  ? new Date(formData.expected_harvest_date).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })
+                  : 'Select harvest date'}
+              </Text>
+            </TouchableOpacity>
+            {errors.expected_harvest_date && (
+              <Text style={styles.errorText}>{errors.expected_harvest_date}</Text>
+            )}
+          </View>
+
+          {showHarvestDatePicker && (
+            <DateTimePicker
+              value={
+                formData.expected_harvest_date
+                  ? new Date(formData.expected_harvest_date)
+                  : new Date(selectedCrop.expected_harvest_date)
+              }
+              mode="date"
+              display="default"
+              onChange={(event, date) => {
+                setShowHarvestDatePicker(false);
+                if (date) {
+                  handleInputChange('expected_harvest_date', date.toISOString().split('T')[0]);
+                }
+              }}
+              minimumDate={new Date(selectedCrop.planting_date)}
+            />
+          )}
+        </View>
+
+        {/* Location */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Location Details</Text>
+
+          <View style={styles.readOnlyCard}>
+            <View style={styles.readOnlyRow}>
+              <Text style={styles.readOnlyLabel}>District</Text>
+              <Text style={styles.readOnlyValue}>{selectedCrop.district}</Text>
+            </View>
+            <View style={styles.readOnlyRow}>
+              <Text style={styles.readOnlyLabel}>State</Text>
+              <Text style={styles.readOnlyValue}>{selectedCrop.state}</Text>
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Farm Address</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Enter farm address"
+              multiline
+              numberOfLines={3}
+              value={formData.location_address}
+              onChangeText={(value) => handleInputChange('location_address', value)}
+            />
+          </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Submit Button */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+        <TouchableOpacity
+          style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={20} color={colors.white} />
+              <Text style={styles.submitButtonText}>Update Crop</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -405,72 +324,160 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    marginTop: spacing.md,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderLight,
   },
   backButton: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: '600',
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  title: {
+  headerTitle: {
     ...typography.h3,
     color: colors.text.primary,
-  },
-  deleteButton: {
-    fontSize: 24,
+    fontWeight: '700',
   },
   scrollView: {
     flex: 1,
   },
-  content: {
-    padding: spacing.md,
+  scrollContent: {
+    padding: spacing.lg,
   },
   section: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   sectionTitle: {
     ...typography.h4,
     color: colors.text.primary,
+    fontWeight: '700',
     marginBottom: spacing.md,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  textArea: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
+  readOnlyCard: {
+    backgroundColor: withOpacity(colors.gray[100], 0.5),
+    borderRadius: borderRadius.md,
     padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  readOnlyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  readOnlyLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+  },
+  readOnlyValue: {
     ...typography.body,
     color: colors.text.primary,
-    textAlignVertical: 'top',
-    minHeight: 100,
+    fontWeight: '600',
+  },
+  inputGroup: {
+    marginBottom: spacing.md,
+  },
+  label: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  required: {
+    color: colors.error,
+  },
+  input: {
+    ...typography.body,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    color: colors.text.primary,
+    minHeight: 48,
   },
-  submitButton: {
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  dangerButton: {
-    backgroundColor: `${colors.error}15`,
-    paddingVertical: spacing.md,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-    borderWidth: 1,
+  inputError: {
     borderColor: colors.error,
   },
-  dangerButtonText: {
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  pickerContainer: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 48,
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 48,
+  },
+  dateButtonText: {
     ...typography.body,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  errorText: {
+    ...typography.caption,
     color: colors.error,
-    fontWeight: '600',
+    marginTop: spacing.xs,
+  },
+  footer: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    ...shadows.lg,
+  },
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    ...shadows.md,
+  },
+  submitButtonDisabled: {
+    backgroundColor: colors.gray[400],
+  },
+  submitButtonText: {
+    ...typography.button,
+    color: colors.white,
+    fontSize: 16,
   },
 });

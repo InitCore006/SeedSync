@@ -5,50 +5,55 @@ import { useFarmerStore } from '@/store/farmerStore';
 export const useAuth = () => {
   const {
     user,
+    profile,
     isAuthenticated,
     isLoading,
     error,
     login,
     logout,
     loadUser,
-    clearError,
     updateUser,
+    clearError,
   } = useAuthStore();
 
-  const resetFarmerStore = () => {
-    // safe no-op if reset is not defined on farmer store
-    const store = (useFarmerStore as unknown as { getState?: () => any }).getState
-      ? (useFarmerStore as any).getState()
-      : undefined;
-    if (store && typeof store.reset === 'function') {
-      store.reset();
-    }
-  };
+  const { clearFarmer } = useFarmerStore();
 
   // Load user on mount
   useEffect(() => {
-    loadUser();
+    if (!user && !isLoading) {
+      loadUser();
+    }
   }, []);
 
   // Enhanced logout that clears all stores
   const handleLogout = async () => {
     await logout();
-    resetFarmerStore();
+    clearFarmer();
   };
 
   return {
     user,
+    profile,
     isAuthenticated,
     isLoading,
     error,
     login,
     logout: handleLogout,
     loadUser,
-    clearError,
     updateUser,
-    isFarmer: user?.role === 'FARMER',
-    isWarehouse: user?.role === 'WAREHOUSE',
-    isLogistics: user?.role === 'LOGISTICS',
-    isApproved: user?.approval_status === 'APPROVED',
+    clearError,
+    
+    // Role checks
+    isFarmer: user?.role === 'farmer',
+    isFPO: user?.role === 'fpo',
+    isProcessor: user?.role === 'processor',
+    isBuyer: user?.role === 'buyer',
+    isAdmin: user?.role === 'admin',
+    
+    // Verification status
+    isPhoneVerified: user?.is_phone_verified || false,
+    isEmailVerified: user?.is_email_verified || false,
+    isKYCVerified: user?.is_kyc_verified || false,
+    isActive: user?.is_active || false,
   };
 };

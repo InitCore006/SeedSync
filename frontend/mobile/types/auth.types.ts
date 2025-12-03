@@ -1,3 +1,7 @@
+// ============================================================================
+// USER & PROFILE TYPES (Aligned with Backend)
+// ============================================================================
+
 export interface User {
   id: string;
   phone_number: string;
@@ -7,16 +11,16 @@ export interface User {
   is_active: boolean;
   is_phone_verified: boolean;
   is_email_verified: boolean;
+  is_kyc_verified: boolean;
   preferred_language: string;
   date_joined: string;
   last_login: string | null;
 }
 
 export interface UserProfile {
-  id: string;
-  user: string;
   date_of_birth: string | null;
   gender: 'M' | 'F' | 'O' | null;
+  profile_picture: string | null;
   address_line1: string;
   address_line2: string;
   village: string;
@@ -29,11 +33,13 @@ export interface UserProfile {
   ifsc_code: string;
   account_holder_name: string;
   education_level: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Farmer {
   id: string;
-  user: string;
+  user: string; // User ID
   farmer_id: string;
   total_land_area: number;
   irrigated_land: number;
@@ -49,8 +55,17 @@ export interface Farmer {
   updated_at: string;
 }
 
+export interface UserWithProfile extends User {
+  profile: UserProfile;
+}
+
+export interface FarmerWithDetails extends Farmer {
+  user_details: User;
+  profile_details: UserProfile;
+}
+
 // ============================================================================
-// LOGIN
+// AUTH REQUEST/RESPONSE TYPES
 // ============================================================================
 
 export interface LoginRequest {
@@ -59,14 +74,31 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  access: string;
-  refresh: string;
+  user: User;
+  tokens: {
+    access: string;
+    refresh: string;
+  };
+  message: string;
+}
+
+export interface RegisterRequest {
+  phone_number: string;
+  password: string;
+  password_confirm: string;
+  full_name: string;
+  email?: string;
+  role: 'farmer' | 'fpo' | 'processor' | 'buyer';
+  preferred_language?: string;
+}
+
+export interface RegisterResponse {
   user: User;
   message: string;
 }
 
 // ============================================================================
-// PHONE VERIFICATION (No OTP Model - Uses Cache)
+// OTP VERIFICATION
 // ============================================================================
 
 export interface SendOTPRequest {
@@ -75,7 +107,7 @@ export interface SendOTPRequest {
 
 export interface SendOTPResponse {
   message: string;
-  otp?: string; // Only in development
+  otp?: string; // Only in development mode
 }
 
 export interface VerifyOTPRequest {
@@ -89,7 +121,7 @@ export interface VerifyOTPResponse {
 }
 
 // ============================================================================
-// FARMER REGISTRATION (Single Step)
+// FARMER REGISTRATION (Complete)
 // ============================================================================
 
 export interface FarmerRegistrationRequest {
@@ -144,20 +176,26 @@ export interface FarmerRegistrationResponse {
     role: string;
   };
   tokens: {
-    refresh: string;
     access: string;
+    refresh: string;
   };
 }
 
 // ============================================================================
-// PASSWORD RESET
+// PASSWORD MANAGEMENT
 // ============================================================================
 
-export interface PasswordResetRequest {
+export interface ChangePasswordRequest {
+  old_password: string;
+  new_password: string;
+  new_password_confirm: string;
+}
+
+export interface ForgotPasswordRequest {
   phone_number: string;
 }
 
-export interface PasswordResetConfirm {
+export interface ResetPasswordRequest {
   phone_number: string;
   otp: string;
   new_password: string;
@@ -169,11 +207,58 @@ export interface PasswordResetResponse {
 }
 
 // ============================================================================
-// CHANGE PASSWORD
+// USER UPDATE
 // ============================================================================
 
-export interface ChangePasswordRequest {
-  old_password: string;
-  new_password: string;
-  new_password_confirm: string;
+export interface UpdateUserRequest {
+  full_name?: string;
+  email?: string;
+  preferred_language?: string;
+}
+
+export interface UpdateProfileRequest {
+  date_of_birth?: string;
+  gender?: 'M' | 'F' | 'O';
+  address_line1?: string;
+  address_line2?: string;
+  village?: string;
+  block?: string;
+  district?: string;
+  state?: string;
+  pincode?: string;
+  bank_name?: string;
+  account_number?: string;
+  ifsc_code?: string;
+  account_holder_name?: string;
+  education_level?: string;
+}
+
+export interface UpdateFarmerRequest {
+  total_land_area?: number;
+  irrigated_land?: number;
+  rain_fed_land?: number;
+  farmer_category?: 'marginal' | 'small' | 'semi_medium' | 'medium' | 'large';
+  caste_category?: 'general' | 'obc' | 'sc' | 'st';
+  has_kisan_credit_card?: boolean;
+  kcc_number?: string;
+  has_pmfby_insurance?: boolean;
+  pmfby_policy_number?: string;
+  has_pm_kisan?: boolean;
+}
+
+// ============================================================================
+// DASHBOARD TYPES
+// ============================================================================
+
+export interface FarmerDashboard {
+  farmer: FarmerWithDetails;
+  statistics: {
+    total_plots: number;
+    total_area: number;
+    active_crops: number;
+    total_harvest: number;
+    total_income: number;
+  };
+  recent_activities: any[];
+  upcoming_tasks: any[];
 }

@@ -34,7 +34,7 @@ class CropCreateSerializer(serializers.ModelSerializer):
                 'expected_harvest_date': 'Harvest date must be after planting date'
             })
         
-        # Validate harvest date is realistic (30-180 days for oilseeds)
+        # Validate harvest date is realistic (30-365 days for oilseeds)
         days_diff = (data['expected_harvest_date'] - data['planting_date']).days
         if days_diff < 30 or days_diff > 365:
             raise serializers.ValidationError({
@@ -56,28 +56,52 @@ class CropCreateSerializer(serializers.ModelSerializer):
         # Set farmer based on user role
         if user.role == 'farmer':
             validated_data['farmer'] = user
-            # Auto-assign FPO if farmer belongs to one
-            if hasattr(user, 'farmer_profile') and user.farmer_profile.fpo:
-                validated_data['fpo'] = user.farmer_profile.fpo
+            
+            # Auto-assign FPO if farmer belongs to one (optional)
+            try:
+                # Check if farmer has a farmer_profile and if it has an FPO
+                if hasattr(user, 'farmer_profile'):
+                    farmer_profile = user.farmer_profile
+                    if hasattr(farmer_profile, 'fpo') and farmer_profile.fpo:
+                        validated_data['fpo'] = farmer_profile.fpo
+            except Exception as e:
+                # If there's any issue checking FPO, just continue without it
+                pass
+                
         elif user.role == 'fpo_admin':
             # FPO admin must specify which farmer
             farmer_id = self.initial_data.get('farmer_id')
             if not farmer_id:
                 raise serializers.ValidationError({'farmer_id': 'Farmer ID is required'})
+            
             try:
                 farmer = User.objects.get(id=farmer_id, role='farmer')
                 validated_data['farmer'] = farmer
-                validated_data['fpo'] = user.fpo_profile.fpo
+                
+                # Assign FPO from admin's profile
+                if hasattr(user, 'fpo_profile') and user.fpo_profile:
+                    validated_data['fpo'] = user.fpo_profile.fpo
             except User.DoesNotExist:
                 raise serializers.ValidationError({'farmer_id': 'Invalid farmer ID'})
+                
         elif user.role == 'admin':
             # Admin can create for any farmer
             farmer_id = self.initial_data.get('farmer_id')
             if not farmer_id:
                 raise serializers.ValidationError({'farmer_id': 'Farmer ID is required'})
+            
             try:
                 farmer = User.objects.get(id=farmer_id, role='farmer')
                 validated_data['farmer'] = farmer
+                
+                # Optionally assign FPO if farmer has one
+                try:
+                    if hasattr(farmer, 'farmer_profile'):
+                        farmer_profile = farmer.farmer_profile
+                        if hasattr(farmer_profile, 'fpo') and farmer_profile.fpo:
+                            validated_data['fpo'] = farmer_profile.fpo
+                except Exception:
+                    pass
             except User.DoesNotExist:
                 raise serializers.ValidationError({'farmer_id': 'Invalid farmer ID'})
         
@@ -124,7 +148,7 @@ class CropUpdateSerializer(serializers.ModelSerializer):
 class CropListSerializer(serializers.ModelSerializer):
     """Serializer for listing crops"""
     farmer_name = serializers.CharField(source='farmer.full_name', read_only=True)
-    fpo_name = serializers.CharField(source='fpo.name', read_only=True)
+    fpo_name = serializers.CharField(source='fpo.name', read_only=True, allow_null=True)
     crop_type_display = serializers.CharField(source='get_crop_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     days_since_planting = serializers.SerializerMethodField()

@@ -1,7 +1,82 @@
 from rest_framework import serializers
 from django.db.models import Sum, Avg
 from .models import Farmer
-from apps.users.serializers import UserListSerializer
+from apps.users.serializers import UserWithProfileSerializer
+
+
+class FarmerSerializer(serializers.ModelSerializer):
+    """Farmer serializer with user and profile"""
+    
+    user = UserWithProfileSerializer(read_only=True)
+    
+    class Meta:
+        model = Farmer
+        fields = [
+            'id', 'user', 'farmer_id',
+            'total_land_area', 'irrigated_land', 'rain_fed_land',
+            'farmer_category', 'caste_category',
+            'is_fpo_member', 'primary_fpo',
+            'has_kisan_credit_card', 'kcc_number',
+            'has_pmfby_insurance', 'pmfby_policy_number',
+            'has_pm_kisan',
+            'total_production', 'average_yield', 'credit_score',
+            'is_active', 'is_verified',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'farmer_id', 'total_production', 'average_yield',
+            'credit_score', 'created_at', 'updated_at'
+        ]
+
+
+class UpdateFarmerSerializer(serializers.Serializer):
+    """Serializer for updating farmer profile"""
+    
+    # Farmer fields
+    total_land_area = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    irrigated_land = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    rain_fed_land = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    farmer_category = serializers.ChoiceField(
+        choices=['marginal', 'small', 'semi_medium', 'medium', 'large'],
+        required=False
+    )
+    caste_category = serializers.ChoiceField(
+        choices=['general', 'obc', 'sc', 'st'],
+        required=False
+    )
+    
+    # Government schemes
+    has_kisan_credit_card = serializers.BooleanField(required=False)
+    kcc_number = serializers.CharField(required=False, allow_blank=True)
+    has_pmfby_insurance = serializers.BooleanField(required=False)
+    pmfby_policy_number = serializers.CharField(required=False, allow_blank=True)
+    has_pm_kisan = serializers.BooleanField(required=False)
+    
+    # Farm details
+    primary_soil_type = serializers.CharField(required=False, allow_blank=True)
+    irrigation_method = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate(self, attrs):
+        """Validate land areas"""
+        if 'total_land_area' in attrs or 'irrigated_land' in attrs or 'rain_fed_land' in attrs:
+            farmer = self.instance
+            total = attrs.get('total_land_area', farmer.total_land_area)
+            irrigated = attrs.get('irrigated_land', farmer.irrigated_land)
+            rain_fed = attrs.get('rain_fed_land', farmer.rain_fed_land)
+            
+            if (irrigated + rain_fed) > total:
+                raise serializers.ValidationError({
+                    "total_land_area": "Irrigated + Rain-fed land cannot exceed total land"
+                })
+        
+        return attrs
+    
+    def update(self, instance, validated_data):
+        """Update farmer profile"""
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        return instance
 
 
 class FarmerRegistrationSerializer(serializers.Serializer):
@@ -154,4 +229,3 @@ class FarmerRegistrationSerializer(serializers.Serializer):
             )
             
             return farmer
-

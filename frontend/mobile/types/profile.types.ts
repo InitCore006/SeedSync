@@ -1,128 +1,243 @@
+// ============================================================================
+// PROFILE TYPES
+// ============================================================================
+
 export interface UserProfile {
   id: string;
-  phoneNumber: string;
-  email?: string;
-  
-  // Personal Information
+  userId: string;
   firstName: string;
   lastName: string;
-  dateOfBirth?: string;
-  gender?: 'male' | 'female' | 'other';
-  profileImage?: string;
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  dateOfBirth: string | null;
+  gender: 'M' | 'F' | 'O' | null;
+  profileImage: string | null;
   
-  // Location
-  address: string;
+  // Address
+  addressLine1: string;
+  addressLine2: string;
   village: string;
+  block: string;
   district: string;
   state: string;
   pincode: string;
   
-  // Farm Details
-  farmSize?: number;
-  farmSizeUnit?: 'acre' | 'hectare';
-  soilType?: string;
-  irrigationType?: string;
+  // Verification
+  isPhoneVerified: boolean;
+  isEmailVerified: boolean;
+  isKycVerified: boolean;
   
-  // KYC Status
-  kycStatus: 'pending' | 'verified' | 'rejected';
-  kycRejectionReason?: string;
+  // Bank Details (from profile)
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+  accountHolderName: string;
   
-  // Preferences
-  language: string;
-  receiveNotifications: boolean;
-  receiveMarketUpdates: boolean;
-  receivePriceAlerts: boolean;
+  // Additional
+  educationLevel: string;
+  preferredLanguage: string;
   
   createdAt: string;
   updatedAt: string;
 }
+
+export interface FarmerProfile {
+  id: string;
+  farmerId: string;
+  userId: string;
+  
+  // Land Details
+  totalLandArea: number;
+  irrigatedLand: number;
+  rainfedLand: number;
+  
+  // Categorization
+  farmerCategory: 'marginal' | 'small' | 'semi_medium' | 'medium' | 'large';
+  casteCategory: 'general' | 'obc' | 'sc' | 'st';
+  
+  // Farm Details
+  primarySoilType: string;
+  irrigationMethod: string;
+  
+  // Government Schemes
+  hasKisanCreditCard: boolean;
+  kccNumber: string;
+  hasPmfbyInsurance: boolean;
+  pmfbyPolicyNumber: string;
+  hasPmKisan: boolean;
+  
+  // Documents
+  aadharNumber: string;
+  panNumber: string;
+  
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompleteProfile {
+  user: UserProfile;
+  farmer: FarmerProfile | null;
+}
+
+// ============================================================================
+// BANK DETAILS
+// ============================================================================
 
 export interface BankDetails {
   id: string;
   userId: string;
-  accountHolderName: string;
+  bankName: string;
   accountNumber: string;
   ifscCode: string;
-  bankName: string;
-  branchName: string;
+  accountHolderName: string;
   accountType: 'savings' | 'current';
-  isVerified: boolean;
+  branch: string;
   isPrimary: boolean;
+  isVerified: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
+export interface BankDetailsFormData {
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+  accountHolderName: string;
+  accountType: 'savings' | 'current';
+  branch?: string;
+}
+
+// ============================================================================
+// DOCUMENTS
+// ============================================================================
+
+export type DocumentType = 
+  | 'aadhar'
+  | 'pan'
+  | 'land_ownership'
+  | 'bank_passbook'
+  | 'ration_card'
+  | 'farmer_id'
+  | 'other';
 
 export interface Document {
   id: string;
   userId: string;
-  type: 'aadhaar' | 'pan' | 'land_records' | 'bank_passbook' | 'other';
-  documentNumber?: string;
-  documentUrl: string;
-  status: 'pending' | 'verified' | 'rejected';
-  rejectionReason?: string;
+  documentType: DocumentType;
+  documentNumber: string;
+  documentName: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  isVerified: boolean;
+  verificationStatus: 'pending' | 'verified' | 'rejected';
+  verificationNote: string | null;
   uploadedAt: string;
-  verifiedAt?: string;
+  verifiedAt: string | null;
 }
+
+export interface DocumentUploadData {
+  documentType: DocumentType;
+  documentNumber?: string;
+  file: {
+    uri: string;
+    type: string;
+    name: string;
+  };
+}
+
+// ============================================================================
+// APP SETTINGS
+// ============================================================================
 
 export interface AppSettings {
-  language: string;
-  theme: 'light' | 'dark' | 'system';
-  notifications: {
-    enabled: boolean;
-    marketUpdates: boolean;
-    priceAlerts: boolean;
-    weatherAlerts: boolean;
-    cropReminders: boolean;
-    tradeMessages: boolean;
-  };
-  privacy: {
-    showProfile: boolean;
-    showLocation: boolean;
-    allowMessages: boolean;
-  };
-  dataUsage: {
-    autoDownloadImages: boolean;
-    autoDownloadVideos: boolean;
-    dataSaverMode: boolean;
-  };
-}
-
-export interface HelpCategory {
-  id: string;
-  name: string;
-  icon: string;
-  questions: HelpQuestion[];
-}
-
-export interface HelpQuestion {
-  id: string;
-  question: string;
-  answer: string;
-}
-
-export interface SupportTicket {
-  id: string;
   userId: string;
-  category: string;
-  subject: string;
-  description: string;
-  status: 'open' | 'in_progress' | 'resolved' | 'closed';
-  priority: 'low' | 'medium' | 'high';
-  responses: TicketResponse[];
-  createdAt: string;
+  
+  // Notifications
+  pushNotifications: boolean;
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  
+  // Notification Preferences
+  notifyCropUpdates: boolean;
+  notifyMarketPrices: boolean;
+  notifyWeatherAlerts: boolean;
+  notifyFpoAnnouncements: boolean;
+  notifyGovernmentSchemes: boolean;
+  
+  // Privacy
+  profileVisibility: 'public' | 'private' | 'fpo_only';
+  showPhoneNumber: boolean;
+  showEmail: boolean;
+  
+  // App Preferences
+  language: 'en' | 'hi' | 'te' | 'ta' | 'kn' | 'mr';
+  theme: 'light' | 'dark' | 'auto';
+  currency: 'INR';
+  measurementUnit: 'metric' | 'imperial';
+  dateFormat: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
+  
   updatedAt: string;
 }
 
-export interface TicketResponse {
-  id: string;
-  message: string;
-  isStaff: boolean;
-  createdAt: string;
+// ============================================================================
+// UPDATE REQUESTS
+// ============================================================================
+
+export interface UpdateUserProfileRequest {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  dateOfBirth?: string;
+  gender?: 'M' | 'F' | 'O';
+  addressLine1?: string;
+  addressLine2?: string;
+  village?: string;
+  block?: string;
+  district?: string;
+  state?: string;
+  pincode?: string;
+  educationLevel?: string;
+  preferredLanguage?: string;
 }
 
-export interface Language {
-  code: string;
-  name: string;
-  nativeName: string;
-  isRTL: boolean;
+export interface UpdateFarmerProfileRequest {
+  totalLandArea?: number;
+  irrigatedLand?: number;
+  rainfedLand?: number;
+  farmerCategory?: 'marginal' | 'small' | 'semi_medium' | 'medium' | 'large';
+  casteCategory?: 'general' | 'obc' | 'sc' | 'st';
+  primarySoilType?: string;
+  irrigationMethod?: string;
+  hasKisanCreditCard?: boolean;
+  kccNumber?: string;
+  hasPmfbyInsurance?: boolean;
+  pmfbyPolicyNumber?: string;
+  hasPmKisan?: boolean;
+  aadharNumber?: string;
+  panNumber?: string;
+}
+
+export interface UpdateBankDetailsRequest {
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  accountHolderName?: string;
+}
+
+// ============================================================================
+// PROFILE COMPLETION
+// ============================================================================
+
+export interface ProfileCompletionStatus {
+  overall: number;
+  sections: {
+    basicInfo: number;
+    address: number;
+    bankDetails: number;
+    farmDetails: number;
+    documents: number;
+  };
+  missingFields: string[];
 }

@@ -62,7 +62,7 @@ export const authService = {
   // Get current user profile
   getProfile: async (): Promise<ApiResponse<User>> => {
     try {
-      const response = await api.get('/users/profile/');
+      const response = await api.get('/users/me/');
       return { data: response.data };
     } catch (error: any) {
       return { 
@@ -74,7 +74,7 @@ export const authService = {
   // Update user profile
   updateProfile: async (data: Partial<User>): Promise<ApiResponse<User>> => {
     try {
-      const response = await api.patch('/users/profile/', data);
+      const response = await api.patch('/users/me/', data);
       return { data: response.data };
     } catch (error: any) {
       return { 
