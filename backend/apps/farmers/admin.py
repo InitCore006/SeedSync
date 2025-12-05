@@ -1,114 +1,43 @@
+"""
+Admin configuration for Farmers App
+"""
 from django.contrib import admin
-from django.utils.html import format_html
-
-from apps.fpos.models import FPO
-from .models import Farmer
+from .models import FarmerProfile, FarmLand, CropPlanning
 
 
-@admin.register(Farmer)
-class FarmerAdmin(admin.ModelAdmin):
-    list_display = [
-        'farmer_id',
-        'farmer_name',
-        'farmer_category',
-        'caste_category',
-        'is_fpo_member',
-        'primary_fpo',
-        'total_land_area',
-        'average_yield',
-        'colored_credit_score',
-        'is_active',
-        'is_verified',
-        'created_at'
-    ]
-    
-    list_filter = [
-        'farmer_category',
-        'caste_category',
-        'is_fpo_member',
-        'is_active',
-        'is_verified',
-        'has_kisan_credit_card',
-        'has_pmfby_insurance',
-        'has_pm_kisan',
-        'created_at'
-    ]
-
-    search_fields = [
-        'farmer_id',
-        'user__full_name',
-        'user__phone_number',
-    ]
-
-    autocomplete_fields = ['user', 'primary_fpo']
-
+@admin.register(FarmerProfile)
+class FarmerProfileAdmin(admin.ModelAdmin):
+    list_display = ['full_name', 'user', 'district', 'state', 'total_land_acres', 'kyc_status', 'fpo']
+    list_filter = ['state', 'kyc_status', 'fpo', 'created_at']
+    search_fields = ['full_name', 'user__phone_number', 'aadhaar_number', 'district']
     ordering = ['-created_at']
-
-    readonly_fields = ('credit_score', 'created_at', 'updated_at')
-
+    readonly_fields = ['created_at', 'updated_at', 'total_lots_created', 'total_quantity_sold_quintals', 'total_earnings']
+    
     fieldsets = (
-        ('Linked User', {
-            'fields': ('user', 'farmer_id')
-        }),
-        ('Land Details', {
-            'fields': (
-                'total_land_area',
-                'irrigated_land',
-                'rain_fed_land',
-                'farmer_category',
-                'caste_category'
-            )
-        }),
-        ('FPO Membership', {
-            'fields': ('is_fpo_member', 'primary_fpo')
-        }),
-        ('Government Schemes', {
-            'fields': (
-                'has_kisan_credit_card',
-                'kcc_number',
-                'has_pmfby_insurance',
-                'pmfby_policy_number',
-                'has_pm_kisan'
-            )
-        }),
-        ('Performance Metrics', {
-            'fields': (
-                'total_production',
-                'average_yield',
-                'credit_score'
-            )
-        }),
-        ('Status', {
-            'fields': ('is_active', 'is_verified')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at')
-        }),
+        ('User & FPO', {'fields': ('user', 'fpo')}),
+        ('Personal Details', {'fields': ('full_name', 'father_name', 'date_of_birth', 'gender', 'profile_photo')}),
+        ('Farm Details', {'fields': ('total_land_acres', 'farming_experience_years', 'primary_crops')}),
+        ('KYC', {'fields': ('aadhaar_number', 'pan_number', 'kyc_status', 'kyc_documents')}),
+        ('Bank Details', {'fields': ('bank_account_number', 'bank_account_holder_name', 'ifsc_code', 'bank_name', 'bank_branch')}),
+        ('Address', {'fields': ('village', 'post_office', 'tehsil', 'district', 'state', 'pincode', 'latitude', 'longitude')}),
+        ('Statistics', {'fields': ('total_lots_created', 'total_quantity_sold_quintals', 'total_earnings')}),
+        ('Preferences', {'fields': ('preferred_language',)}),
     )
 
-    # -------------------
-    # Custom Display Fields
-    # -------------------
 
-    def farmer_name(self, obj):
-        return obj.user.full_name
-    farmer_name.short_description = "Farmer"
-
-    def colored_credit_score(self, obj):
-        score = obj.credit_score
-        color = "red"
-
-        if score >= 80:
-            color = "green"
-        elif score >= 50:
-            color = "orange"
-
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span>',
-            color,
-            score
-        )
-    colored_credit_score.short_description = "Credit Score"
+@admin.register(FarmLand)
+class FarmLandAdmin(admin.ModelAdmin):
+    list_display = ['land_name', 'farmer', 'land_area_acres', 'soil_type', 'irrigation_available', 'ownership_type']
+    list_filter = ['soil_type', 'irrigation_available', 'ownership_type', 'created_at']
+    search_fields = ['land_name', 'farmer__full_name', 'survey_number']
+    ordering = ['-created_at']
+    readonly_fields = ['created_at', 'updated_at']
 
 
-
+@admin.register(CropPlanning)
+class CropPlanningAdmin(admin.ModelAdmin):
+    list_display = ['farmer', 'crop_type', 'season', 'sowing_date', 'cultivation_area_acres', 'status']
+    list_filter = ['crop_type', 'season', 'status', 'organic_farming', 'sowing_date']
+    search_fields = ['farmer__full_name', 'farm_land__land_name']
+    ordering = ['-sowing_date']
+    readonly_fields = ['created_at', 'updated_at']

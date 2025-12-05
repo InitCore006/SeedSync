@@ -1,24 +1,31 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+"""
+FPO URLs
+All FPO-related endpoints
+"""
+from django.urls import path
 from .views import (
-    FPOViewSet, FPOMembershipViewSet,
-    FPORegistrationStep1View, FPORegistrationStep2View, FPORegistrationStep3View,
-    FPORegistrationSingleStepView
+    FPOProfileAPIView,
+    FPODashboardAPIView,
+    FPOMembersAPIView,
+    FPOProcurementAPIView,
+    FPOWarehousesAPIView
 )
 
-router = DefaultRouter()
-router.register(r'fpos', FPOViewSet, basename='fpo')
-router.register(r'memberships', FPOMembershipViewSet, basename='membership')
+app_name = 'fpos'
 
 urlpatterns = [
-    # Multi-step registration
-    path('register/step1/', FPORegistrationStep1View.as_view(), name='fpo_register_step1'),
-    path('register/step2/', FPORegistrationStep2View.as_view(), name='fpo_register_step2'),
-    path('register/step3/', FPORegistrationStep3View.as_view(), name='fpo_register_step3'),
+    # Profile
+    path('profile/', FPOProfileAPIView.as_view(), name='fpo-profile'),
     
-    # Single-step registration
-    path('register/', FPORegistrationSingleStepView.as_view(), name='fpo_register'),
+    # Dashboard
+    path('dashboard/', FPODashboardAPIView.as_view(), name='fpo-dashboard'),
     
-    # ViewSet routes
-    path('', include(router.urls)),
+    # Members management
+    path('members/', FPOMembersAPIView.as_view(), name='fpo-members'),
+    
+    # Procurement opportunities
+    path('procurement/', FPOProcurementAPIView.as_view(), name='fpo-procurement'),
+    
+    # Warehouses
+    path('warehouses/', FPOWarehousesAPIView.as_view(), name='fpo-warehouses'),
 ]

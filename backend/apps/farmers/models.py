@@ -1,147 +1,351 @@
+"""
+Farmer Models for SeedSync Platform
+Farmer profiles, farm land details, and crop planning
+"""
 from django.db import models
-import uuid
+from django.core.validators import MinValueValidator, MaxValueValidator
+from apps.core.models import TimeStampedModel
+from apps.core.constants import (
+    OILSEED_CHOICES, SOIL_TYPE_CHOICES, SEASON_CHOICES,
+    KYC_STATUS_CHOICES, INDIAN_STATES
+)
+from apps.core.validators import (
+    validate_positive, validate_aadhaar, 
+    validate_pan, validate_ifsc, validate_pincode
+)
 
-class Farmer(models.Model):
-    """Farmer master profile"""
-    
-    CATEGORY_CHOICES = [
-        ('marginal', 'Marginal (< 1 hectare)'),
-        ('small', 'Small (1-2 hectares)'),
-        ('semi_medium', 'Semi-Medium (2-4 hectares)'),
-        ('medium', 'Medium (4-10 hectares)'),
-        ('large', 'Large (> 10 hectares)'),
-    ]
-    
-    CASTE_CATEGORY_CHOICES = [
-        ('general', 'General'),
-        ('obc', 'OBC'),
-        ('sc', 'SC'),
-        ('st', 'ST'),
-    ]
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.OneToOneField('users.User', on_delete=models.CASCADE, related_name='farmer_profile')
-    
-    # Farmer ID (like Kisan Credit Card)
-    farmer_id = models.CharField(max_length=20, unique=True, db_index=True)
-    
-    # Land Details
-    total_land_area = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        help_text="Total land in acres"
+
+class FarmerProfile(TimeStampedModel):
+    """
+    Farmer profile with KYC and bank details
+    Linked to User model with role='farmer'
+    """
+    user = models.OneToOneField(
+        'users.User', 
+        on_delete=models.CASCADE, 
+        related_name='farmer_profile'
     )
-    irrigated_land = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        help_text="Irrigated land in acres"
-    )
-    rain_fed_land = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        help_text="Rain-fed land in acres"
-    )
-    
-    # Categorization
-    farmer_category = models.CharField(
-        max_length=20,
-        choices=CATEGORY_CHOICES,
-        default='marginal'
-    )
-    caste_category = models.CharField(
-        max_length=10,
-        choices=CASTE_CATEGORY_CHOICES,
-        default='general'
-    )
-    
-    # FPO Membership - FIXED: Use string reference to avoid circular import
-    is_fpo_member = models.BooleanField(default=False)
-    primary_fpo = models.ForeignKey(
-        'fpos.FPO',  # String reference instead of direct import
+    fpo = models.ForeignKey(
+        'fpos.FPOProfile', 
         on_delete=models.SET_NULL,
-        null=True,
+        null=True, 
         blank=True,
-        related_name='primary_members'
+        related_name='farmer_members'
     )
     
-    # Government Schemes
-    has_kisan_credit_card = models.BooleanField(default=False)
-    kcc_number = models.CharField(max_length=20, blank=True)
-    has_pmfby_insurance = models.BooleanField(default=False)
-    pmfby_policy_number = models.CharField(max_length=30, blank=True)
-    has_pm_kisan = models.BooleanField(default=False)
+    # Personal Details
+    full_name = models.CharField(max_length=200)
+    father_name = models.CharField(max_length=200, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    gender = models.CharField(
+        max_length=10,
+        choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')],
+        blank=True
+    )
+    profile_photo = models.ImageField(upload_to='farmers/profiles/', blank=True, null=True)
     
-    # Performance Metrics (for credit scoring)
-    total_production = models.DecimalField(
+    # Farm Details
+    total_land_acres = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        validators=[validate_positive],
+        help_text="Total farmland in acres"
+    )
+    farming_experience_years = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(80)]
+    )
+    primary_crops = models.JSONField(
+        default=list,
+        help_text="List of primary crops grown. e.g., ['soybean', 'mustard']"
+    )
+    
+    # KYC Details
+    aadhaar_number = models.CharField(
+        max_length=12, 
+        blank=True,
+        validators=[validate_aadhaar],
+        unique=True,
+        null=True
+    )
+    pan_number = models.CharField(
+        max_length=10,
+        blank=True,
+        validators=[validate_pan],
+        unique=True,
+        null=True
+    )
+    kyc_status = models.CharField(
+        max_length=20,
+        choices=KYC_STATUS_CHOICES,
+        default='pending'
+    )
+    kyc_documents = models.JSONField(
+        default=dict,
+        help_text="URLs to uploaded KYC documents"
+    )
+    
+    # Bank Details
+    bank_account_number = models.CharField(max_length=20, blank=True)
+    bank_account_holder_name = models.CharField(max_length=200, blank=True)
+    ifsc_code = models.CharField(
+        max_length=11,
+        blank=True,
+        validators=[validate_ifsc]
+    )
+    bank_name = models.CharField(max_length=100, blank=True)
+    bank_branch = models.CharField(max_length=100, blank=True)
+    
+    # Address
+    village = models.CharField(max_length=100, blank=True)
+    post_office = models.CharField(max_length=100, blank=True)
+    tehsil = models.CharField(max_length=100, blank=True)
+    district = models.CharField(max_length=100)
+    state = models.CharField(max_length=50, choices=INDIAN_STATES)
+    pincode = models.CharField(
+        max_length=6,
+        validators=[validate_pincode]
+    )
+    
+    # Location
+    latitude = models.DecimalField(
+        max_digits=9, 
+        decimal_places=6,
+        null=True,
+        blank=True
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True
+    )
+    
+    # Stats
+    total_lots_created = models.IntegerField(default=0)
+    total_quantity_sold_quintals = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=0,
-        help_text="Total production in quintals"
+        default=0
     )
-    average_yield = models.DecimalField(
-        max_digits=8,
+    total_earnings = models.DecimalField(
+        max_digits=15,
         decimal_places=2,
-        default=0,
-        help_text="Average yield per acre"
+        default=0
     )
-    credit_score = models.IntegerField(default=0)
     
-    # Status
-    is_active = models.BooleanField(default=True)
-    is_verified = models.BooleanField(default=False)
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # Preferences
+    preferred_language = models.CharField(
+        max_length=10,
+        choices=[('en', 'English'), ('hi', 'Hindi')],
+        default='hi'
+    )
     
     class Meta:
-        db_table = 'farmers'
-        verbose_name = 'Farmer'
-        verbose_name_plural = 'Farmers'
-        indexes = [
-            models.Index(fields=['farmer_id']),
-            models.Index(fields=['is_fpo_member']),
-        ]
+        db_table = 'farmer_profiles'
+        verbose_name = 'Farmer Profile'
+        verbose_name_plural = 'Farmer Profiles'
+        ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.user.full_name} ({self.farmer_id})"
+        return f"{self.full_name} - {self.district}, {self.state}"
     
-    def calculate_credit_score(self):
-        """Calculate farmer credit score based on performance"""
-        score = 0
-        
-        # Land ownership (max 30 points)
-        if self.total_land_area > 10:
-            score += 30
-        elif self.total_land_area > 5:
-            score += 20
-        else:
-            score += 10
-        
-        # FPO membership (10 points)
-        if self.is_fpo_member:
-            score += 10
-        
-        # Government schemes (20 points)
-        if self.has_kisan_credit_card:
-            score += 10
-        if self.has_pmfby_insurance:
-            score += 10
-        
-        # Production performance (40 points)
-        if self.average_yield > 20:
-            score += 40
-        elif self.average_yield > 15:
-            score += 30
-        elif self.average_yield > 10:
-            score += 20
-        else:
-            score += 10
-        
-        self.credit_score = min(score, 100)
-        self.save()
-        return self.credit_score
+    def get_fpo_name(self):
+        return self.fpo.organization_name if self.fpo else 'Independent'
 
 
+class FarmLand(TimeStampedModel):
+    """
+    Individual farm land parcels owned by farmer
+    A farmer can have multiple land parcels
+    """
+    farmer = models.ForeignKey(
+        FarmerProfile,
+        on_delete=models.CASCADE,
+        related_name='farm_lands'
+    )
+    
+    # Land Details
+    land_name = models.CharField(
+        max_length=100,
+        help_text="Name or identifier for this land parcel"
+    )
+    land_area_acres = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        validators=[validate_positive]
+    )
+    survey_number = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Government survey/khasra number"
+    )
+    
+    # Location
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    village = models.CharField(max_length=100, blank=True)
+    
+    # Soil & Infrastructure
+    soil_type = models.CharField(
+        max_length=20,
+        choices=SOIL_TYPE_CHOICES
+    )
+    soil_ph = models.DecimalField(
+        max_digits=3,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(14)]
+    )
+    irrigation_available = models.BooleanField(default=False)
+    irrigation_type = models.CharField(
+        max_length=50,
+        blank=True,
+        choices=[
+            ('drip', 'Drip Irrigation'),
+            ('sprinkler', 'Sprinkler'),
+            ('canal', 'Canal'),
+            ('well', 'Well/Tubewell'),
+            ('rainfed', 'Rainfed')
+        ]
+    )
+    water_source = models.CharField(
+        max_length=50,
+        blank=True,
+        choices=[
+            ('groundwater', 'Groundwater'),
+            ('surface_water', 'Surface Water'),
+            ('rainwater', 'Rainwater'),
+            ('mixed', 'Mixed')
+        ]
+    )
+    
+    # Ownership
+    ownership_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('owned', 'Owned'),
+            ('leased', 'Leased'),
+            ('shared', 'Shared Cropping')
+        ],
+        default='owned'
+    )
+    ownership_document = models.FileField(
+        upload_to='farmers/land_documents/',
+        blank=True,
+        null=True
+    )
+    
+    # Additional
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        db_table = 'farm_lands'
+        verbose_name = 'Farm Land'
+        verbose_name_plural = 'Farm Lands'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.land_name} - {self.land_area_acres} acres ({self.farmer.full_name})"
 
 
+class CropPlanning(TimeStampedModel):
+    """
+    Crop planning and cultivation records
+    Tracks what crops are planted on which land
+    """
+    farmer = models.ForeignKey(
+        FarmerProfile,
+        on_delete=models.CASCADE,
+        related_name='crop_plans'
+    )
+    farm_land = models.ForeignKey(
+        FarmLand,
+        on_delete=models.CASCADE,
+        related_name='crop_plans'
+    )
+    
+    # Crop Details
+    crop_type = models.CharField(
+        max_length=50,
+        choices=OILSEED_CHOICES
+    )
+    crop_variety = models.CharField(max_length=100, blank=True)
+    season = models.CharField(
+        max_length=20,
+        choices=SEASON_CHOICES
+    )
+    
+    # Cultivation Details
+    sowing_date = models.DateField()
+    expected_harvest_date = models.DateField()
+    actual_harvest_date = models.DateField(null=True, blank=True)
+    
+    # Area & Yield
+    cultivation_area_acres = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        validators=[validate_positive]
+    )
+    expected_yield_quintals = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+    actual_yield_quintals = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+    
+    # Cultivation Practices
+    seed_variety = models.CharField(max_length=100, blank=True)
+    seed_quantity_kg = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+    fertilizer_used = models.JSONField(
+        default=list,
+        help_text="List of fertilizers used"
+    )
+    pesticide_used = models.JSONField(
+        default=list,
+        help_text="List of pesticides used"
+    )
+    organic_farming = models.BooleanField(default=False)
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('planned', 'Planned'),
+            ('sowed', 'Sowed'),
+            ('growing', 'Growing'),
+            ('harvested', 'Harvested'),
+            ('sold', 'Sold')
+        ],
+        default='planned'
+    )
+    
+    # Notes
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        db_table = 'crop_planning'
+        verbose_name = 'Crop Planning'
+        verbose_name_plural = 'Crop Planning'
+        ordering = ['-sowing_date']
+    
+    def __str__(self):
+        return f"{self.get_crop_type_display()} - {self.season} ({self.farmer.full_name})"
+    
+    def get_yield_per_acre(self):
+        """Calculate yield per acre"""
+        if self.actual_yield_quintals and self.cultivation_area_acres:
+            return round(self.actual_yield_quintals / self.cultivation_area_acres, 2)
+        return 0

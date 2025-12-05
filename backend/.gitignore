@@ -28,16 +28,14 @@ wheels/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-/media
-/staticfiles
-/static
+media/
+staticfiles/
 
 # Environment
 .env
 .env.local
-.env.*.local
 
-# IDEs
+# IDE
 .vscode/
 .idea/
 *.swp
@@ -47,29 +45,3 @@ db.sqlite3-journal
 # OS
 .DS_Store
 Thumbs.db
-
-# Logs
-logs/
-*.log
-
-# ML Models
-ml_models/*.pkl
-ml_models/*.h5
-ml_models/*.pt
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# Coverage
-htmlcov/
-.coverage
-.coverage.*
-coverage.xml
-*.cover
-
-# Pytest
-.pytest_cache/
-
-# Jupyter Notebook
-.ipynb_checkpoints

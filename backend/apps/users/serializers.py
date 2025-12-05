@@ -1,372 +1,243 @@
+"""
+Serializers for Users & Authentication
+"""
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from django.contrib.auth.password_validation import validate_password
-from .models import User, UserProfile
-import re
+from rest_framework_simplejwt.tokens import RefreshToken
 
-
-
+from .models import User, OTPVerification, UserProfile
+from apps.core.utils import format_phone_number, validate_phone_number
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    """User Profile Serializer"""
+    """Serializer for user profile"""
     
     class Meta:
         model = UserProfile
         fields = [
-            'date_of_birth', 'gender', 'profile_picture',
-            'address_line1', 'address_line2', 'village', 'block',
-            'district', 'state', 'pincode',
-            'bank_name', 'account_number', 'ifsc_code', 'account_holder_name',
-            'education_level', 'created_at', 'updated_at'
+            'full_name', 'profile_photo', 'aadhaar_number', 'pan_number',
+            'kyc_status', 'address', 'city', 'district', 'state', 'pincode',
+            'latitude', 'longitude', 'language_preference'
         ]
-        read_only_fields = ['created_at', 'updated_at']
-    
-    def validate_pincode(self, value):
-        """Validate Indian pincode"""
-        if not re.match(r'^\d{6}$', value):
-            raise serializers.ValidationError("Pincode must be 6 digits")
-        return value
-    
-    def validate_ifsc_code(self, value):
-        """Validate IFSC code"""
-        if value and not re.match(r'^[A-Z]{4}0[A-Z0-9]{6}$', value):
-            raise serializers.ValidationError("Invalid IFSC code format")
-        return value
+        read_only_fields = ['kyc_status']
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """User Serializer with nested profile"""
-    
-    profile = UserProfileSerializer(required=False)
-    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    password_confirm = serializers.CharField(write_only=True, required=True)
+    """Serializer for user model"""
+    profile = UserProfileSerializer(read_only=True)
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
     
     class Meta:
         model = User
         fields = [
-            'id', 'phone_number', 'email', 'full_name', 'role',
-            'preferred_language', 'is_phone_verified', 'is_email_verified',
-            'is_kyc_verified', 'is_active', 'date_joined', 'last_login',
-            'password', 'password_confirm', 'profile'
+            'id', 'phone_number', 'email', 'role', 'role_display',
+            'is_verified', 'is_active', 'date_joined', 'last_login', 'profile'
         ]
-        read_only_fields = [
-            'id', 'is_phone_verified', 'is_email_verified', 
-            'is_kyc_verified', 'date_joined', 'last_login'
-        ]
-        extra_kwargs = {
-            'password': {'write_only': True},
-        }
+        read_only_fields = ['id', 'is_verified', 'date_joined', 'last_login']
+
+
+class RegisterSerializer(serializers.Serializer):
+    """Serializer for user registration"""
+    phone_number = serializers.CharField(max_length=15)
+    role = serializers.ChoiceField(choices=User._meta.get_field('role').choices)
+    full_name = serializers.CharField(max_length=200, required=False)
     
     def validate_phone_number(self, value):
-        """Validate Indian phone number"""
-        if not re.match(r'^[6-9]\d{9}$', value):
+        """Validate and format phone number (accepts 10 digits)"""
+        if not validate_phone_number(value):
             raise serializers.ValidationError(
-                "Phone number must be 10 digits starting with 6-9"
+                "Invalid phone number. Enter 10 digits starting with 6-9. "
+                "Example: 9137966960 (no need for +91)"
             )
-        return value
+        
+        # Format to +91XXXXXXXXXX (adds +91 automatically)
+        phone = format_phone_number(value)
+        
+        # Check if user already exists
+        if User.objects.filter(phone_number=phone).exists():
+            raise serializers.ValidationError("User with this phone number already exists")
+        
+        return phone
+    
+    def create(self, validated_data):
+        """Create user and profile"""
+        full_name = validated_data.pop('full_name', '')
+        
+        # Create user
+        user = User.objects.create_user(
+            phone_number=validated_data['phone_number'],
+            role=validated_data['role']
+        )
+        
+        # Create profile
+        UserProfile.objects.create(
+            user=user,
+            full_name=full_name
+        )
+        
+        # Create OTP
+        otp = OTPVerification.create_otp(
+            phone_number=user.phone_number,
+            purpose='registration',
+            user=user
+        )
+        
+        return user, otp
+
+
+class SendOTPSerializer(serializers.Serializer):
+    """Serializer for sending OTP (accepts 10 digits)"""
+    phone_number = serializers.CharField(max_length=15)
+    purpose = serializers.ChoiceField(choices=OTPVerification._meta.get_field('purpose').choices, default='login')
+    
+    def validate_phone_number(self, value):
+        """Validate phone number (10 digits, auto-adds +91)"""
+        if not validate_phone_number(value):
+            raise serializers.ValidationError(
+                "Invalid phone number. Enter 10 digits starting with 6-9. "
+                "Example: 9137966960"
+            )
+        return format_phone_number(value)
+
+
+class VerifyOTPSerializer(serializers.Serializer):
+    """Serializer for OTP verification (accepts 10 digits)"""
+    phone_number = serializers.CharField(max_length=15)
+    otp = serializers.CharField(max_length=6)
+    purpose = serializers.ChoiceField(choices=OTPVerification._meta.get_field('purpose').choices, default='login')
+    
+    def validate_phone_number(self, value):
+        """Validate phone number (10 digits, auto-adds +91)"""
+        if not validate_phone_number(value):
+            raise serializers.ValidationError(
+                "Invalid phone number. Enter 10 digits starting with 6-9."
+            )
+        return format_phone_number(value)
     
     def validate(self, attrs):
-        """Validate password confirmation"""
-        if attrs.get('password') != attrs.get('password_confirm'):
-            raise serializers.ValidationError({
-                "password": "Password fields didn't match."
-            })
+        """Validate OTP"""
+        phone_number = attrs.get('phone_number')
+        otp = attrs.get('otp')
+        purpose = attrs.get('purpose')
+        
+        # Get latest OTP
+        try:
+            otp_obj = OTPVerification.objects.filter(
+                phone_number=phone_number,
+                purpose=purpose,
+                is_used=False
+            ).latest('created_at')
+        except OTPVerification.DoesNotExist:
+            raise serializers.ValidationError("No OTP found for this phone number")
+        
+        # Verify OTP
+        if not otp_obj.verify(otp):
+            raise serializers.ValidationError("Invalid or expired OTP")
+        
+        attrs['otp_obj'] = otp_obj
+        return attrs
+
+
+class LoginSerializer(serializers.Serializer):
+    """Serializer for login with OTP"""
+    phone_number = serializers.CharField(max_length=15)
+    otp = serializers.CharField(max_length=6)
+    
+    def validate(self, attrs):
+        """Validate login credentials"""
+        phone_number = format_phone_number(attrs.get('phone_number'))
+        otp = attrs.get('otp')
+        
+        # Get user
+        try:
+            user = User.objects.get(phone_number=phone_number)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("User not found. Please register first.")
+        
+        # Verify OTP
+        try:
+            otp_obj = OTPVerification.objects.filter(
+                phone_number=phone_number,
+                purpose='login',
+                is_used=False
+            ).latest('created_at')
+        except OTPVerification.DoesNotExist:
+            raise serializers.ValidationError("No OTP found. Please request a new OTP.")
+        
+        if not otp_obj.verify(otp):
+            raise serializers.ValidationError("Invalid or expired OTP")
+        
+        # Mark user as verified if not already
+        if not user.is_verified:
+            user.is_verified = True
+            user.save()
+        
+        attrs['user'] = user
         return attrs
     
     def create(self, validated_data):
-        """Create user with profile"""
-        validated_data.pop('password_confirm')
-        profile_data = validated_data.pop('profile', None)
-        password = validated_data.pop('password')
+        """Generate JWT tokens"""
+        user = validated_data['user']
+        refresh = RefreshToken.for_user(user)
         
-        # Create user
-        user = User.objects.create(**validated_data)
-        user.set_password(password)
-        user.save()
-        
-        # Create profile
-        if profile_data:
-            UserProfile.objects.create(user=user, **profile_data)
-        else:
-            UserProfile.objects.create(user=user)
-        
-        return user
+        return {
+            'user': user,
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
+
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating user profile"""
+    email = serializers.EmailField(required=False, allow_blank=True)
+    
+    class Meta:
+        model = UserProfile
+        fields = [
+            'full_name', 'profile_photo', 'address', 'city', 
+            'district', 'state', 'pincode', 'latitude', 'longitude',
+            'language_preference', 'email'
+        ]
     
     def update(self, instance, validated_data):
-        """Update user and profile"""
-        profile_data = validated_data.pop('profile', None)
-        validated_data.pop('password', None)
-        validated_data.pop('password_confirm', None)
+        """Update profile and user email if provided"""
+        email = validated_data.pop('email', None)
         
-        # Update user
+        # Update user email
+        if email is not None:
+            instance.user.email = email
+            instance.user.save()
+        
+        # Update profile
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         
-        # Update profile
-        if profile_data:
-            profile = instance.profile
-            for attr, value in profile_data.items():
-                setattr(profile, attr, value)
-            profile.save()
-        
         return instance
 
 
-class UserListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for user lists"""
-    
-    class Meta:
-        model = User
-        fields = [
-            'id', 'phone_number', 'email', 'full_name', 
-            'role', 'is_active', 'date_joined'
-        ]
-
-
-class RegisterSerializer(serializers.ModelSerializer):
-    """Registration serializer"""
-    
-    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    password_confirm = serializers.CharField(write_only=True, required=True)
-    
-    class Meta:
-        model = User
-        fields = [
-            'phone_number', 'email', 'full_name', 'role',
-            'preferred_language', 'password', 'password_confirm'
-        ]
-    
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password_confirm']:
-            raise serializers.ValidationError({
-                "password": "Password fields didn't match."
-            })
-        return attrs
-    
-    def create(self, validated_data):
-        validated_data.pop('password_confirm')
-        password = validated_data.pop('password')
-        
-        user = User.objects.create(**validated_data)
-        user.set_password(password)
-        user.save()
-        
-        # Create empty profile
-        UserProfile.objects.create(user=user)
-        
-        return user
-
-
-class LoginSerializer(serializers.Serializer):
-    """Login serializer"""
-    
-    phone_number = serializers.CharField(required=True)
-    password = serializers.CharField(required=True, write_only=True)
-    
-    def validate(self, attrs):
-        phone_number = attrs.get('phone_number')
-        password = attrs.get('password')
-        
-        if phone_number and password:
-            user = authenticate(
-                request=self.context.get('request'),
-                username=phone_number,
-                password=password
-            )
-            
-            if not user:
-                raise serializers.ValidationError(
-                    'Unable to log in with provided credentials.',
-                    code='authorization'
-                )
-            
-            if not user.is_active:
-                raise serializers.ValidationError(
-                    'User account is disabled.',
-                    code='authorization'
-                )
-        else:
-            raise serializers.ValidationError(
-                'Must include "phone_number" and "password".',
-                code='authorization'
-            )
-        
-        attrs['user'] = user
-        return attrs
-
-
 class ChangePasswordSerializer(serializers.Serializer):
-    """Change password serializer"""
-    
-    old_password = serializers.CharField(required=True, write_only=True)
-    new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
-    new_password_confirm = serializers.CharField(required=True, write_only=True)
-    
-    def validate_old_password(self, value):
-        user = self.context['request'].user
-        if not user.check_password(value):
-            raise serializers.ValidationError("Old password is incorrect")
-        return value
+    """Serializer for changing password (optional feature)"""
+    old_password = serializers.CharField(required=False)
+    new_password = serializers.CharField(min_length=6)
     
     def validate(self, attrs):
-        if attrs['new_password'] != attrs['new_password_confirm']:
-            raise serializers.ValidationError({
-                "new_password": "Password fields didn't match."
-            })
+        """Validate password change"""
+        user = self.context['request'].user
+        
+        # If user has a password, verify old password
+        if user.has_usable_password():
+            old_password = attrs.get('old_password')
+            if not old_password:
+                raise serializers.ValidationError({"old_password": "This field is required"})
+            if not user.check_password(old_password):
+                raise serializers.ValidationError({"old_password": "Incorrect password"})
+        
         return attrs
     
-    def save(self, **kwargs):
+    def save(self):
+        """Set new password"""
         user = self.context['request'].user
         user.set_password(self.validated_data['new_password'])
         user.save()
         return user
-
-
-class PhoneVerificationSerializer(serializers.Serializer):
-    """Phone verification OTP request"""
-    
-    phone_number = serializers.CharField(required=True)
-    
-    def validate_phone_number(self, value):
-        if not re.match(r'^[6-9]\d{9}$', value):
-            raise serializers.ValidationError(
-                "Phone number must be 10 digits starting with 6-9"
-            )
-        return value
-
-
-class VerifyOTPSerializer(serializers.Serializer):
-    """Verify OTP"""
-    
-    phone_number = serializers.CharField(required=True)
-    otp = serializers.CharField(required=True, min_length=6, max_length=6)
-
-
-class ForgotPasswordSerializer(serializers.Serializer):
-    """Forgot password - send OTP"""
-    
-    phone_number = serializers.CharField(required=True)
-    
-    def validate_phone_number(self, value):
-        try:
-            User.objects.get(phone_number=value)
-        except User.DoesNotExist:
-            raise serializers.ValidationError("User with this phone number does not exist")
-        return value
-
-
-class ResetPasswordSerializer(serializers.Serializer):
-    """Reset password with OTP"""
-    
-    phone_number = serializers.CharField(required=True)
-    otp = serializers.CharField(required=True, min_length=6, max_length=6)
-    new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
-    new_password_confirm = serializers.CharField(required=True, write_only=True)
-    
-    def validate(self, attrs):
-        if attrs['new_password'] != attrs['new_password_confirm']:
-            raise serializers.ValidationError({
-                "new_password": "Password fields didn't match."
-            })
-        return attrs
-
-
-class UserStatsSerializer(serializers.Serializer):
-    """User statistics"""
-    
-    total_users = serializers.IntegerField()
-    active_users = serializers.IntegerField()
-    verified_users = serializers.IntegerField()
-    users_by_role = serializers.DictField()
-    users_by_state = serializers.DictField()
-    recent_registrations = serializers.IntegerField()
-    
-    
-    
-class UserWithProfileSerializer(serializers.ModelSerializer):
-    """Complete User Serializer with nested profile"""
-    
-    profile = UserProfileSerializer(read_only=True)
-    
-    class Meta:
-        model = User
-        fields = [
-            'id', 'phone_number', 'email', 'full_name', 'role',
-            'preferred_language', 'is_phone_verified', 'is_email_verified',
-            'is_kyc_verified', 'is_active', 'date_joined', 'last_login',
-            'profile'
-        ]
-        read_only_fields = [
-            'id', 'is_phone_verified', 'is_email_verified', 
-            'is_kyc_verified', 'date_joined', 'last_login', 'role'
-        ]
-    
-    
-    
-class UpdateUserProfileSerializer(serializers.Serializer):
-    """Serializer for updating user + profile in one request"""
-    
-    # User fields
-    full_name = serializers.CharField(max_length=200, required=False)
-    email = serializers.EmailField(required=False, allow_blank=True)
-    preferred_language = serializers.CharField(required=False)
-    
-    # Profile fields
-    date_of_birth = serializers.DateField(required=False, allow_null=True)
-    gender = serializers.ChoiceField(choices=['M', 'F', 'O'], required=False)
-    address_line1 = serializers.CharField(required=False, allow_blank=True)
-    address_line2 = serializers.CharField(required=False, allow_blank=True)
-    village = serializers.CharField(required=False, allow_blank=True)
-    block = serializers.CharField(required=False, allow_blank=True)
-    district = serializers.CharField(required=False, allow_blank=True)
-    state = serializers.CharField(required=False, allow_blank=True)
-    pincode = serializers.CharField(max_length=6, required=False)
-    
-    # Bank details
-    bank_name = serializers.CharField(required=False, allow_blank=True)
-    account_number = serializers.CharField(required=False, allow_blank=True)
-    ifsc_code = serializers.CharField(required=False, allow_blank=True)
-    account_holder_name = serializers.CharField(required=False, allow_blank=True)
-    education_level = serializers.CharField(required=False, allow_blank=True)
-    
-    def validate_pincode(self, value):
-        if value and not re.match(r'^\d{6}$', value):
-            raise serializers.ValidationError("Pincode must be 6 digits")
-        return value
-    
-    def update(self, instance, validated_data):
-        """Update user and profile"""
-        user = instance
-        profile = user.profile
-        
-        # Update user fields
-        user_fields = ['full_name', 'email', 'preferred_language']
-        for field in user_fields:
-            if field in validated_data:
-                setattr(user, field, validated_data[field])
-        user.save()
-        
-        # Update profile fields
-        profile_fields = [
-            'date_of_birth', 'gender', 'address_line1', 'address_line2',
-            'village', 'block', 'district', 'state', 'pincode',
-            'bank_name', 'account_number', 'ifsc_code', 
-            'account_holder_name', 'education_level'
-        ]
-        for field in profile_fields:
-            if field in validated_data:
-                setattr(profile, field, validated_data[field])
-        profile.save()
-        
-        return user
-
-    
-    
-    
-    
-    
-    
-    
-    

@@ -1,38 +1,23 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
-
+"""
+URL patterns for Users & Authentication
+"""
+from django.urls import path
 from .views import (
-    RegisterView, LoginView, LogoutView, ChangePasswordView,
-    UserViewSet, ProfileView, UploadProfileImageView,
-    PhoneVerificationView, VerifyRegistrationOTPView,
-    ForgotPasswordView, ResetPasswordView
+    RegisterAPIView, SendOTPAPIView, VerifyOTPAPIView, 
+    LoginAPIView, ProfileAPIView, ChangePasswordAPIView, LogoutAPIView
 )
 
-# Router for ViewSets
-router = DefaultRouter()
-router.register(r'', UserViewSet, basename='user')
+app_name = 'users'
 
 urlpatterns = [
-    # Authentication
-    path('register/', RegisterView.as_view(), name='register'),
-    path('login/', LoginView.as_view(), name='login'),
-    path('logout/', LogoutView.as_view(), name='logout'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('change-password/', ChangePasswordView.as_view(), name='change_password'),
+    # Authentication endpoints
+    path('register/', RegisterAPIView.as_view(), name='register'),
+    path('send-otp/', SendOTPAPIView.as_view(), name='send-otp'),
+    path('verify-otp/', VerifyOTPAPIView.as_view(), name='verify-otp'),
+    path('login/', LoginAPIView.as_view(), name='login'),
+    path('logout/', LogoutAPIView.as_view(), name='logout'),
     
-    # Profile Management
-    path('profile/', ProfileView.as_view(), name='profile'),
-    path('profile/upload-image/', UploadProfileImageView.as_view(), name='upload_profile_image'),
-    
-    # Phone Verification
-    path('send-otp/', PhoneVerificationView.as_view(), name='send_otp'),
-    path('verify-registration-otp/', VerifyRegistrationOTPView.as_view(), name='verify_registration_otp'),
-    
-    # Password Reset
-    path('forgot-password/', ForgotPasswordView.as_view(), name='forgot_password'),
-    path('reset-password/', ResetPasswordView.as_view(), name='reset_password'),
-    
-    # ViewSet routes
-    path('', include(router.urls)),
+    # Profile endpoints
+    path('profile/', ProfileAPIView.as_view(), name='profile'),
+    path('change-password/', ChangePasswordAPIView.as_view(), name='change-password'),
 ]

@@ -1,416 +1,407 @@
-from rest_framework import viewsets, status, permissions
+"""
+FPO Views - Complete Implementation
+Handles FPO profile, dashboard, members, procurement, and warehouses
+"""
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.db import transaction
-from django.db.models import Q, Sum, Count
-from .models import FPO, FPOMembership
-from .serializers import (
-    FPOSerializer, FPOListSerializer, FPOMembershipSerializer,
-    FPORegistrationStep1Serializer, FPORegistrationStep2Serializer,
-    FPORegistrationStep3Serializer, FPORegistrationCompleteSerializer
-)
-from apps.users.models import User, UserProfile
+from django.db.models import Sum, Count, Avg, Q
+from django.utils import timezone
+from datetime import timedelta
+from django_filters.rest_framework import DjangoFilterBackend
+
+from apps.core.utils import response_success, response_error
+from apps.core.permissions import IsFPO
+from .models import FPOProfile, FPOMembership, FPOWarehouse
+from .serializers import FPOProfileSerializer, FPOMembershipSerializer, FPOWarehouseSerializer
+from apps.lots.models import ProcurementLot
+from apps.farmers.models import FarmerProfile
+from apps.bids.models import Bid
 
 
-from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.db import transaction
-from django.db.models import Q, Sum, Count
-from .models import FPO, FPOMembership
-from .serializers import (
-    FPOSerializer, FPOListSerializer, FPOMembershipSerializer,
-    FPORegistrationStep1Serializer, FPORegistrationStep2Serializer,
-    FPORegistrationStep3Serializer, FPORegistrationCompleteSerializer
-)
-from apps.users.models import User, UserProfile
-from .utils import (
-    create_registration_token, 
-    store_registration_data, 
-    get_registration_data,
-    clear_registration_data
-)
-
-
-class FPORegistrationStep1View(APIView):
-    """Step 1: Create User Account"""
-    permission_classes = [permissions.AllowAny]
+class FPOProfileAPIView(APIView):
+    """
+    Get or update FPO profile
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
     
-    def post(self, request):
-        serializer = FPORegistrationStep1Serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        # Create registration token
-        token = create_registration_token()
-        
-        # Store data with token
-        registration_data = {
-            'phone_number': serializer.validated_data['phone_number'],
-            'full_name': serializer.validated_data['full_name'],
-            'email': serializer.validated_data.get('email', ''),
-            'password': serializer.validated_data['password'],
-            'preferred_language': serializer.validated_data.get('preferred_language', 'en'),
-        }
-        
-        store_registration_data(token, 'step1', registration_data)
-        
-        return Response({
-            'message': 'Step 1 completed',
-            'next_step': 'step2',
-            'registration_token': token,
-            'data': {
-                'phone_number': serializer.validated_data['phone_number'],
-                'full_name': serializer.validated_data['full_name'],
-            }
-        }, status=status.HTTP_200_OK)
-
-
-class FPORegistrationStep2View(APIView):
-    """Step 2: User Profile Details"""
-    permission_classes = [permissions.AllowAny]
-    
-    def post(self, request):
-        # Get registration token from request
-        token = request.data.get('registration_token')
-        
-        if not token:
-            return Response({
-                'error': 'Registration token is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Check if step 1 is completed
-        step1_data = get_registration_data(token, 'step1')
-        if not step1_data:
-            return Response({
-                'error': 'Please complete step 1 first or your session has expired'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        serializer = FPORegistrationStep2Serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        # Store in cache with token
-        store_registration_data(token, 'step2', serializer.validated_data)
-        
-        return Response({
-            'message': 'Step 2 completed',
-            'next_step': 'step3',
-            'registration_token': token,
-            'data': {
-                'district': serializer.validated_data['district'],
-                'state': serializer.validated_data['state'],
-            }
-        }, status=status.HTTP_200_OK)
-
-
-class FPORegistrationStep3View(APIView):
-    """Step 3: FPO Details & Complete Registration"""
-    permission_classes = [permissions.AllowAny]
-    
-    def post(self, request):
-        # Get registration token
-        token = request.data.get('registration_token')
-        
-        if not token:
-            return Response({
-                'error': 'Registration token is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Check previous steps
-        step1_data = get_registration_data(token, 'step1')
-        step2_data = get_registration_data(token, 'step2')
-        
-        if not step1_data or not step2_data:
-            return Response({
-                'error': 'Please complete all previous steps or your session has expired'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        serializer = FPORegistrationStep3Serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        # Create everything in a transaction
+    def get(self, request):
+        """Get FPO profile"""
         try:
-            with transaction.atomic():
-                # 1. Create User
-                user = User.objects.create_user(
-                    phone_number=step1_data['phone_number'],
-                    full_name=step1_data['full_name'],
-                    email=step1_data.get('email'),
-                    password=step1_data['password'],
-                    role='fpo_admin',
-                    preferred_language=step1_data.get('preferred_language', 'en')
+            fpo = FPOProfile.objects.get(user=request.user)
+            serializer = FPOProfileSerializer(fpo)
+            return Response(
+                response_success(
+                    message="Profile fetched successfully",
+                    data=serializer.data
                 )
-                
-                # 2. Create UserProfile
-                profile = UserProfile.objects.create(
-                    user=user,
-                    date_of_birth=step2_data.get('date_of_birth'),
-                    gender=step2_data.get('gender'),
-                    address_line1=step2_data.get('address_line1', ''),
-                    address_line2=step2_data.get('address_line2', ''),
-                    village=step2_data.get('village', ''),
-                    block=step2_data.get('block', ''),
-                    district=step2_data['district'],
-                    state=step2_data['state'],
-                    pincode=step2_data['pincode'],
-                    bank_name=step2_data.get('bank_name', ''),
-                    account_number=step2_data.get('account_number', ''),
-                    ifsc_code=step2_data.get('ifsc_code', ''),
-                    account_holder_name=step2_data.get('account_holder_name', ''),
-                    education_level=step2_data.get('education_level', ''),
-                )
-                
-                # 3. Create FPO
-                fpo_data = serializer.validated_data
-                fpo = FPO.objects.create(
-                    owner=user,
-                    name=fpo_data['name'],
-                    district=fpo_data.get('district', step2_data['district']),
-                    state=fpo_data.get('state', step2_data['state']),
-                    pincode=fpo_data.get('pincode', step2_data['pincode']),
-                    contact_person=fpo_data['contact_person'],
-                    contact_phone=fpo_data['contact_phone'],
-                    contact_email=fpo_data['contact_email'],
-                    registration_number=fpo_data['registration_number'],
-                    gstin=fpo_data.get('gstin', ''),
-                    total_land_area=fpo_data['total_land_area'],
-                    monthly_capacity=fpo_data['monthly_capacity'],
-                )
-                
-                # Generate tokens
-                refresh = RefreshToken.for_user(user)
-                
-                # Clear registration data
-                clear_registration_data(token)
-                
-                return Response({
-                    'message': 'FPO registered successfully! Awaiting verification.',
-                    'user': {
-                        'id': str(user.id),
-                        'phone_number': user.phone_number,
-                        'full_name': user.full_name,
-                        'role': user.role,
-                    },
-                    'fpo': {
-                        'id': str(fpo.id),
-                        'name': fpo.name,
-                        'fpo_code': fpo.fpo_code,
-                        'is_verified': fpo.is_verified,
-                    },
-                    'tokens': {
-                        'refresh': str(refresh),
-                        'access': str(refresh.access_token),
-                    }
-                }, status=status.HTTP_201_CREATED)
-                
-        except Exception as e:
-            return Response({
-                'error': f'Registration failed: {str(e)}'
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-
-# ...existing code for FPORegistrationSingleStepView, FPOViewSet, etc...
-
-
-
-class FPORegistrationSingleStepView(APIView):
-    """Single-step FPO Registration (All data at once)"""
-    permission_classes = [permissions.AllowAny]
+            )
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
     
-    def post(self, request):
-        """Complete FPO registration in one go"""
-        serializer = FPORegistrationCompleteSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        data = serializer.validated_data
-        
+    def patch(self, request):
+        """Update FPO profile"""
         try:
-            with transaction.atomic():
-                # 1. Create User
-                user = User.objects.create_user(
-                    phone_number=data['phone_number'],
-                    full_name=data['full_name'],
-                    email=data.get('email', ''),
-                    password=data['password'],
-                    role='fpo_admin',
-                    preferred_language=data.get('preferred_language', 'en')
+            fpo = FPOProfile.objects.get(user=request.user)
+            serializer = FPOProfileSerializer(fpo, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    response_success(
+                        message="Profile updated successfully",
+                        data=serializer.data
+                    )
                 )
-                
-                # 2. Create UserProfile
-                profile_data = data['profile']
-                profile = UserProfile.objects.create(
-                    user=user,
-                    **profile_data
-                )
-                
-                # 3. Create FPO
-                fpo_data = data['fpo']
-                fpo = FPO.objects.create(
-                    owner=user,
-                    name=fpo_data['name'],
-                    district=fpo_data.get('district', profile_data['district']),
-                    state=fpo_data.get('state', profile_data['state']),
-                    pincode=fpo_data.get('pincode', profile_data['pincode']),
-                    contact_person=fpo_data['contact_person'],
-                    contact_phone=fpo_data['contact_phone'],
-                    contact_email=fpo_data['contact_email'],
-                    registration_number=fpo_data['registration_number'],
-                    gstin=fpo_data.get('gstin', ''),
-                    total_land_area=fpo_data['total_land_area'],
-                    monthly_capacity=fpo_data['monthly_capacity'],
-                )
-                
-                # Generate tokens
-                refresh = RefreshToken.for_user(user)
-                
-                return Response({
-                    'message': 'FPO registered successfully! Awaiting verification.',
-                    'user': {
-                        'id': str(user.id),
-                        'phone_number': user.phone_number,
-                        'full_name': user.full_name,
-                        'role': user.role,
-                    },
-                    'fpo': FPOSerializer(fpo).data,
-                    'tokens': {
-                        'refresh': str(refresh),
-                        'access': str(refresh.access_token),
-                    }
-                }, status=status.HTTP_201_CREATED)
-                
-        except Exception as e:
-            return Response({
-                'error': f'Registration failed: {str(e)}'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                response_error(message="Validation failed", errors=serializer.errors),
+                status=400
+            )
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
 
 
-class FPOViewSet(viewsets.ModelViewSet):
-    """FPO CRUD Operations"""
-    queryset = FPO.objects.select_related('owner').all()
-    serializer_class = FPOSerializer
-    permission_classes = [permissions.IsAuthenticated]
+class FPODashboardAPIView(APIView):
+    """
+    FPO Dashboard with key metrics and analytics
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
     
-    def get_queryset(self):
-        """Filter based on role"""
-        user = self.request.user
-        queryset = FPO.objects.select_related('owner')
-        
-        # FPO admin sees only their FPO
-        if user.role == 'fpo_admin':
-            return queryset.filter(owner=user)
-        
-        # Farmers see FPOs they can join
-        if user.role == 'farmer':
-            if hasattr(user, 'profile'):
-                queryset = queryset.filter(
-                    state=user.profile.state,
-                    district=user.profile.district,
-                    is_active=True
-                )
-        
-        # Filters
-        state = self.request.query_params.get('state')
-        district = self.request.query_params.get('district')
-        is_verified = self.request.query_params.get('is_verified')
-        search = self.request.query_params.get('search')
-        
-        if state:
-            queryset = queryset.filter(state__iexact=state)
-        if district:
-            queryset = queryset.filter(district__iexact=district)
-        if is_verified is not None:
-            queryset = queryset.filter(is_verified=is_verified.lower() == 'true')
-        if search:
-            queryset = queryset.filter(
-                Q(name__icontains=search) |
-                Q(fpo_code__icontains=search)
+    def get(self, request):
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
             )
         
-        return queryset
-    
-    def get_serializer_class(self):
-        if self.action == 'list':
-            return FPOListSerializer
-        return FPOSerializer
-    
-    @action(detail=False, methods=['get'])
-    def my_fpo(self, request):
-        """Get current user's FPO"""
-        try:
-            fpo = FPO.objects.get(owner=request.user)
-            serializer = self.get_serializer(fpo)
-            return Response(serializer.data)
-        except FPO.DoesNotExist:
-            return Response({
-                'error': 'You do not own any FPO'
-            }, status=status.HTTP_404_NOT_FOUND)
-    
-    @action(detail=True, methods=['get'])
-    def members(self, request, pk=None):
-        """Get FPO members"""
-        fpo = self.get_object()
-        memberships = FPOMembership.objects.filter(
-            fpo=fpo, is_active=True
-        ).select_related('farmer')
-        serializer = FPOMembershipSerializer(memberships, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'])
-    def verify(self, request, pk=None):
-        """Verify FPO (admin only)"""
-        if request.user.role != 'admin':
-            return Response({
-                'error': 'Admin access required'
-            }, status=status.HTTP_403_FORBIDDEN)
+        # Member statistics
+        total_members = FPOMembership.objects.filter(fpo=fpo, is_active=True).count()
+        new_members_this_month = FPOMembership.objects.filter(
+            fpo=fpo,
+            is_active=True,
+            created_at__gte=timezone.now().date().replace(day=1)
+        ).count()
         
-        fpo = self.get_object()
-        fpo.is_verified = True
-        fpo.save()
+        # Procurement statistics
+        total_procured_lots = ProcurementLot.objects.filter(fpo=fpo).count()
+        total_procured_quantity = ProcurementLot.objects.filter(fpo=fpo).aggregate(
+            total=Sum('quantity_quintals')
+        )['total'] or 0
+        
+        # Active bids placed by FPO
+        active_bids = Bid.objects.filter(
+            bidder_id=fpo.id,
+            bidder_type='fpo',
+            status='pending'
+        ).count()
+        
+        accepted_bids = Bid.objects.filter(
+            bidder_id=fpo.id,
+            bidder_type='fpo',
+            status='accepted'
+        ).count()
+        
+        # Warehouse utilization
+        warehouses = FPOWarehouse.objects.filter(fpo=fpo)
+        total_capacity = warehouses.aggregate(total=Sum('capacity_quintals'))['total'] or 0
+        current_stock = warehouses.aggregate(total=Sum('current_stock_quintals'))['total'] or 0
+        utilization_percentage = (current_stock / total_capacity * 100) if total_capacity > 0 else 0
+        
+        # Monthly procurement trend (last 6 months)
+        monthly_trend = []
+        for i in range(6):
+            month_start = (timezone.now().date().replace(day=1) - timedelta(days=30*i))
+            month_end = month_start.replace(day=28) + timedelta(days=4)
+            
+            month_lots = ProcurementLot.objects.filter(
+                fpo=fpo,
+                created_at__gte=month_start,
+                created_at__lt=month_end
+            ).aggregate(
+                count=Count('id'),
+                quantity=Sum('quantity_quintals')
+            )
+            
+            monthly_trend.append({
+                'month': month_start.strftime('%B %Y'),
+                'lots': month_lots['count'] or 0,
+                'quantity_quintals': float(month_lots['quantity'] or 0)
+            })
+        
+        # Crop-wise procurement
+        crop_stats = ProcurementLot.objects.filter(fpo=fpo).values('crop_type').annotate(
+            total_quantity=Sum('quantity_quintals'),
+            total_lots=Count('id'),
+            avg_price=Avg('final_price_per_quintal')
+        )
+        
+        dashboard_data = {
+            'fpo_info': {
+                'name': fpo.organization_name,
+                'total_members': total_members,
+                'new_members_this_month': new_members_this_month,
+                'registration_year': fpo.year_of_registration,
+                'is_verified': fpo.is_verified
+            },
+            'procurement': {
+                'total_lots': total_procured_lots,
+                'total_quantity_quintals': float(total_procured_quantity),
+                'active_bids': active_bids,
+                'accepted_bids': accepted_bids
+            },
+            'warehouse': {
+                'total_capacity_quintals': float(total_capacity),
+                'current_stock_quintals': float(current_stock),
+                'utilization_percentage': round(utilization_percentage, 2),
+                'warehouse_count': warehouses.count()
+            },
+            'trends': {
+                'monthly_procurement': list(reversed(monthly_trend)),
+                'crop_wise_stats': list(crop_stats)
+            }
+        }
+        
+        return Response(
+            response_success(
+                message="Dashboard data fetched successfully",
+                data=dashboard_data
+            )
+        )
+
+
+class FPOMembersAPIView(APIView):
+    """
+    Manage FPO members - list and add members
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
+    
+    def get(self, request):
+        """Get all FPO members"""
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        memberships = FPOMembership.objects.filter(
+            fpo=fpo,
+            is_active=True
+        ).select_related('farmer', 'farmer__user')
+        
+        members_data = []
+        for membership in memberships:
+            farmer = membership.farmer
+            members_data.append({
+                'id': str(membership.id),
+                'farmer': {
+                    'id': str(farmer.id),
+                    'full_name': farmer.full_name,
+                    'phone_number': farmer.user.phone_number,
+                },
+                'fpo': str(fpo.id),
+                'joined_date': membership.joined_date.isoformat() if membership.joined_date else None,
+                'share_capital': float(membership.share_capital),
+                'is_active': membership.is_active,
+            })
+        
+        # Paginated response format matching frontend expectations
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 10))
+        
+        start = (page - 1) * page_size
+        end = start + page_size
         
         return Response({
-            'message': f'FPO {fpo.name} verified successfully'
+            'status': 'success',
+            'message': 'Members fetched successfully',
+            'data': {
+                'results': members_data[start:end]
+            },
+            'meta': {
+                'count': len(members_data),
+                'page': page,
+                'page_size': page_size,
+                'next': None,
+                'previous': None
+            }
         })
     
-    @action(detail=False, methods=['get'])
-    def statistics(self, request):
-        """FPO statistics"""
-        stats = FPO.objects.aggregate(
-            total_fpos=Count('id'),
-            verified_fpos=Count('id', filter=Q(is_verified=True)),
-            total_members=Sum('total_members'),
-            total_land=Sum('total_land_area'),
-            total_capacity=Sum('monthly_capacity')
+    def post(self, request):
+        """Add new member to FPO"""
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        farmer_id = request.data.get('farmer_id')
+        share_capital = float(request.data.get('share_capital', 0))
+        
+        try:
+            farmer = FarmerProfile.objects.get(id=farmer_id)
+        except FarmerProfile.DoesNotExist:
+            return Response(
+                response_error(message="Farmer not found"),
+                status=404
+            )
+        
+        # Check if already member
+        if FPOMembership.objects.filter(fpo=fpo, farmer=farmer, is_active=True).exists():
+            return Response(
+                response_error(message="Farmer is already a member"),
+                status=400
+            )
+        
+        membership = FPOMembership.objects.create(
+            fpo=fpo,
+            farmer=farmer,
+            joined_date=timezone.now().date(),
+            share_capital=share_capital,
+            is_active=True
         )
-        return Response(stats)
+        
+        # Update farmer's FPO reference
+        farmer.fpo = fpo
+        farmer.save()
+        
+        # Update FPO member count
+        fpo.active_members = FPOMembership.objects.filter(fpo=fpo, is_active=True).count()
+        fpo.total_members = fpo.active_members
+        fpo.save()
+        
+        return Response(
+            response_success(
+                message="Member added successfully",
+                data={'membership_id': str(membership.id)}
+            ),
+            status=201
+        )
 
 
-class FPOMembershipViewSet(viewsets.ModelViewSet):
-    """FPO Membership Management"""
-    queryset = FPOMembership.objects.select_related('fpo', 'farmer').all()
-    serializer_class = FPOMembershipSerializer
-    permission_classes = [permissions.IsAuthenticated]
+class FPOProcurementAPIView(APIView):
+    """
+    Browse available lots for procurement
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
     
-    def get_queryset(self):
-        """Filter based on role"""
-        user = self.request.user
-        queryset = FPOMembership.objects.select_related('fpo', 'farmer')
+    def get(self, request):
+        """Browse available lots for procurement"""
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
         
-        if user.role == 'farmer':
-            return queryset.filter(farmer=user)
+        # Get query parameters
+        crop_type = request.query_params.get('crop_type')
+        quality_grade = request.query_params.get('quality_grade')
+        max_price = request.query_params.get('max_price')
         
-        if user.role == 'fpo_admin':
-            return queryset.filter(fpo__owner=user)
+        # Available lots (not yet procured or fully sold)
+        lots = ProcurementLot.objects.filter(
+            status__in=['available', 'bidding'],
+            is_active=True,
+            available_quantity_quintals__gt=0
+        ).select_related('farmer', 'farmer__user')
         
-        return queryset
+        # Apply filters
+        if crop_type:
+            lots = lots.filter(crop_type=crop_type)
+        
+        if quality_grade:
+            lots = lots.filter(quality_grade=quality_grade)
+        
+        if max_price:
+            lots = lots.filter(expected_price_per_quintal__lte=max_price)
+        
+        # Prioritize FPO member lots
+        lots = lots.order_by(
+            '-farmer__fpo_id',
+            'expected_price_per_quintal'
+        )
+        
+        lots_data = []
+        for lot in lots:
+            lots_data.append({
+                'id': str(lot.id),
+                'lot_number': lot.lot_number,
+                'farmer': {
+                    'id': str(lot.farmer.id),
+                    'full_name': lot.farmer.full_name,
+                    'phone_number': lot.farmer.user.phone_number,
+                },
+                'crop_type': lot.crop_type,
+                'quantity_quintals': float(lot.available_quantity_quintals),
+                'quality_grade': lot.quality_grade,
+                'expected_price_per_quintal': float(lot.expected_price_per_quintal),
+                'harvest_date': lot.harvest_date.isoformat(),
+                'status': lot.status,
+                'description': lot.description or '',
+                'qr_code_url': lot.qr_code_url or None,
+                'blockchain_tx_id': lot.blockchain_tx_id or None,
+                'created_at': lot.created_at.isoformat(),
+            })
+        
+        # Paginated response
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 10))
+        
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        return Response({
+            'status': 'success',
+            'message': 'Procurement opportunities fetched successfully',
+            'data': {
+                'results': lots_data[start:end]
+            },
+            'meta': {
+                'count': len(lots_data),
+                'page': page,
+                'page_size': page_size,
+                'next': None,
+                'previous': None
+            }
+        })
+
+
+class FPOWarehousesAPIView(APIView):
+    """
+    Get FPO warehouses
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
     
-    @action(detail=False, methods=['get'])
-    def my_memberships(self, request):
-        """Get current farmer's FPO memberships"""
-        memberships = FPOMembership.objects.filter(
-            farmer=request.user, is_active=True
-        ).select_related('fpo')
-        serializer = self.get_serializer(memberships, many=True)
-        return Response(serializer.data)
+    def get(self, request):
+        """Get all FPO warehouses"""
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        warehouses = FPOWarehouse.objects.filter(fpo=fpo, is_active=True)
+        serializer = FPOWarehouseSerializer(warehouses, many=True)
+        
+        return Response(
+            response_success(
+                message="Warehouses fetched successfully",
+                data=serializer.data
+            )
+        )

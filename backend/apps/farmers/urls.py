@@ -1,12 +1,21 @@
-from django.urls import path
+"""
+URL patterns for Farmers App
+"""
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import (
-    FarmerRegistrationView,
-    FarmerProfileView,
-    FarmerDashboardView,
+    FarmerProfileViewSet, FarmLandViewSet,
+    CropPlanningViewSet, NearbyFPOAPIView
 )
 
+app_name = 'farmers'
+
+router = DefaultRouter()
+router.register('profiles', FarmerProfileViewSet, basename='farmer-profile')
+router.register('farmlands', FarmLandViewSet, basename='farmland')
+router.register('crop-plans', CropPlanningViewSet, basename='crop-plan')
+
 urlpatterns = [
-    path('register/', FarmerRegistrationView.as_view(), name='farmer-register'),
-    path('me/', FarmerProfileView.as_view(), name='farmer-profile'),
-    path('dashboard/', FarmerDashboardView.as_view(), name='farmer-dashboard'),
+    path('', include(router.urls)),
+    path('nearby-fpos/', NearbyFPOAPIView.as_view(), name='nearby-fpos'),
 ]

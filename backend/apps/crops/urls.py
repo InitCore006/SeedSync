@@ -1,20 +1,17 @@
+"""
+URL Configuration for Crops App
+"""
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import (
-    CropViewSet, CropInputViewSet, CropObservationViewSet,
-    HarvestRecordViewSet, CropTransactionViewSet, CropPredictionViewSet
-)
-
-app_name = 'crops'
+from .views import CropMasterViewSet, CropVarietyViewSet, MandiPriceViewSet, MSPRecordViewSet
 
 router = DefaultRouter()
-router.register(r'crops', CropViewSet, basename='crop')
-router.register(r'inputs', CropInputViewSet, basename='crop-input')
-router.register(r'observations', CropObservationViewSet, basename='crop-observation')
-router.register(r'harvests', HarvestRecordViewSet, basename='harvest-record')
-router.register(r'transactions', CropTransactionViewSet, basename='crop-transaction')
-router.register(r'predictions', CropPredictionViewSet, basename='crop-prediction')
+router.register(r'masters', CropMasterViewSet, basename='crop-master')
+router.register(r'varieties', CropVarietyViewSet, basename='crop-variety')
+router.register(r'mandi-prices', MandiPriceViewSet, basename='mandi-price')
+router.register(r'msp', MSPRecordViewSet, basename='msp-record')
 
+app_name = 'crops'
 urlpatterns = [
     path('', include(router.urls)),
 ]

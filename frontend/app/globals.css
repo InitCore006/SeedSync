@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+@theme {
+  /* SeedSync Brand Colors */
+  --color-primary: #437409;
+  --color-primary-dark: #438602;
+  --color-primary-light: #c8e686;
+  --color-primary-50: #f7fce7;
+  --color-primary-100: #ecf8c7;
+  --color-primary-200: #ddf292;
+  --color-primary-300: #c8e686;
+  --color-primary-400: #a8d354;
+  --color-primary-500: #86b932;
+  --color-primary-600: #649424;
+  --color-primary-700: #4c7120;
+  --color-primary-800: #438602;
+  --color-primary-900: #437409;
+  
+  /* Status Colors */
+  --color-success: #10b981;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #3b82f6;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: #f9fafb;
+  color: #111827;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Animations */
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}

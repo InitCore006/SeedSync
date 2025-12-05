@@ -1,0 +1,89 @@
+"""
+Lots Views for SeedSync Platform
+"""
+from rest_framework import viewsets, filters, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django_filters.rest_framework import DjangoFilterBackend
+from apps.core.permissions import IsFarmer, IsFPO
+from .models import ProcurementLot, LotImage, LotStatusHistory
+from .serializers import ProcurementLotSerializer, ProcurementLotCreateSerializer, LotImageSerializer
+
+
+class ProcurementLotViewSet(viewsets.ModelViewSet):
+    """Procurement lot viewset"""
+    queryset = ProcurementLot.objects.filter(is_active=True).select_related('farmer', 'fpo').prefetch_related('images', 'status_history')
+    serializer_class = ProcurementLotSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['crop_type', 'status', 'quality_grade', 'farmer', 'fpo']
+    search_fields = ['lot_number', 'description']
+    ordering_fields = ['created_at', 'quantity_quintals', 'expected_price_per_quintal']
+    ordering = ['-created_at']
+    
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return ProcurementLotCreateSerializer
+        return ProcurementLotSerializer
+    
+    def get_permissions(self):
+        if self.action == 'create':
+            return [IsFarmer()]
+        return super().get_permissions()
+    
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        """Update lot status"""
+        lot = self.get_object()
+        new_status = request.data.get('status')
+        remarks = request.data.get('remarks', '')
+        
+        if new_status not in dict(lot._meta.get_field('status').choices):
+            return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        old_status = lot.status
+        lot.status = new_status
+        lot.save()
+        
+        # Create status history
+        LotStatusHistory.objects.create(
+            lot=lot,
+            old_status=old_status,
+            new_status=new_status,
+            changed_by=request.user,
+            remarks=remarks
+        )
+        
+        return Response({'status': 'Status updated successfully'})
+    
+    @action(detail=False, methods=['get'])
+    def my_lots(self, request):
+        """Get current user's lots"""
+        if hasattr(request.user, 'farmer_profile'):
+            queryset = self.get_queryset().filter(farmer=request.user.farmer_profile)
+        elif hasattr(request.user, 'fpo_profile'):
+            queryset = self.get_queryset().filter(fpo=request.user.fpo_profile)
+        else:
+            queryset = self.get_queryset().none()
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def marketplace(self, request):
+        """Get marketplace listings - active lots"""
+        queryset = self.get_queryset().filter(status='listed')
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
