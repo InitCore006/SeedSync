@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   content: {
     padding: 20,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   actions: {
     flexDirection: 'row',
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   },
   resultLabel: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   resultValue: {
     fontSize: 16,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   treatmentText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     lineHeight: 20,
   },
 });

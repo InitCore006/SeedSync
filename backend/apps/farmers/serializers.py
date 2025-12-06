@@ -23,11 +23,26 @@ class FarmerProfileSerializer(serializers.ModelSerializer):
 
 
 class FarmerProfileCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating farmer profile"""
+    """Serializer for creating farmer profile - Single step registration"""
     
     class Meta:
         model = FarmerProfile
-        exclude = ['user', 'total_lots_created', 'total_quantity_sold_quintals', 'total_earnings']
+        fields = [
+            'full_name', 'father_name', 'total_land_acres', 'district', 'state', 'pincode',
+            'date_of_birth', 'gender', 'farming_experience_years', 'primary_crops',
+            'village', 'post_office', 'tehsil', 'latitude', 'longitude',
+            'aadhaar_number', 'pan_number', 'bank_account_number', 
+            'bank_account_holder_name', 'ifsc_code', 'bank_name', 'bank_branch',
+            'preferred_language', 'profile_photo'
+        ]
+    
+    def validate(self, attrs):
+        # Ensure required fields for initial registration
+        required_fields = ['full_name', 'total_land_acres', 'district', 'state', 'pincode']
+        for field in required_fields:
+            if field not in attrs or not attrs[field]:
+                raise serializers.ValidationError({field: f"{field.replace('_', ' ').title()} is required"})
+        return attrs
 
 
 class FarmerProfileUpdateSerializer(serializers.ModelSerializer):

@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   },
   variety: {
     fontSize: 18,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     marginBottom: 20,
   },
   infoSection: {
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   infoValue: {
     fontSize: 16,
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     lineHeight: 24,
   },
   bidCard: {
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   },
   bidDate: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     marginBottom: 12,
   },
   bidActions: {

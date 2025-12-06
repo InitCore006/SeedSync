@@ -127,7 +127,7 @@ export default function FPOFinderScreen() {
                 </View>
                 
                 <View style={styles.fpoDetail}>
-                  <Ionicons name="location" size={16} color={COLORS.textSecondary} />
+                  <Ionicons name="location" size={16} color={COLORS.secondary} />
                   <Text style={styles.fpoLocation}>{fpo.location}</Text>
                 </View>
                 
@@ -139,7 +139,7 @@ export default function FPOFinderScreen() {
                 </View>
                 
                 <View style={styles.fpoDetail}>
-                  <Ionicons name="call" size={16} color={COLORS.textSecondary} />
+                  <Ionicons name="call" size={16} color={COLORS.secondary} />
                   <Text style={styles.fpoContact}>{fpo.contact_number}</Text>
                 </View>
                 
@@ -156,7 +156,7 @@ export default function FPOFinderScreen() {
 
         {!loading && location && fpos.length === 0 && (
           <View style={styles.emptyState}>
-            <Ionicons name="sad-outline" size={64} color={COLORS.textSecondary} />
+            <Ionicons name="sad-outline" size={64} color={COLORS.secondary} />
             <Text style={styles.emptyText}>
               No FPOs found within 50km radius
             </Text>
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
   },
   promptText: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     textAlign: 'center',
     marginVertical: 20,
   },
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
   },
   fpoLocation: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     marginLeft: 8,
     flex: 1,
   },
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
   },
   fpoContact: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     marginLeft: 8,
   },
   callButton: {
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     textAlign: 'center',
     marginTop: 16,
   },

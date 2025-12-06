@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   grid: {
     padding: 10,
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   },
   cardDescription: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     textAlign: 'center',
   },
 });

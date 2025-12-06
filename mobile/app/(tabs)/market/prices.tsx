@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   price: {
     fontSize: 24,
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     textAlign: 'center',
   },
 });

@@ -1,31 +1,31 @@
 import api from './api';
 import { ENDPOINTS } from '@/constants/config';
-import { AuthResponse, RegisterData, LoginCredentials, UserProfile } from '@/types/api';
+import { AuthResponse, RegisterData, LoginCredentials, UserProfile, User } from '@/types/api';
 import { AxiosResponse } from 'axios';
 
 export const authAPI = {
-  // Register new user
-  register: (data: RegisterData): Promise<AxiosResponse<AuthResponse>> => {
+  // Register new user (returns user_id, phone_number, message - NOT full auth)
+  register: (data: RegisterData): Promise<AxiosResponse<{ user_id: string; phone_number: string; message: string; otp_expires_at: string }>> => {
     return api.post(ENDPOINTS.AUTH.REGISTER, data);
   },
 
-  // Send OTP for registration
-  sendOTP: (phone_number: string): Promise<AxiosResponse<{ message: string }>> => {
-    return api.post(ENDPOINTS.AUTH.SEND_OTP, { phone_number });
+  // Send OTP for registration (with purpose parameter)
+  sendOTP: (phone_number: string, purpose: 'registration' | 'login' = 'registration'): Promise<AxiosResponse<{ message: string; phone_number: string; otp_expires_at: string }>> => {
+    return api.post(ENDPOINTS.AUTH.SEND_OTP, { phone_number, purpose });
   },
 
-  // Send OTP for login
-  sendLoginOTP: (phone_number: string): Promise<AxiosResponse<{ message: string }>> => {
-    return api.post(ENDPOINTS.AUTH.SEND_LOGIN_OTP, { phone_number });
+  // Send OTP for login (with purpose parameter)
+  sendLoginOTP: (phone_number: string): Promise<AxiosResponse<{ message: string; phone_number: string; otp_expires_at: string }>> => {
+    return api.post(ENDPOINTS.AUTH.SEND_OTP, { phone_number, purpose: 'login' });
   },
 
-  // Verify OTP
-  verifyOTP: (data: { phone_number: string; otp: string }): Promise<AxiosResponse<{ message: string }>> => {
-    return api.post(ENDPOINTS.AUTH.VERIFY_OTP, data);
+  // Verify OTP (returns user and tokens)
+  verifyOTP: (data: { phone_number: string; otp: string; purpose?: 'registration' | 'login' }): Promise<AxiosResponse<{ user: User; tokens: { access: string; refresh: string }; message: string }>> => {
+    return api.post(ENDPOINTS.AUTH.VERIFY_OTP, { ...data, purpose: data.purpose || 'registration' });
   },
 
   // Login with phone and OTP
-  login: (credentials: LoginCredentials): Promise<AxiosResponse<AuthResponse>> => {
+  login: (credentials: LoginCredentials): Promise<AxiosResponse<{ user: User; tokens: { access: string; refresh: string }; message: string }>> => {
     return api.post(ENDPOINTS.AUTH.LOGIN, credentials);
   },
 

@@ -27,7 +27,7 @@ export const Input: React.FC<InputProps> = ({
       {label && <Text style={styles.label}>{label}</Text>}
       <TextInput
         style={[styles.input, error && styles.inputError, style]}
-        placeholderTextColor={COLORS.textSecondary}
+        placeholderTextColor={COLORS.secondary}
         {...props}
       />
       {error && <Text style={styles.error}>{error}</Text>}

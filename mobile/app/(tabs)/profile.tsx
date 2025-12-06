@@ -35,9 +35,9 @@ export default function ProfileScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+          <Text style={styles.avatarText}>{user.profile?.full_name.charAt(0).toUpperCase()}</Text>
         </View>
-        <Text style={styles.name}>{user.name}</Text>
+        <Text style={styles.name}>{user.profile?.full_name}</Text>
         <Text style={styles.phone}>{formatPhoneNumber(user.phone_number)}</Text>
       </View>
 
@@ -47,14 +47,14 @@ export default function ProfileScreen() {
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>User Type</Text>
           <Text style={styles.infoValue}>
-            {user.user_type.charAt(0).toUpperCase() + user.user_type.slice(1)}
+            {user.role_display.charAt(0).toUpperCase() + user.role_display.slice(1)}
           </Text>
         </View>
 
-        {user.organization_name && (
+        {user.role == "logistics" && (
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Organization</Text>
-            <Text style={styles.infoValue}>{user.organization_name}</Text>
+            <Text style={styles.infoValue}>{user.profile?.full_name}</Text>
           </View>
         )}
       </View>
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   infoValue: {
     fontSize: 16,

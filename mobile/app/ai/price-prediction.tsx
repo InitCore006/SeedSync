@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   content: {
     padding: 20,
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     marginBottom: 4,
   },
   statValue: {

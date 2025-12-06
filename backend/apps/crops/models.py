@@ -204,3 +204,108 @@ class MSPRecord(TimeStampedModel):
     def get_total_msp(self):
         """Get total MSP including bonus"""
         return self.msp_per_quintal + self.bonus_per_quintal
+
+
+class CropVarietyRequest(TimeStampedModel):
+    """
+    Farmer/FPO requests for new crop varieties
+    Approval workflow before adding to CropVariety master
+    """
+    # Requester Info
+    farmer = models.ForeignKey(
+        'farmers.FarmerProfile',
+        on_delete=models.CASCADE,
+        related_name='variety_requests',
+        null=True,
+        blank=True
+    )
+    fpo = models.ForeignKey(
+        'fpos.FPOProfile',
+        on_delete=models.CASCADE,
+        related_name='variety_requests',
+        null=True,
+        blank=True
+    )
+    
+    # Variety Details
+    crop_type = models.CharField(
+        max_length=50,
+        choices=OILSEED_CHOICES,
+        help_text="Existing crop type"
+    )
+    variety_name = models.CharField(
+        max_length=100,
+        help_text="Name of new variety to add"
+    )
+    variety_code = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Optional: Official variety code if known"
+    )
+    
+    # Supporting Information
+    source = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Where is this variety from? (e.g., State Agriculture Dept, ICAR)"
+    )
+    reason = models.TextField(
+        help_text="Why do you need this variety?"
+    )
+    characteristics = models.TextField(
+        blank=True,
+        help_text="Any known characteristics (maturity days, yield, etc.)"
+    )
+    region = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Suitable region/district"
+    )
+    
+    # Approval Workflow
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending Review'),
+            ('approved', 'Approved'),
+            ('rejected', 'Rejected'),
+            ('duplicate', 'Already Exists')
+        ],
+        default='pending'
+    )
+    admin_notes = models.TextField(
+        blank=True,
+        help_text="Admin comments/feedback"
+    )
+    reviewed_by = models.ForeignKey(
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_variety_requests'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Link to created variety (if approved)
+    created_variety = models.ForeignKey(
+        CropVariety,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='source_request'
+    )
+    
+    class Meta:
+        db_table = 'crop_variety_requests'
+        verbose_name = 'Crop Variety Request'
+        verbose_name_plural = 'Crop Variety Requests'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['crop_type', 'status']),
+        ]
+    
+    def __str__(self):
+        requester = self.farmer.full_name if self.farmer else self.fpo.organization_name
+        return f"{self.variety_name} ({self.get_crop_type_display()}) - {requester}"
+

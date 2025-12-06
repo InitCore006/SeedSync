@@ -21,7 +21,7 @@ export const LotCard: React.FC<LotCardProps> = ({ lot, onPress, style }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
-        return COLORS.textSecondary;
+        return COLORS.secondary;
       case 'open':
         return COLORS.success;
       case 'closed':
@@ -29,7 +29,7 @@ export const LotCard: React.FC<LotCardProps> = ({ lot, onPress, style }) => {
       case 'awarded':
         return COLORS.primary;
       default:
-        return COLORS.textSecondary;
+        return COLORS.secondary;
     }
   };
 
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
   },
   variety: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     marginBottom: 12,
   },
   detailsRow: {
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   value: {
     fontSize: 14,
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   bids: {
     fontSize: 12,
