@@ -130,7 +130,6 @@ for i, (user, name) in enumerate(zip(farmer_users, farmer_names)):
         user=user,
         defaults={
             'full_name': name,
-            'age': random.randint(25, 60),
             'gender': 'male',
             'district': 'Nagpur',
             'state': 'Maharashtra',

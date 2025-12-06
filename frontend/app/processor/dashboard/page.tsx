@@ -43,9 +43,12 @@ function ProcessorDashboardContent() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Active Bids</p>
+                <p className="text-sm font-medium text-gray-600">Pending Bids</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {formatNumber(stats?.active_bids || 0)}
+                  {formatNumber(stats?.bidding?.pending_bids || 0)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {formatNumber(stats?.bidding?.accepted_bids || 0)} accepted
                 </p>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -69,7 +72,10 @@ function ProcessorDashboardContent() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Processing Batches</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {formatNumber(stats?.active_batches || 0)}
+                  {formatNumber(stats?.processing?.total_batches || 0)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {formatNumber(stats?.processing?.total_processed_quintals || 0)} qtl processed
                 </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -91,9 +97,12 @@ function ProcessorDashboardContent() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Raw Material Stock</p>
+                <p className="text-sm font-medium text-gray-600">Procured Lots</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {formatNumber(stats?.raw_material_stock_mt || 0)} MT
+                  {formatNumber(stats?.procurement?.total_lots || 0)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {formatNumber(stats?.procurement?.total_quantity_quintals || 0)} quintals
                 </p>
               </div>
               <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -104,9 +113,9 @@ function ProcessorDashboardContent() {
               variant="ghost"
               size="sm"
               className="mt-4 text-yellow-600"
-              onClick={() => router.push('/processor/inventory')}
+              onClick={() => router.push('/processor/procurement?view=history')}
             >
-              View Inventory →
+              View History →
             </Button>
           </CardContent>
         </Card>
@@ -115,16 +124,26 @@ function ProcessorDashboardContent() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Finished Products</p>
+                <p className="text-sm font-medium text-gray-600">Extraction Efficiency</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {formatNumber(stats?.finished_product_stock_mt || 0)} MT
+                  {formatNumber(stats?.processing?.extraction_efficiency_percent || 0)}%
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {formatNumber(stats?.processing?.total_oil_extracted_quintals || 0)} qtl oil
                 </p>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Boxes className="w-6 h-6 text-purple-600" />
+                <TrendingUp className="w-6 h-6 text-purple-600" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 mt-4">Ready for sale</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-4 text-purple-600"
+              onClick={() => router.push('/processor/inventory')}
+            >
+              View Inventory →
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -143,18 +162,21 @@ function ProcessorDashboardContent() {
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">Batch #{batch.batch_number}</p>
                       <p className="text-sm text-gray-600 mt-1">
-                        {batch.crop_name} → {batch.product_name}
+                        {batch.crop_type}
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
-                        Input: {formatNumber(batch.input_quantity_kg)} kg
+                        Processed: {formatNumber(batch.processed_quantity)} qtl
                       </p>
                     </div>
                     <div className="text-right ml-4">
-                      <Badge variant="status" status={batch.status}>
-                        {batch.status}
+                      <Badge variant="status" status="active">
+                        Completed
                       </Badge>
                       <p className="text-sm text-gray-600 mt-2">
-                        Output: {formatNumber(batch.output_quantity_kg || 0)} kg
+                        Oil: {formatNumber(batch.oil_extracted || 0)} qtl
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Cake: {formatNumber(batch.cake_produced || 0)} qtl
                       </p>
                     </div>
                   </div>
@@ -187,51 +209,63 @@ function ProcessorDashboardContent() {
         
         <Card>
           <CardHeader>
-            <CardTitle>Production Stats</CardTitle>
+            <CardTitle>Processing Stats</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Avg Processing Time</span>
+                  <span className="text-sm text-gray-600">Bid Success Rate</span>
                   <span className="text-sm font-semibold text-gray-900">
-                    {stats?.avg_processing_days || 0} days
+                    {stats?.bidding?.success_rate || 0}%
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: '70%' }} />
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full" 
+                    style={{ width: `${stats?.bidding?.success_rate || 0}%` }} 
+                  />
                 </div>
               </div>
               
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Avg Yield Rate</span>
+                  <span className="text-sm text-gray-600">Extraction Efficiency</span>
                   <span className="text-sm font-semibold text-gray-900">
-                    {stats?.avg_yield_rate || 0}%
+                    {stats?.processing?.extraction_efficiency_percent || 0}%
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-500 h-2 rounded-full" style={{ width: `${stats?.avg_yield_rate || 0}%` }} />
+                  <div 
+                    className="bg-green-500 h-2 rounded-full" 
+                    style={{ width: `${stats?.processing?.extraction_efficiency_percent || 0}%` }} 
+                  />
                 </div>
               </div>
               
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Quality Pass Rate</span>
+                  <span className="text-sm text-gray-600">Processing Capacity</span>
                   <span className="text-sm font-semibold text-gray-900">
-                    {stats?.quality_pass_rate || 0}%
+                    {formatNumber(stats?.processor_info?.processing_capacity || 0)} qtl/day
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-primary h-2 rounded-full" style={{ width: `${stats?.quality_pass_rate || 0}%` }} />
+                  <div className="bg-primary h-2 rounded-full" style={{ width: '85%' }} />
                 </div>
               </div>
               
               <div className="pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-600">Company</span>
+                  <span className="text-xs font-medium text-gray-900">
+                    {stats?.processor_info?.company_name}
+                  </span>
+                </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Total Processed (FY)</span>
-                  <span className="text-lg font-bold text-gray-900">
-                    {formatNumber(stats?.total_processed_mt || 0)} MT
+                  <span className="text-sm text-gray-600">Location</span>
+                  <span className="text-xs text-gray-600">
+                    {stats?.processor_info?.city}, {stats?.processor_info?.state}
                   </span>
                 </div>
               </div>
@@ -240,27 +274,63 @@ function ProcessorDashboardContent() {
         </Card>
       </div>
       
-      {/* Revenue Overview */}
-      {stats?.monthly_revenue && (
+      {/* Monthly Trend */}
+      {stats?.trends?.monthly_procurement && stats.trends.monthly_procurement.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Monthly Revenue Trend</CardTitle>
+            <CardTitle>Monthly Procurement Trend</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-64 flex items-end gap-2">
-              {stats.monthly_revenue.map((month: any, index: number) => (
-                <div key={index} className="flex-1 flex flex-col items-center">
-                  <div
-                    className="w-full bg-primary rounded-t-lg"
-                    style={{
-                      height: `${(month.revenue / Math.max(...stats.monthly_revenue.map((m: any) => m.revenue))) * 100}%`,
-                      minHeight: '20px',
-                    }}
-                  />
-                  <p className="text-xs text-gray-600 mt-2">{month.month}</p>
-                  <p className="text-xs font-semibold text-gray-900">
-                    ₹{(month.revenue / 100000).toFixed(1)}L
-                  </p>
+              {stats.trends.monthly_procurement.map((month: any, index: number) => {
+                const maxQty = Math.max(...stats.trends.monthly_procurement.map((m: any) => m.quantity_quintals));
+                const height = maxQty > 0 ? (month.quantity_quintals / maxQty) * 100 : 0;
+                
+                return (
+                  <div key={index} className="flex-1 flex flex-col items-center">
+                    <div
+                      className="w-full bg-primary rounded-t-lg hover:bg-primary/80 transition-colors cursor-pointer"
+                      style={{
+                        height: `${height}%`,
+                        minHeight: month.quantity_quintals > 0 ? '20px' : '0px',
+                      }}
+                      title={`${month.month}: ${formatNumber(month.quantity_quintals)} quintals`}
+                    />
+                    <p className="text-xs text-gray-600 mt-2 transform -rotate-45 origin-top-left">
+                      {month.month.split(' ')[0]}
+                    </p>
+                    <p className="text-xs font-semibold text-gray-900">
+                      {formatNumber(month.quantity_quintals)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Crop-wise Stats */}
+      {stats?.trends?.crop_wise_stats && stats.trends.crop_wise_stats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Crop-wise Procurement</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {stats.trends.crop_wise_stats.map((crop: any, index: number) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{crop.crop_type}</p>
+                    <p className="text-sm text-gray-600">
+                      {formatNumber(crop.total_lots)} lots • {formatNumber(crop.total_quantity)} quintals
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-gray-900">
+                      Avg: {formatCurrency(crop.avg_price)}/qtl
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>

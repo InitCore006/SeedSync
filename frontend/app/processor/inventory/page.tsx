@@ -7,35 +7,41 @@ import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
+import Loading from '@/components/ui/Loading';
 import { Package2, Search, AlertCircle, BoxesIcon } from 'lucide-react';
 import { formatNumber, formatDate } from '@/lib/utils';
-
-// Mock data - replace with API
-const mockRawMaterials = [
-  { id: 1, name: 'Soybean Seeds', quantity: 15000, unit: 'kg', category: 'raw', location: 'Warehouse 1', minStock: 5000, status: 'optimal', lastUpdated: '2025-12-05' },
-  { id: 2, name: 'Mustard Seeds', quantity: 8000, unit: 'kg', category: 'raw', location: 'Warehouse 1', minStock: 3000, status: 'optimal', lastUpdated: '2025-12-04' },
-  { id: 3, name: 'Groundnut', quantity: 2000, unit: 'kg', category: 'raw', location: 'Warehouse 2', minStock: 4000, status: 'low', lastUpdated: '2025-12-05' },
-];
-
-const mockFinishedGoods = [
-  { id: 4, name: 'Soybean Oil', quantity: 5000, unit: 'liters', category: 'finished', location: 'Storage A', minStock: 2000, status: 'optimal', lastUpdated: '2025-12-05' },
-  { id: 5, name: 'Mustard Oil', quantity: 3500, unit: 'liters', category: 'finished', location: 'Storage B', minStock: 2000, status: 'optimal', lastUpdated: '2025-12-04' },
-  { id: 6, name: 'Groundnut Oil', quantity: 1200, unit: 'liters', category: 'finished', location: 'Storage A', minStock: 1500, status: 'low', lastUpdated: '2025-12-03' },
-];
+import { useProcessorInventory } from '@/lib/hooks/useAPI';
 
 function ProcessorInventoryContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
 
-  const allInventory = [...mockRawMaterials, ...mockFinishedGoods];
+  const { inventory, isLoading, isError } = useProcessorInventory();
+
+  if (isLoading) return <Loading fullScreen />;
+  if (isError) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+          Failed to load inventory data
+        </div>
+      </div>
+    );
+  }
+
+  const rawMaterials = inventory?.raw_materials || [];
+  const finishedProducts = inventory?.finished_products || [];
+  const allInventory = [...rawMaterials, ...finishedProducts];
   
   const filteredInventory = allInventory.filter(item =>
-    (categoryFilter === 'all' || item.category === categoryFilter) &&
+    (categoryFilter === 'all' || 
+     (categoryFilter === 'raw' && item.category === 'raw') ||
+     (categoryFilter === 'finished' && item.category === 'finished')) &&
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const rawMaterialsCount = mockRawMaterials.length;
-  const finishedGoodsCount = mockFinishedGoods.length;
+  const rawMaterialsCount = rawMaterials.length;
+  const finishedGoodsCount = finishedProducts.length;
   const lowStockCount = allInventory.filter(item => item.status === 'low').length;
 
   return (
@@ -129,13 +135,13 @@ function ProcessorInventoryContent() {
       {/* Inventory Grid */}
       {filteredInventory.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredInventory.map((item) => (
-            <Card key={item.id} className="hover:shadow-lg transition-shadow">
+          {filteredInventory.map((item, index) => (
+            <Card key={index} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <CardTitle>{item.name}</CardTitle>
-                    <p className="text-sm text-gray-600 mt-1">{item.location}</p>
+                    <p className="text-sm text-gray-600 mt-1">{item.location || 'Main Warehouse'}</p>
                   </div>
                   <Badge variant="status" status={item.category === 'raw' ? 'pending' : 'active'}>
                     {item.category === 'raw' ? 'Raw' : 'Finished'}
@@ -150,11 +156,6 @@ function ProcessorInventoryContent() {
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Min Stock:</span>
-                    <span className="text-sm text-gray-900">{formatNumber(item.minStock)} {item.unit}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Status:</span>
                     {item.status === 'low' ? (
                       <Badge variant="status" status="pending">Low Stock</Badge>
@@ -163,17 +164,12 @@ function ProcessorInventoryContent() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Last Updated:</span>
-                    <span className="text-xs text-gray-500">{formatDate(item.lastUpdated, 'P')}</span>
-                  </div>
-
                   {item.status === 'low' && (
                     <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-3">
                       <div className="flex items-start">
                         <AlertCircle className="w-4 h-4 text-orange-600 mt-0.5 mr-2" />
                         <p className="text-xs text-orange-800">
-                          Stock is below minimum level. Consider reordering.
+                          Stock needs replenishment
                         </p>
                       </div>
                     </div>

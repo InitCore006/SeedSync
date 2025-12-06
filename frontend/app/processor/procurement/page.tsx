@@ -9,11 +9,13 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
+import Loading from '@/components/ui/Loading';
 import { ShoppingCart, Search, TrendingUp } from 'lucide-react';
 import { formatCurrency, formatNumber, formatDate } from '@/lib/utils';
 import { CROPS, QUALITY_GRADES } from '@/lib/constants';
 import { toast } from 'react-hot-toast';
-import { useLots } from '@/lib/hooks/useAPI';
+import { useProcessorProcurement } from '@/lib/hooks/useAPI';
+import { API } from '@/lib/api';
 
 function ProcessorProcurementContent() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,19 +24,23 @@ function ProcessorProcurementContent() {
   const [showBidModal, setShowBidModal] = useState(false);
   const [selectedLot, setSelectedLot] = useState<any>(null);
   const [bidAmount, setBidAmount] = useState('');
+  const [bidQuantity, setBidQuantity] = useState('');
 
-  const { lots, isLoading } = useLots({ status: 'open' });
+  const { lots, isLoading, mutate } = useProcessorProcurement({ 
+    view: 'available',
+    crop_type: cropFilter !== 'all' ? cropFilter : undefined,
+    quality_grade: gradeFilter !== 'all' ? gradeFilter : undefined,
+  });
 
   const filteredLots = lots?.filter((lot: any) =>
-    (cropFilter === 'all' || lot.crop_name === cropFilter) &&
-    (gradeFilter === 'all' || lot.quality_grade === gradeFilter) &&
-    (lot.crop_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     lot.lot_number?.toLowerCase().includes(searchQuery.toLowerCase()))
+    lot.crop_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    lot.lot_number?.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
   const handlePlaceBid = (lot: any) => {
     setSelectedLot(lot);
     setBidAmount(lot.expected_price_per_quintal?.toString() || '');
+    setBidQuantity(lot.available_quantity_quintals?.toString() || '');
     setShowBidModal(true);
   };
 
@@ -44,19 +50,45 @@ function ProcessorProcurementContent() {
       return;
     }
 
-    // TODO: Call API to place bid
-    toast.success('Bid placed successfully!');
-    setShowBidModal(false);
-    setSelectedLot(null);
-    setBidAmount('');
+    if (!bidQuantity || parseFloat(bidQuantity) <= 0) {
+      toast.error('Please enter a valid quantity');
+      return;
+    }
+
+    if (parseFloat(bidQuantity) > selectedLot.available_quantity_quintals) {
+      toast.error('Quantity exceeds available quantity');
+      return;
+    }
+
+    try {
+      await API.processor.placeBid({
+        lot_id: selectedLot.id,
+        bid_amount_per_quintal: parseFloat(bidAmount),
+        quantity_quintals: parseFloat(bidQuantity),
+      });
+      
+      toast.success('Bid placed successfully!');
+      setShowBidModal(false);
+      setSelectedLot(null);
+      setBidAmount('');
+      setBidQuantity('');
+      mutate(); // Refresh lots
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to place bid');
+    }
   };
+
+  const totalQuantity = filteredLots.reduce((sum: number, l: any) => sum + (l.available_quantity_quintals || 0), 0);
+  const avgPrice = filteredLots.length > 0 
+    ? filteredLots.reduce((sum: number, l: any) => sum + (l.expected_price_per_quintal || 0), 0) / filteredLots.length 
+    : 0;
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Procurement Marketplace</h1>
-        <p className="text-gray-600 mt-1">Browse and bid on available lots from FPOs</p>
+        <p className="text-gray-600 mt-1">Browse and bid on available lots from farmers and FPOs</p>
       </div>
 
       {/* Stats Cards */}
@@ -64,14 +96,14 @@ function ProcessorProcurementContent() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">Available Lots</p>
-            <p className="text-3xl font-bold text-gray-900 mt-1">{lots?.length || 0}</p>
+            <p className="text-3xl font-bold text-gray-900 mt-1">{filteredLots.length || 0}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">Total Quantity</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">
-              {formatNumber(lots?.reduce((sum: number, l: any) => sum + (l.quantity_kg || 0), 0) || 0)} kg
+              {formatNumber(totalQuantity)} qtl
             </p>
           </CardContent>
         </Card>
@@ -79,11 +111,7 @@ function ProcessorProcurementContent() {
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">Avg Price</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">
-              {formatCurrency(
-                lots?.length > 0
-                  ? lots.reduce((sum: number, l: any) => sum + (l.expected_price_per_quintal || 0), 0) / lots.length
-                  : 0
-              )}/qtl
+              {formatCurrency(avgPrice)}/qtl
             </p>
           </CardContent>
         </Card>
@@ -91,7 +119,7 @@ function ProcessorProcurementContent() {
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">Crop Varieties</p>
             <p className="text-3xl font-bold text-gray-900 mt-1">
-              {new Set(lots?.map((l: any) => l.crop_name)).size || 0}
+              {new Set(filteredLots.map((l: any) => l.crop_type)).size || 0}
             </p>
           </CardContent>
         </Card>
@@ -115,7 +143,7 @@ function ProcessorProcurementContent() {
               onChange={(e) => setCropFilter(e.target.value)}
               options={[
                 { value: 'all', label: 'All Crops' },
-                ...CROPS.map(crop => ({ value: crop.label, label: crop.label }))
+                ...CROPS.map(crop => ({ value: crop.value, label: crop.label }))
               ]}
               className="w-full md:w-48"
             />
@@ -136,7 +164,8 @@ function ProcessorProcurementContent() {
       {isLoading ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-gray-600">Loading lots...</p>
+            <Loading />
+            <p className="text-gray-600 mt-4">Loading lots...</p>
           </CardContent>
         </Card>
       ) : filteredLots.length > 0 ? (
@@ -146,42 +175,47 @@ function ProcessorProcurementContent() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle>{lot.crop_name}</CardTitle>
+                    <CardTitle>{lot.crop_type}</CardTitle>
                     <p className="text-sm text-gray-600 mt-1">{lot.lot_number}</p>
                   </div>
-                  <Badge variant="status" status="active">Available</Badge>
+                  <Badge variant="status" status="active">
+                    {lot.source === 'fpo' ? 'FPO' : 'Farmer'}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div className="pb-3 border-b border-gray-200">
                     <p className="text-xs text-gray-600">Seller</p>
-                    <p className="font-medium text-gray-900">{lot.farmer?.full_name || 'FPO Member'}</p>
-                    <p className="text-xs text-gray-600">{lot.farmer?.city}, {lot.farmer?.state}</p>
+                    <p className="font-medium text-gray-900">
+                      {lot.farmer?.full_name || lot.fpo?.organization_name || 'N/A'}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {lot.farmer?.district}, {lot.farmer?.state || lot.fpo?.phone_number}
+                    </p>
                   </div>
 
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">Quantity:</span>
-                    <span className="font-semibold">{formatNumber(lot.quantity_kg)} kg</span>
+                    <span className="font-semibold">{formatNumber(lot.available_quantity_quintals)} qtl</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">Quality Grade:</span>
                     <span className="font-semibold">Grade {lot.quality_grade}</span>
                   </div>
-                  {lot.moisture_content && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Moisture:</span>
-                      <span className="font-semibold">{lot.moisture_content}%</span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Harvest Date:</span>
+                    <span className="font-semibold">{formatDate(lot.harvest_date, 'PP')}</span>
+                  </div>
 
                   <div className="pt-3 border-t border-gray-200">
                     <p className="text-xs text-gray-600 mb-1">Expected Price</p>
                     <p className="text-2xl font-bold text-primary">
-                      {formatCurrency(lot.expected_price_per_quintal)}<span className="text-sm text-gray-600">/qtl</span>
+                      {formatCurrency(lot.expected_price_per_quintal)}
+                      <span className="text-sm text-gray-600">/qtl</span>
                     </p>
                     <p className="text-xs text-gray-600 mt-1">
-                      Total: {formatCurrency((lot.quantity_kg / 100) * lot.expected_price_per_quintal)}
+                      Total: {formatCurrency(lot.available_quantity_quintals * lot.expected_price_per_quintal)}
                     </p>
                   </div>
                 </div>
@@ -223,14 +257,14 @@ function ProcessorProcurementContent() {
         {selectedLot && (
           <div className="space-y-4">
             <div>
-              <h3 className="font-bold text-lg">{selectedLot.crop_name}</h3>
+              <h3 className="font-bold text-lg">{selectedLot.crop_type}</h3>
               <p className="text-sm text-gray-600">{selectedLot.lot_number}</p>
             </div>
 
             <div className="bg-gray-50 p-4 rounded-lg space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Quantity:</span>
-                <span className="font-medium">{formatNumber(selectedLot.quantity_kg)} kg</span>
+                <span className="text-sm text-gray-600">Available Quantity:</span>
+                <span className="font-medium">{formatNumber(selectedLot.available_quantity_quintals)} qtl</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Expected Price:</span>
@@ -243,6 +277,15 @@ function ProcessorProcurementContent() {
             </div>
 
             <Input
+              label="Quantity (quintals)"
+              type="number"
+              placeholder="Enter quantity"
+              value={bidQuantity}
+              onChange={(e) => setBidQuantity(e.target.value)}
+              required
+            />
+
+            <Input
               label="Your Bid Amount (₹/quintal)"
               type="number"
               placeholder="Enter your bid"
@@ -251,10 +294,10 @@ function ProcessorProcurementContent() {
               required
             />
 
-            {bidAmount && (
+            {bidAmount && bidQuantity && (
               <div className="bg-blue-50 p-3 rounded-lg">
                 <p className="text-sm font-medium text-blue-900">
-                  Total Bid Value: {formatCurrency((selectedLot.quantity_kg / 100) * parseFloat(bidAmount || '0'))}
+                  Total Bid Value: {formatCurrency(parseFloat(bidQuantity) * parseFloat(bidAmount || '0'))}
                 </p>
               </div>
             )}

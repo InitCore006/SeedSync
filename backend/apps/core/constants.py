@@ -134,6 +134,7 @@ LOT_STATUS_CHOICES = [
     (LOT_SOLD, 'Sold'),
     (LOT_DELIVERED, 'Delivered'),
     (LOT_CANCELLED, 'Cancelled'),
+    ('aggregated', 'Aggregated into Bulk Lot'),
 ]
 
 # Bid Status

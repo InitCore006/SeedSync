@@ -4,7 +4,7 @@ All FPO (Farmer Producer Organization) related API endpoints for the SeedSync pl
 
 ## Base URL
 ```
-http://127.0.0.1:8000/api/fpos/
+http://127.0.0.1:8000/api/fpos//-
 ```
 
 ## Authentication

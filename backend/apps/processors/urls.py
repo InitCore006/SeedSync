@@ -6,6 +6,7 @@ from django.urls import path
 from .views import (
     ProcessorProfileAPIView,
     ProcessorDashboardAPIView,
+    ProcessorBidsAPIView,
     ProcessorProcurementAPIView,
     ProcessingBatchesAPIView,
     ProcessorInventoryAPIView
@@ -19,6 +20,9 @@ urlpatterns = [
     
     # Dashboard
     path('dashboard/', ProcessorDashboardAPIView.as_view(), name='processor-dashboard'),
+    
+    # Bids management
+    path('bids/', ProcessorBidsAPIView.as_view(), name='processor-bids'),
     
     # Procurement opportunities
     path('procurement/', ProcessorProcurementAPIView.as_view(), name='processor-procurement'),

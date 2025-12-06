@@ -31,6 +31,12 @@ function FPODashboardContent() {
   const stats = dashboard;
   const fpoProfile = profile;
   
+  // Extract data with correct paths from backend
+  const fpoInfo = stats?.fpo_info || {};
+  const procurement = stats?.procurement || {};
+  const warehouse = stats?.warehouse || {};
+  const trends = stats?.trends || {};
+  
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -38,7 +44,7 @@ function FPODashboardContent() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">{fpoProfile?.organization_name || 'FPO Dashboard'}</h1>
           <p className="text-gray-600 mt-1">
-            {fpoProfile?.city}, {fpoProfile?.state}
+            {fpoProfile?.district}, {fpoProfile?.state}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -81,7 +87,7 @@ function FPODashboardContent() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Members</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {formatNumber(stats?.total_members || 0)}
+                  {fpoInfo?.total_members || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -103,9 +109,9 @@ function FPODashboardContent() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Active Lots</p>
+                <p className="text-sm font-medium text-gray-600">Total Lots</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {formatNumber(stats?.active_lots || 0)}
+                  {procurement?.total_lots || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -127,9 +133,9 @@ function FPODashboardContent() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {formatCurrency(stats?.total_revenue || 0)}
+                <p className="text-sm font-medium text-gray-600">Procured Quantity</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {formatNumber(procurement?.total_quantity_quintals || 0)} quintals
                 </p>
               </div>
               <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -147,8 +153,8 @@ function FPODashboardContent() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Warehouse Stock</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {formatNumber(stats?.warehouse_stock_mt || 0)} MT
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {formatNumber(warehouse?.current_stock_quintals || 0)} quintals
                 </p>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -175,26 +181,25 @@ function FPODashboardContent() {
             <CardTitle>Recent Procurement Lots</CardTitle>
           </CardHeader>
           <CardContent>
-            {stats?.recent_lots && stats.recent_lots.length > 0 ? (
+            {trends?.crop_wise_stats && trends.crop_wise_stats.length > 0 ? (
               <div className="space-y-4">
-                {stats.recent_lots.map((lot: any) => (
-                  <div key={lot.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                {trends.crop_wise_stats.slice(0, 5).map((crop: any, index: number) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900">{lot.crop_name}</p>
+                      <div className="flex items-center gap-2">
+                        <Package className="w-4 h-4 text-gray-400" />
+                        <span className="font-medium text-gray-900">{crop.crop_type}</span>
+                      </div>
                       <p className="text-sm text-gray-600 mt-1">
-                        {lot.quantity_kg} kg • Grade {lot.quality_grade}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Created {formatDate(lot.created_at, 'PP')}
+                        {crop.total_lots} lots • {formatNumber(crop.total_quantity)} quintals
                       </p>
                     </div>
-                    <div className="text-right ml-4">
-                      <Badge variant="status" status={lot.status}>
-                        {lot.status}
-                      </Badge>
-                      <p className="text-sm font-semibold text-gray-900 mt-2">
-                        {formatCurrency(lot.expected_price_per_quintal)}/qtl
-                      </p>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-gray-900">₹{formatNumber(crop.avg_price || 0)}</p>
+                      <p className="text-xs text-gray-500">avg. per quintal</p>
                     </div>
                   </div>
                 ))}
@@ -227,10 +232,10 @@ function FPODashboardContent() {
         {/* Pending Bids */}
         <Card>
           <CardHeader>
-            <CardTitle>Pending Bids</CardTitle>
+            <CardTitle>Bidding Summary</CardTitle>
           </CardHeader>
           <CardContent>
-            {stats?.pending_bids && stats.pending_bids.length > 0 ? (
+            {procurement?.active_bids > 0 || procurement?.accepted_bids > 0 ? (
               <div className="space-y-4">
                 {stats.pending_bids.map((bid: any) => (
                   <div key={bid.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -270,25 +275,25 @@ function FPODashboardContent() {
         </Card>
       </div>
       
-      {/* Member Growth */}
-      {stats?.member_growth && (
+      {/* Procurement Trend */}
+      {trends?.monthly_procurement && trends.monthly_procurement.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Member Growth (Last 6 Months)</CardTitle>
+            <CardTitle>Monthly Procurement Trend</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-64 flex items-end gap-2">
-              {stats.member_growth.map((month: any, index: number) => (
+              {trends.monthly_procurement.map((month: any, index: number) => (
                 <div key={index} className="flex-1 flex flex-col items-center">
                   <div
                     className="w-full bg-primary rounded-t-lg"
                     style={{
-                      height: `${(month.count / Math.max(...stats.member_growth.map((m: any) => m.count))) * 100}%`,
+                      height: `${(month.quantity_quintals / Math.max(...trends.monthly_procurement.map((m: any) => m.quantity_quintals))) * 100}%`,
                       minHeight: '20px',
                     }}
                   />
                   <p className="text-xs text-gray-600 mt-2">{month.month}</p>
-                  <p className="text-sm font-semibold text-gray-900">{month.count}</p>
+                  <p className="text-xs font-medium">{month.quantity_quintals}q</p>
                 </div>
               ))}
             </div>

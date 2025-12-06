@@ -77,8 +77,25 @@ class ProcurementLotViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def marketplace(self, request):
-        """Get marketplace listings - active lots"""
-        queryset = self.get_queryset().filter(status='listed')
+        """Get marketplace listings - both individual and FPO aggregated lots"""
+        # Show only individual farmer lots and FPO aggregated bulk lots
+        # Exclude fpo_managed lots (those are internal to FPO)
+        queryset = self.get_queryset().filter(
+            status='available',
+            listing_type__in=['individual', 'fpo_aggregated']
+        ).select_related('farmer', 'farmer__user', 'fpo')
+        
+        # Apply filters
+        crop_type = request.query_params.get('crop_type')
+        quality_grade = request.query_params.get('quality_grade')
+        listing_type = request.query_params.get('listing_type')
+        
+        if crop_type:
+            queryset = queryset.filter(crop_type=crop_type)
+        if quality_grade:
+            queryset = queryset.filter(quality_grade=quality_grade)
+        if listing_type:
+            queryset = queryset.filter(listing_type=listing_type)
         
         page = self.paginate_queryset(queryset)
         if page is not None:

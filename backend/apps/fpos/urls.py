@@ -8,7 +8,11 @@ from .views import (
     FPODashboardAPIView,
     FPOMembersAPIView,
     FPOProcurementAPIView,
-    FPOWarehousesAPIView
+    FPOWarehousesAPIView,
+    FPOBidsAPIView,
+    FPOCreateFarmerAPIView,
+    FPORemoveMemberAPIView,
+    FPOCreateAggregatedLotAPIView
 )
 
 app_name = 'fpos'
@@ -28,4 +32,16 @@ urlpatterns = [
     
     # Warehouses
     path('warehouses/', FPOWarehousesAPIView.as_view(), name='fpo-warehouses'),
+    
+    # Bids management
+    path('bids/', FPOBidsAPIView.as_view(), name='fpo-bids'),
+    
+    # Create farmer account
+    path('create-farmer/', FPOCreateFarmerAPIView.as_view(), name='fpo-create-farmer'),
+    
+    # Remove member
+    path('members/<uuid:membership_id>/remove/', FPORemoveMemberAPIView.as_view(), name='fpo-remove-member'),
+    
+    # Create aggregated lot
+    path('create-aggregated-lot/', FPOCreateAggregatedLotAPIView.as_view(), name='fpo-create-aggregated-lot'),
 ]

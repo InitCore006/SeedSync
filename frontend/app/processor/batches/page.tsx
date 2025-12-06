@@ -13,11 +13,14 @@ import Modal from '@/components/ui/Modal';
 import { formatNumber, formatDate, getStatusColor } from '@/lib/utils';
 import { Plus, Factory, Search, Play, Pause, CheckCircle, XCircle } from 'lucide-react';
 import { CROPS } from '@/lib/constants';
+import { useProcessingBatches } from '@/lib/hooks/useAPI';
+import { API } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 interface CreateBatchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (data: any) => void;
+  onCreate: () => void;
 }
 
 function CreateBatchModal({ isOpen, onClose, onCreate }: CreateBatchModalProps) {
@@ -34,18 +37,30 @@ function CreateBatchModal({ isOpen, onClose, onCreate }: CreateBatchModalProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    onCreate(formData);
-    setIsLoading(false);
-    onClose();
-    setFormData({
-      lot_id: '',
-      input_crop: '',
-      input_quantity_kg: '',
-      output_product: '',
-      processing_method: '',
-      expected_output_kg: '',
-    });
+    try {
+      await API.processor.createBatch({
+        lot_id: parseInt(formData.lot_id),
+        input_quantity_kg: parseFloat(formData.input_quantity_kg),
+        processing_method: formData.processing_method,
+        expected_output_kg: parseFloat(formData.expected_output_kg),
+        output_product: formData.output_product,
+      });
+      toast.success('Processing batch created successfully');
+      onCreate();
+      onClose();
+      setFormData({
+        lot_id: '',
+        input_crop: '',
+        input_quantity_kg: '',
+        output_product: '',
+        processing_method: '',
+        expected_output_kg: '',
+      });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to create batch');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -119,68 +134,21 @@ function ProcessorBatchesContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isLoading] = useState(false);
+  
+  const { batches, isLoading, isError, mutate } = useProcessingBatches({ status: statusFilter !== 'all' ? statusFilter : undefined });
 
-  // Mock data - replace with actual API hook
-  const mockBatches = [
-    {
-      id: '1',
-      batch_number: 'BTH-2024-001',
-      input_crop: 'Mustard',
-      input_quantity_kg: 1000,
-      output_product: 'Mustard Oil',
-      output_quantity_kg: 380,
-      expected_output_kg: 400,
-      processing_method: 'Cold Press',
-      status: 'in_progress',
-      started_at: new Date().toISOString(),
-      quality_grade: 'A',
-      yield_percentage: 38.0,
-    },
-    {
-      id: '2',
-      batch_number: 'BTH-2024-002',
-      input_crop: 'Groundnut',
-      input_quantity_kg: 1500,
-      output_product: 'Groundnut Oil',
-      output_quantity_kg: 675,
-      expected_output_kg: 675,
-      processing_method: 'Expeller Press',
-      status: 'completed',
-      started_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      completed_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      quality_grade: 'A+',
-      yield_percentage: 45.0,
-    },
-    {
-      id: '3',
-      batch_number: 'BTH-2024-003',
-      input_crop: 'Sunflower',
-      input_quantity_kg: 800,
-      output_product: 'Sunflower Oil',
-      output_quantity_kg: 0,
-      expected_output_kg: 320,
-      processing_method: 'Solvent Extraction',
-      status: 'pending',
-      quality_grade: null,
-      yield_percentage: 0,
-    },
-  ];
-
-  const batches = mockBatches;
-
-  const handleCreateBatch = (data: any) => {
-    console.log('Creating batch:', data);
+  const handleCreateBatch = () => {
+    mutate(); // Refresh batches after creation
   };
 
-  const filteredBatches = batches.filter((batch: any) =>
-    (statusFilter === 'all' || batch.status === statusFilter) &&
-    (batch.input_crop?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     batch.batch_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     batch.output_product?.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredBatches = (batches || []).filter((batch: any) =>
+    batch.input_crop?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    batch.batch_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    batch.output_product?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (isLoading) return <Loading fullScreen />;
+  if (isError) return <div className="p-6 text-center text-red-600">Failed to load batches</div>;
 
   return (
     <div className="p-6 space-y-6">
@@ -205,14 +173,14 @@ function ProcessorBatchesContent() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">Total Batches</p>
-            <p className="text-3xl font-bold text-gray-900 mt-1">{batches.length}</p>
+            <p className="text-3xl font-bold text-gray-900 mt-1">{batches?.length || 0}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">In Progress</p>
             <p className="text-3xl font-bold text-blue-600 mt-1">
-              {batches.filter(b => b.status === 'in_progress').length}
+              {batches?.filter((b: any) => b.status === 'in_progress').length || 0}
             </p>
           </CardContent>
         </Card>
@@ -220,7 +188,7 @@ function ProcessorBatchesContent() {
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">Completed</p>
             <p className="text-3xl font-bold text-green-600 mt-1">
-              {batches.filter(b => b.status === 'completed').length}
+              {batches?.filter((b: any) => b.status === 'completed').length || 0}
             </p>
           </CardContent>
         </Card>
@@ -228,7 +196,7 @@ function ProcessorBatchesContent() {
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">Avg Yield</p>
             <p className="text-3xl font-bold text-gray-900 mt-1">
-              {(batches.reduce((sum, b) => sum + b.yield_percentage, 0) / batches.length).toFixed(1)}%
+              {batches?.length ? (batches.reduce((sum: number, b: any) => sum + (b.yield_percentage || 0), 0) / batches.length).toFixed(1) : '0.0'}%
             </p>
           </CardContent>
         </Card>
@@ -236,7 +204,7 @@ function ProcessorBatchesContent() {
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">Total Output</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">
-              {formatNumber(batches.reduce((sum, b) => sum + b.output_quantity_kg, 0))} kg
+              {formatNumber(batches?.reduce((sum: number, b: any) => sum + (b.output_quantity_kg || 0), 0) || 0)} kg
             </p>
           </CardContent>
         </Card>

@@ -98,16 +98,50 @@ export interface ProcurementLot {
     phone_number: string;
   };
   crop_type: string;
+  crop_type_display?: string;
   quantity_quintals: number;
   quality_grade: string;
   expected_price_per_quintal: number;
   harvest_date: string;
-  status: 'available' | 'bidding' | 'sold' | 'delivered' | 'cancelled';
+  status: 'available' | 'bidding' | 'sold' | 'delivered' | 'cancelled' | 'aggregated';
   description?: string;
   qr_code_url?: string;
   blockchain_tx_id?: string;
   created_at: string;
   images?: LotImage[];
+  // Listing type for FPO aggregation
+  listing_type?: 'individual' | 'fpo_managed' | 'fpo_aggregated';
+  managed_by_fpo?: boolean;
+  fpo_name?: string;
+  farmer_name?: string;
+  // Warehouse fields
+  warehouse_id?: string;
+  warehouse_name?: string;
+  warehouse_code?: string;
+  warehouse_district?: string;
+  // Multi-warehouse aggregation
+  source_warehouse_ids?: string[];
+  source_warehouse_names?: string[];
+}
+
+export interface Warehouse {
+  id: string;
+  warehouse_name: string;
+  name?: string;
+  warehouse_code: string;
+  warehouse_type: 'godown' | 'cold_storage' | 'warehouse' | 'shed';
+  address: string;
+  village?: string;
+  district: string;
+  state: string;
+  pincode: string;
+  capacity_quintals: number;
+  current_stock_quintals: number;
+  has_scientific_storage: boolean;
+  has_pest_control: boolean;
+  has_quality_testing_lab: boolean;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface LotImage {

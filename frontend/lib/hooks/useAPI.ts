@@ -172,10 +172,40 @@ export function useFPOProcurement(params?: any) {
   };
 }
 
+export function useFPOWarehouses() {
+  const { data, error, isLoading, mutate } = useSWR(
+    '/fpo/warehouses',
+    () => API.fpo.getWarehouses(),
+    defaultConfig
+  );
+
+  return {
+    warehouses: Array.isArray(data?.data) ? data.data : [],
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+export function useFPOBids(params?: any) {
+  const { data, error, isLoading, mutate } = useSWR(
+    params ? ['/fpo/bids', params] : '/fpo/bids',
+    () => API.fpo.getBids(params),
+    defaultConfig
+  );
+
+  return {
+    bids: data?.data?.results || [],
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
 // ============= Processor Hooks =============
 export function useProcessorDashboard() {
-  const { data, error, isLoading } = useSWR(
-    '/processor/dashboard',
+  const { data, error, isLoading, mutate } = useSWR(
+    '/processors/dashboard',
     () => API.processor.getDashboard(),
     defaultConfig
   );
@@ -184,27 +214,75 @@ export function useProcessorDashboard() {
     dashboard: data?.data,
     isLoading,
     isError: error,
+    mutate,
+  };
+}
+
+export function useProcessorProfile() {
+  const { data, error, isLoading, mutate } = useSWR(
+    '/processors/profile',
+    () => API.processor.getProfile(),
+    defaultConfig
+  );
+
+  return {
+    profile: data?.data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+export function useProcessorBids(params?: any) {
+  const { data, error, isLoading, mutate } = useSWR(
+    params ? ['/processors/bids', params] : '/processors/bids',
+    () => API.processor.getBids(params),
+    defaultConfig
+  );
+
+  return {
+    bids: data?.data?.results || [],
+    meta: data?.meta,
+    isLoading,
+    isError: error,
+    mutate,
   };
 }
 
 export function useProcessorProcurement(params?: any) {
-  const { data, error, isLoading } = useSWR(
-    params ? ['/processor/procurement', params] : '/processor/procurement',
+  const { data, error, isLoading, mutate } = useSWR(
+    params ? ['/processors/procurement', params] : '/processors/procurement',
     () => API.processor.getProcurement(params),
     defaultConfig
   );
 
   return {
-    opportunities: data?.data?.results || [],
+    lots: data?.data?.results || [],
     meta: data?.meta,
     isLoading,
     isError: error,
+    mutate,
+  };
+}
+
+export function useProcessorInventory() {
+  const { data, error, isLoading, mutate } = useSWR(
+    '/processors/inventory',
+    () => API.processor.getInventory(),
+    defaultConfig
+  );
+
+  return {
+    inventory: data?.data,
+    isLoading,
+    isError: error,
+    mutate,
   };
 }
 
 export function useProcessingBatches(params?: any) {
   const { data, error, isLoading, mutate } = useSWR(
-    params ? ['/processor/batches', params] : '/processor/batches',
+    params ? ['/processors/batches', params] : '/processors/batches',
     () => API.processor.getBatches(params),
     defaultConfig
   );

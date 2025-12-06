@@ -46,6 +46,47 @@ class ProcurementLot(TimeStampedModel):
         help_text="FPO that procured this lot"
     )
     
+    # FPO Management Fields
+    managed_by_fpo = models.BooleanField(
+        default=False,
+        help_text="True if farmer is FPO member and lot is auto-managed by FPO"
+    )
+    listing_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('individual', 'Individual Farmer Lot'),
+            ('fpo_managed', 'FPO Managed Lot'),
+            ('fpo_aggregated', 'FPO Aggregated Bulk Lot'),
+        ],
+        default='individual',
+        help_text="Type of listing"
+    )
+    parent_lots = models.ManyToManyField(
+        'self',
+        symmetrical=False,
+        blank=True,
+        related_name='aggregated_lots',
+        help_text="Parent lots for FPO aggregated listings (traceability)"
+    )
+    
+    # Warehouse Storage (for FPO-managed lots)
+    warehouse = models.ForeignKey(
+        'warehouses.Warehouse',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='stored_lots',
+        help_text="Warehouse where this lot is stored (for FPO lots)"
+    )
+    
+    # Multi-warehouse aggregation (for FPO aggregated lots from multiple warehouses)
+    source_warehouses = models.ManyToManyField(
+        'warehouses.Warehouse',
+        blank=True,
+        related_name='aggregated_from_lots',
+        help_text="Source warehouses for multi-warehouse aggregated lots"
+    )
+    
     # Crop Details
     crop_type = models.CharField(
         max_length=50,

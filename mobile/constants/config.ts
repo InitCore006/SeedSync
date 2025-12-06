@@ -1,4 +1,4 @@
-export const API_URL = 'http://127.0.0.1:8000/api';
+export const API_URL = 'http://https://d65d17911a7c.ngrok-free.app/api';
 
 export const ENDPOINTS = {
   // Auth endpoints

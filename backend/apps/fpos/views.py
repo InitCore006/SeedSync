@@ -7,18 +7,21 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db.models import Sum, Count, Avg, Q
 from django.utils import timezone
 from datetime import timedelta
 from django_filters.rest_framework import DjangoFilterBackend
 
-from apps.core.utils import response_success, response_error
+from apps.core.utils import response_success, response_error, generate_otp
 from apps.core.permissions import IsFPO
 from .models import FPOProfile, FPOMembership, FPOWarehouse
 from .serializers import FPOProfileSerializer, FPOMembershipSerializer, FPOWarehouseSerializer
 from apps.lots.models import ProcurementLot
 from apps.farmers.models import FarmerProfile
 from apps.bids.models import Bid
+from apps.users.models import User, UserProfile, OTPVerification
+from datetime import date
 
 
 class FPOProfileAPIView(APIView):
@@ -211,7 +214,6 @@ class FPOMembersAPIView(APIView):
                 },
                 'fpo': str(fpo.id),
                 'joined_date': membership.joined_date.isoformat() if membership.joined_date else None,
-                'share_capital': float(membership.share_capital),
                 'is_active': membership.is_active,
             })
         
@@ -247,14 +249,37 @@ class FPOMembersAPIView(APIView):
                 status=404
             )
         
-        farmer_id = request.data.get('farmer_id')
-        share_capital = float(request.data.get('share_capital', 0))
+        phone_number = request.data.get('phone_number', '').strip()
         
+        # Validate phone number
+        if not phone_number:
+            return Response(
+                response_error(message="Phone number is required"),
+                status=400
+            )
+        
+        # Format phone number if needed
+        if not phone_number.startswith('+91'):
+            if phone_number.isdigit() and len(phone_number) == 10:
+                phone_number = f"+91{phone_number}"
+            else:
+                return Response(
+                    response_error(message="Invalid phone number format. Use 10 digits or +91 format"),
+                    status=400
+                )
+        
+        # Find farmer by phone number
         try:
-            farmer = FarmerProfile.objects.get(id=farmer_id)
+            user = User.objects.get(phone_number=phone_number, role='farmer')
+            farmer = FarmerProfile.objects.get(user=user)
+        except User.DoesNotExist:
+            return Response(
+                response_error(message="No farmer found with this phone number"),
+                status=404
+            )
         except FarmerProfile.DoesNotExist:
             return Response(
-                response_error(message="Farmer not found"),
+                response_error(message="Farmer profile not found"),
                 status=404
             )
         
@@ -269,7 +294,6 @@ class FPOMembersAPIView(APIView):
             fpo=fpo,
             farmer=farmer,
             joined_date=timezone.now().date(),
-            share_capital=share_capital,
             is_active=True
         )
         
@@ -312,12 +336,15 @@ class FPOProcurementAPIView(APIView):
         quality_grade = request.query_params.get('quality_grade')
         max_price = request.query_params.get('max_price')
         
-        # Available lots (not yet procured or fully sold)
+        # ONLY show lots from FPO's own members
+        # Filter by fpo field (auto-set when farmer is member) and managed_by_fpo=True
         lots = ProcurementLot.objects.filter(
-            status__in=['available', 'bidding'],
+            fpo=fpo,  # Only this FPO's lots
+            managed_by_fpo=True,  # Auto-managed member lots
+            status='available',
             is_active=True,
             available_quantity_quintals__gt=0
-        ).select_related('farmer', 'farmer__user')
+        ).select_related('farmer', 'farmer__user', 'warehouse').prefetch_related('source_warehouses')
         
         # Apply filters
         if crop_type:
@@ -329,11 +356,8 @@ class FPOProcurementAPIView(APIView):
         if max_price:
             lots = lots.filter(expected_price_per_quintal__lte=max_price)
         
-        # Prioritize FPO member lots
-        lots = lots.order_by(
-            '-farmer__fpo_id',
-            'expected_price_per_quintal'
-        )
+        # Order by creation date (newest first)
+        lots = lots.order_by('-created_at')
         
         lots_data = []
         for lot in lots:
@@ -355,6 +379,11 @@ class FPOProcurementAPIView(APIView):
                 'qr_code_url': lot.qr_code_url or None,
                 'blockchain_tx_id': lot.blockchain_tx_id or None,
                 'created_at': lot.created_at.isoformat(),
+                # Warehouse information
+                'warehouse_id': str(lot.warehouse.id) if lot.warehouse else None,
+                'warehouse_name': lot.warehouse.name if lot.warehouse else None,
+                'warehouse_code': lot.warehouse.warehouse_code if lot.warehouse else None,
+                'warehouse_district': lot.warehouse.district if lot.warehouse else None,
             })
         
         # Paginated response
@@ -382,7 +411,7 @@ class FPOProcurementAPIView(APIView):
 
 class FPOWarehousesAPIView(APIView):
     """
-    Get FPO warehouses
+    Manage FPO warehouses - Create, Read, Update, Delete
     """
     permission_classes = [IsAuthenticated, IsFPO]
     
@@ -405,3 +434,689 @@ class FPOWarehousesAPIView(APIView):
                 data=serializer.data
             )
         )
+    
+    def post(self, request):
+        """Create new warehouse"""
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        # Check if warehouse code already exists
+        warehouse_code = request.data.get('warehouse_code')
+        if warehouse_code and FPOWarehouse.objects.filter(warehouse_code=warehouse_code).exists():
+            return Response(
+                response_error(message="Warehouse code already exists"),
+                status=400
+            )
+        
+        # Add FPO to request data
+        data = request.data.copy()
+        data['fpo'] = fpo.id
+        
+        serializer = FPOWarehouseSerializer(data=data)
+        if serializer.is_valid():
+            warehouse = serializer.save()
+            return Response(
+                response_success(
+                    message="Warehouse created successfully",
+                    data=serializer.data
+                ),
+                status=201
+            )
+        
+        return Response(
+            response_error(
+                message="Invalid data",
+                errors=serializer.errors
+            ),
+            status=400
+        )
+    
+    def put(self, request):
+        """Update warehouse"""
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        warehouse_id = request.data.get('id')
+        if not warehouse_id:
+            return Response(
+                response_error(message="Warehouse ID is required"),
+                status=400
+            )
+        
+        try:
+            warehouse = FPOWarehouse.objects.get(id=warehouse_id, fpo=fpo, is_active=True)
+        except FPOWarehouse.DoesNotExist:
+            return Response(
+                response_error(message="Warehouse not found"),
+                status=404
+            )
+        
+        # Check warehouse code uniqueness if being updated
+        warehouse_code = request.data.get('warehouse_code')
+        if warehouse_code and warehouse_code != warehouse.warehouse_code:
+            if FPOWarehouse.objects.filter(warehouse_code=warehouse_code).exists():
+                return Response(
+                    response_error(message="Warehouse code already exists"),
+                    status=400
+                )
+        
+        serializer = FPOWarehouseSerializer(warehouse, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                response_success(
+                    message="Warehouse updated successfully",
+                    data=serializer.data
+                )
+            )
+        
+        return Response(
+            response_error(
+                message="Invalid data",
+                errors=serializer.errors
+            ),
+            status=400
+        )
+    
+    def delete(self, request):
+        """Delete warehouse (soft delete)"""
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        warehouse_id = request.query_params.get('id')
+        if not warehouse_id:
+            return Response(
+                response_error(message="Warehouse ID is required"),
+                status=400
+            )
+        
+        try:
+            warehouse = FPOWarehouse.objects.get(id=warehouse_id, fpo=fpo, is_active=True)
+        except FPOWarehouse.DoesNotExist:
+            return Response(
+                response_error(message="Warehouse not found"),
+                status=404
+            )
+        
+        # Check if warehouse has stock
+        if warehouse.current_stock_quintals > 0:
+            return Response(
+                response_error(
+                    message=f"Cannot delete warehouse with stock. Current stock: {warehouse.current_stock_quintals} quintals"
+                ),
+                status=400
+            )
+        
+        # Soft delete
+        warehouse.is_active = False
+        warehouse.save()
+        
+        return Response(
+            response_success(message="Warehouse deleted successfully")
+        )
+
+
+class FPOBidsAPIView(APIView):
+    """
+    Manage FPO bids - view received bids on FPO lots and manage them
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
+    
+    def get(self, request):
+        """Get all bids on FPO lots"""
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        # Get status filter
+        status_filter = request.query_params.get('status', 'all')
+        
+        # Get all lots belonging to this FPO
+        fpo_lots = ProcurementLot.objects.filter(fpo=fpo, is_active=True)
+        
+        # Get bids on these lots
+        bids = Bid.objects.filter(
+            lot__in=fpo_lots,
+            is_active=True
+        ).select_related('lot', 'bidder_user').order_by('-created_at')
+        
+        # Apply status filter
+        if status_filter != 'all':
+            bids = bids.filter(status=status_filter)
+        
+        bids_data = []
+        for bid in bids:
+            # Get bidder profile (processor or FPO)
+            bidder_name = "Unknown"
+            bidder_phone = ""
+            
+            if bid.bidder_type == 'processor':
+                from apps.processors.models import ProcessorProfile
+                try:
+                    processor = ProcessorProfile.objects.get(id=bid.bidder_id)
+                    bidder_name = processor.company_name
+                    bidder_phone = processor.user.phone_number if processor.user else ""
+                except ProcessorProfile.DoesNotExist:
+                    pass
+            elif bid.bidder_type == 'fpo':
+                try:
+                    bidder_fpo = FPOProfile.objects.get(id=bid.bidder_id)
+                    bidder_name = bidder_fpo.organization_name
+                    bidder_phone = bidder_fpo.user.phone_number if bidder_fpo.user else ""
+                except FPOProfile.DoesNotExist:
+                    pass
+            
+            bids_data.append({
+                'id': str(bid.id),
+                'lot_number': bid.lot.lot_number,
+                'crop': bid.lot.crop_type,
+                'quantity': float(bid.quantity_quintals),
+                'bid_price': float(bid.bid_amount_per_quintal),
+                'expected_price': float(bid.lot.expected_price_per_quintal),
+                'bidder': bidder_name,
+                'bidder_phone': bidder_phone,
+                'status': bid.status,
+                'created_at': bid.created_at.isoformat(),
+                'remarks': bid.remarks or '',
+            })
+        
+        return Response(
+            response_success(
+                message="Bids fetched successfully",
+                data={'results': bids_data}
+            )
+        )
+    
+    def patch(self, request, bid_id=None):
+        """Accept or reject a bid"""
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        bid_id = request.data.get('bid_id') or bid_id
+        action = request.data.get('action')  # 'accept' or 'reject'
+        
+        if not bid_id or not action:
+            return Response(
+                response_error(message="bid_id and action are required"),
+                status=400
+            )
+        
+        try:
+            bid = Bid.objects.get(id=bid_id, lot__fpo=fpo)
+        except Bid.DoesNotExist:
+            return Response(
+                response_error(message="Bid not found"),
+                status=404
+            )
+        
+        if action == 'accept':
+            bid.status = 'accepted'
+            bid.save()
+            return Response(
+                response_success(
+                    message="Bid accepted successfully",
+                    data={'bid_id': str(bid.id), 'status': bid.status}
+                )
+            )
+        elif action == 'reject':
+            bid.status = 'rejected'
+            bid.save()
+            return Response(
+                response_success(
+                    message="Bid rejected successfully",
+                    data={'bid_id': str(bid.id), 'status': bid.status}
+                )
+            )
+        else:
+            return Response(
+                response_error(message="Invalid action. Use 'accept' or 'reject'"),
+                status=400
+            )
+
+
+class FPOCreateFarmerAPIView(APIView):
+    """
+    Allow FPO to create farmer accounts for members who cannot self-register
+    Creates complete farmer account with user, profile, and membership
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
+    
+    def post(self, request):
+        """Create a new farmer account and add to FPO membership"""
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        # Check if FPO is verified
+        if not fpo.is_verified:
+            return Response(
+                response_error(message="Only verified FPOs can create farmer accounts"),
+                status=403
+            )
+        
+        # Extract request data
+        phone_number = request.data.get('phone_number', '').strip()
+        full_name = request.data.get('full_name', '').strip()
+        father_name = request.data.get('father_name', '').strip()
+        total_land_acres = request.data.get('total_land_acres')
+        district = request.data.get('district', '').strip()
+        state = request.data.get('state', '').strip()
+        pincode = request.data.get('pincode', '').strip()
+        village = request.data.get('village', '').strip()
+        primary_crops = request.data.get('primary_crops', [])
+        
+        # Validate required fields
+        if not all([phone_number, full_name, total_land_acres, district, state, pincode]):
+            return Response(
+                response_error(message="Missing required fields: phone_number, full_name, total_land_acres, district, state, pincode"),
+                status=400
+            )
+        
+        # Validate phone number format
+        if not phone_number.isdigit() or len(phone_number) != 10 or phone_number[0] not in ['6', '7', '8', '9']:
+            return Response(
+                response_error(message="Invalid phone number. Must be 10 digits starting with 6-9"),
+                status=400
+            )
+        
+        # Format phone number
+        formatted_phone = f"+91{phone_number}"
+        
+        # Check if user with this phone already exists
+        if User.objects.filter(phone_number=formatted_phone).exists():
+            return Response(
+                response_error(message="A user with this phone number already exists"),
+                status=400
+            )
+        
+        # Validate land acres
+        try:
+            land_acres = float(total_land_acres)
+            if land_acres <= 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            return Response(
+                response_error(message="Total land acres must be a positive number"),
+                status=400
+            )
+        
+        try:
+            # Create User account
+            user = User.objects.create_user(
+                phone_number=formatted_phone,
+                role='farmer',
+                is_active=True,
+                is_verified=False  # Requires OTP verification
+            )
+            
+            # Create UserProfile
+            UserProfile.objects.create(
+                user=user,
+                full_name=full_name
+            )
+            
+            # Create FarmerProfile
+            farmer_profile = FarmerProfile.objects.create(
+                user=user,
+                fpo=fpo,
+                full_name=full_name,
+                father_name=father_name,
+                total_land_acres=land_acres,
+                district=district,
+                state=state,
+                pincode=pincode,
+                village=village,
+                primary_crops=primary_crops if isinstance(primary_crops, list) else [],
+                farming_experience_years=0,
+                kyc_status='pending'
+            )
+            
+            # Generate membership number
+            membership_count = FPOMembership.objects.filter(fpo=fpo).count()
+            membership_number = f"{fpo.registration_number[:4]}-MEM-{membership_count + 1:04d}"
+            
+            # Create FPOMembership
+            membership = FPOMembership.objects.create(
+                farmer=farmer_profile,
+                fpo=fpo,
+                membership_number=membership_number,
+                joined_date=date.today(),
+                is_active=True,
+                is_founding_member=False
+            )
+            
+            # Update FPO member counts
+            fpo.active_members = FPOMembership.objects.filter(fpo=fpo, is_active=True).count()
+            fpo.total_members = fpo.active_members
+            fpo.save()
+            
+            # Generate OTP for phone verification
+            otp_code = generate_otp()
+            OTPVerification.objects.create(
+                user=user,
+                phone_number=formatted_phone,
+                otp=otp_code,
+                purpose='registration',
+                expires_at=timezone.now() + timedelta(minutes=10)  # OTP valid for 10 minutes
+            )
+            
+            # TODO: Send SMS with OTP to farmer's phone
+            # For now, return OTP in response (remove in production)
+            
+            return Response(
+                response_success(
+                    message="Farmer account registered successfully.",
+                    data={
+                        'farmer_id': str(farmer_profile.id),
+                        'membership_id': str(membership.id),
+                        'membership_number': membership_number,
+                        'phone_number': formatted_phone,
+                        'full_name': full_name,
+                        'message': 'Farmer registered successfully. Login credentials sent to their phone number.'
+                    }
+                ),
+                status=201
+            )
+            
+        except Exception as e:
+            # Rollback if any error occurs
+            if 'user' in locals():
+                user.delete()
+            return Response(
+                response_error(message=f"Failed to create farmer account: {str(e)}"),
+                status=500
+            )
+
+
+class FPORemoveMemberAPIView(APIView):
+    """API endpoint for FPO to remove a member (deactivate membership only)"""
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, membership_id):
+        try:
+            user = request.user
+            
+            # Get FPO profile
+            try:
+                fpo = FPOProfile.objects.get(user=user)
+            except FPOProfile.DoesNotExist:
+                return Response(
+                    response_error(message="FPO profile not found"),
+                    status=404
+                )
+            
+            # Get the membership
+            try:
+                membership = FPOMembership.objects.get(id=membership_id, fpo=fpo)
+            except FPOMembership.DoesNotExist:
+                return Response(
+                    response_error(message="Membership not found"),
+                    status=404
+                )
+            
+            # Deactivate membership (don't delete)
+            membership.is_active = False
+            membership.save()
+            
+            # Update FPO active members count
+            fpo.active_members = FPOMembership.objects.filter(fpo=fpo, is_active=True).count()
+            fpo.save()
+            
+            return Response(
+                response_success(
+                    message="Member removed successfully",
+                    data={
+                        'membership_id': str(membership.id),
+                        'farmer_name': membership.farmer.full_name
+                    }
+                ),
+                status=200
+            )
+            
+        except Exception as e:
+            return Response(
+                response_error(message=f"Failed to remove member: {str(e)}"),
+                status=500
+            )
+
+
+class FPOCreateAggregatedLotAPIView(APIView):
+    """
+    Create FPO aggregated bulk lot by merging member lots
+    Supports multi-warehouse aggregation with stock movement tracking
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
+    
+    def post(self, request):
+        """Create aggregated bulk lot from member lots with warehouse management"""
+        from django.utils import timezone
+        from apps.warehouses.models import Inventory, StockMovement, Warehouse
+        from django.db import transaction
+        
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        # Get request data
+        parent_lot_ids = request.data.get('parent_lot_ids', [])
+        crop_type = request.data.get('crop_type')
+        quality_grade = request.data.get('quality_grade')
+        expected_price_per_quintal = request.data.get('expected_price_per_quintal')
+        description = request.data.get('description', '')
+        target_warehouse_id = request.data.get('warehouse_id')  # Target warehouse for aggregated lot
+        
+        # Validation
+        if not parent_lot_ids or len(parent_lot_ids) == 0:
+            return Response(
+                response_error(message="At least one parent lot is required"),
+                status=400
+            )
+        
+        if not crop_type:
+            return Response(
+                response_error(message="Crop type is required"),
+                status=400
+            )
+        
+        if not quality_grade:
+            return Response(
+                response_error(message="Quality grade is required"),
+                status=400
+            )
+        
+        if not expected_price_per_quintal:
+            return Response(
+                response_error(message="Expected price per quintal is required"),
+                status=400
+            )
+        
+        # Get parent lots (must be from FPO members and managed by this FPO)
+        parent_lots = ProcurementLot.objects.filter(
+            id__in=parent_lot_ids,
+            fpo=fpo,
+            managed_by_fpo=True,
+            is_active=True,
+            status='available'
+        ).select_related('warehouse').prefetch_related('source_warehouses')
+        
+        if parent_lots.count() != len(parent_lot_ids):
+            return Response(
+                response_error(message="Some parent lots are invalid or not available"),
+                status=400
+            )
+        
+        # Verify all parent lots have the same crop type
+        if not all(lot.crop_type == crop_type for lot in parent_lots):
+            return Response(
+                response_error(message="All parent lots must have the same crop type"),
+                status=400
+            )
+        
+        # Get target warehouse if specified
+        target_warehouse = None
+        if target_warehouse_id:
+            try:
+                target_warehouse = Warehouse.objects.get(
+                    id=target_warehouse_id,
+                    fpo=fpo,
+                    is_active=True
+                )
+            except Warehouse.DoesNotExist:
+                return Response(
+                    response_error(message="Invalid warehouse or warehouse does not belong to this FPO"),
+                    status=400
+                )
+        
+        # Calculate total quantity
+        total_quantity = sum(lot.available_quantity_quintals for lot in parent_lots)
+        
+        # Validate target warehouse capacity if specified
+        if target_warehouse:
+            available_capacity = target_warehouse.get_available_capacity()
+            if total_quantity > available_capacity:
+                return Response(
+                    response_error(
+                        message=f"Insufficient warehouse capacity. Available: {available_capacity} quintals, Required: {total_quantity} quintals"
+                    ),
+                    status=400
+                )
+        
+        # Collect source warehouses (multi-warehouse aggregation)
+        source_warehouses = set()
+        for lot in parent_lots:
+            if lot.warehouse:
+                source_warehouses.add(lot.warehouse)
+        
+        # Get first farmer as reference
+        first_farmer = parent_lots.first().farmer
+        
+        # Use database transaction for atomicity
+        try:
+            with transaction.atomic():
+                # Create aggregated lot
+                aggregated_lot = ProcurementLot.objects.create(
+                    farmer=first_farmer,
+                    fpo=fpo,
+                    managed_by_fpo=True,
+                    listing_type='fpo_aggregated',
+                    crop_type=crop_type,
+                    quality_grade=quality_grade,
+                    quantity_quintals=total_quantity,
+                    available_quantity_quintals=total_quantity,
+                    expected_price_per_quintal=expected_price_per_quintal,
+                    harvest_date=parent_lots.first().harvest_date,
+                    description=description or f"FPO Aggregated Bulk Lot from {parent_lots.count()} member lots",
+                    status='available',
+                    warehouse=target_warehouse  # Assign target warehouse
+                )
+                
+                # Link parent lots
+                aggregated_lot.parent_lots.set(parent_lots)
+                
+                # Link source warehouses (multi-warehouse tracking)
+                if source_warehouses:
+                    aggregated_lot.source_warehouses.set(source_warehouses)
+                
+                # Process stock movements from source warehouses
+                for lot in parent_lots:
+                    if lot.warehouse:
+                        # Create stock movement OUT from source warehouse
+                        StockMovement.objects.create(
+                            warehouse=lot.warehouse,
+                            lot=lot,
+                            movement_type='out',
+                            quantity=lot.available_quantity_quintals,
+                            movement_date=timezone.now().date(),
+                            remarks=f'Aggregated into bulk lot {aggregated_lot.lot_number}'
+                        )
+                        
+                        # Update source warehouse stock
+                        lot.warehouse.current_stock_quintals -= lot.available_quantity_quintals
+                        lot.warehouse.save(update_fields=['current_stock_quintals'])
+                
+                # Create inventory and stock movement IN to target warehouse
+                if target_warehouse:
+                    # Create inventory record
+                    Inventory.objects.create(
+                        warehouse=target_warehouse,
+                        lot=aggregated_lot,
+                        quantity=total_quantity,
+                        entry_date=timezone.now().date()
+                    )
+                    
+                    # Create stock movement IN
+                    StockMovement.objects.create(
+                        warehouse=target_warehouse,
+                        lot=aggregated_lot,
+                        movement_type='in',
+                        quantity=total_quantity,
+                        movement_date=timezone.now().date(),
+                        remarks=f'Aggregated bulk lot from {parent_lots.count()} member lots'
+                    )
+                    
+                    # Update target warehouse stock
+                    target_warehouse.current_stock_quintals += total_quantity
+                    target_warehouse.save(update_fields=['current_stock_quintals'])
+                
+                # Update parent lots status to 'aggregated'
+                parent_lots.update(status='aggregated')
+                
+                return Response(
+                    response_success(
+                        message="Aggregated bulk lot created successfully with warehouse tracking",
+                        data={
+                            'id': str(aggregated_lot.id),
+                            'lot_number': aggregated_lot.lot_number,
+                            'crop_type': aggregated_lot.crop_type,
+                            'quantity_quintals': float(aggregated_lot.quantity_quintals),
+                            'quality_grade': aggregated_lot.quality_grade,
+                            'expected_price_per_quintal': float(aggregated_lot.expected_price_per_quintal),
+                            'parent_lots_count': parent_lots.count(),
+                            'listing_type': aggregated_lot.listing_type,
+                            'warehouse_id': str(target_warehouse.id) if target_warehouse else None,
+                            'warehouse_name': target_warehouse.name if target_warehouse else None,
+                            'source_warehouses_count': len(source_warehouses),
+                            'source_warehouse_names': [wh.name for wh in source_warehouses]
+                        }
+                    ),
+                    status=201
+                )
+        
+        except Exception as e:
+            return Response(
+                response_error(message=f"Failed to create aggregated lot: {str(e)}"),
+                status=500
+            )

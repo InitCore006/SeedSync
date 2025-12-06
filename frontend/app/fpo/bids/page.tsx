@@ -10,68 +10,64 @@ import Modal from '@/components/ui/Modal';
 import { Gavel, CheckCircle, XCircle, Clock, TrendingUp } from 'lucide-react';
 import { formatCurrency, formatNumber, formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
-
-// Mock data - replace with useBids() hook
-const mockBids = [
-  {
-    id: 1,
-    lotNumber: 'LOT-2025-001',
-    crop: 'Soybean',
-    quantity: 5000,
-    bidPrice: 4800,
-    expectedPrice: 4600,
-    bidder: 'ABC Processors Ltd',
-    bidderPhone: '9876543210',
-    status: 'pending',
-    createdAt: '2025-12-05T10:30:00',
-  },
-  {
-    id: 2,
-    lotNumber: 'LOT-2025-002',
-    crop: 'Mustard',
-    quantity: 2000,
-    bidPrice: 5200,
-    expectedPrice: 5000,
-    bidder: 'XYZ Oil Mills',
-    bidderPhone: '9123456789',
-    status: 'pending',
-    createdAt: '2025-12-05T09:15:00',
-  },
-  {
-    id: 3,
-    lotNumber: 'LOT-2025-003',
-    crop: 'Groundnut',
-    quantity: 10000,
-    bidPrice: 5500,
-    expectedPrice: 5400,
-    bidder: 'PQR Industries',
-    bidderPhone: '9988776655',
-    status: 'accepted',
-    createdAt: '2025-12-04T14:20:00',
-  },
-];
+import { useFPOBids } from '@/lib/hooks/useAPI';
+import { API } from '@/lib/api';
 
 function BidsContent() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedBid, setSelectedBid] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
 
-  const filteredBids = mockBids.filter(bid =>
-    statusFilter === 'all' || bid.status === statusFilter
-  );
+  const { bids, isLoading, isError, mutate } = useFPOBids({ status: statusFilter === 'all' ? undefined : statusFilter });
 
-  const pendingCount = mockBids.filter(b => b.status === 'pending').length;
-  const acceptedCount = mockBids.filter(b => b.status === 'accepted').length;
-  const totalBidValue = mockBids.reduce((sum, b) => sum + (b.bidPrice * b.quantity / 100), 0);
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
 
-  const handleAcceptBid = async (bidId: number) => {
-    toast.success('Bid accepted successfully!');
-    // TODO: Call API to accept bid
+  if (isError) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center text-red-600">
+              <p className="text-lg font-medium">Error loading bids</p>
+              <p className="text-sm mt-1">Please try again later</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const filteredBids = bids;
+  const pendingCount = bids.filter((b: any) => b.status === 'pending').length;
+  const acceptedCount = bids.filter((b: any) => b.status === 'accepted').length;
+  const totalBidValue = bids.reduce((sum: number, b: any) => sum + (b.bid_price * b.quantity / 100), 0);
+
+  const handleAcceptBid = async (bidId: string) => {
+    try {
+      await API.fpo.acceptBid(bidId);
+      toast.success('Bid accepted successfully!');
+      mutate();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to accept bid');
+    }
   };
 
-  const handleRejectBid = async (bidId: number) => {
-    toast.success('Bid rejected');
-    // TODO: Call API to reject bid
+  const handleRejectBid = async (bidId: string) => {
+    try {
+      await API.fpo.rejectBid(bidId);
+      toast.success('Bid rejected');
+      mutate();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to reject bid');
+    }
   };
 
   return (
@@ -89,7 +85,7 @@ function BidsContent() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Bids</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{mockBids.length}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">{bids.length}</p>
               </div>
               <Gavel className="w-12 h-12 text-primary opacity-20" />
             </div>
@@ -164,7 +160,7 @@ function BidsContent() {
                       <Badge variant="status" status={bid.status}>
                         {bid.status.toUpperCase()}
                       </Badge>
-                      {bid.bidPrice > bid.expectedPrice && (
+                      {bid.bid_price > bid.expected_price && (
                         <Badge variant="status" status="active">Higher Bid!</Badge>
                       )}
                     </div>
@@ -172,7 +168,7 @@ function BidsContent() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
                         <p className="text-xs text-gray-600">Lot Number</p>
-                        <p className="font-medium text-gray-900">{bid.lotNumber}</p>
+                        <p className="font-medium text-gray-900">{bid.lot_number}</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Quantity</p>
@@ -180,11 +176,11 @@ function BidsContent() {
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Bid Price</p>
-                        <p className="font-bold text-primary">{formatCurrency(bid.bidPrice)}/qtl</p>
+                        <p className="font-bold text-primary">{formatCurrency(bid.bid_price)}/qtl</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Expected Price</p>
-                        <p className="font-medium text-gray-600">{formatCurrency(bid.expectedPrice)}/qtl</p>
+                        <p className="font-medium text-gray-600">{formatCurrency(bid.expected_price)}/qtl</p>
                       </div>
                     </div>
 
@@ -192,16 +188,16 @@ function BidsContent() {
                       <div>
                         <p className="text-xs text-gray-600">Bidder</p>
                         <p className="font-medium text-gray-900">{bid.bidder}</p>
-                        <p className="text-xs text-gray-600">{bid.bidderPhone}</p>
+                        <p className="text-xs text-gray-600">{bid.bidder_phone}</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Total Bid Value</p>
-                        <p className="font-bold text-gray-900">{formatCurrency((bid.bidPrice * bid.quantity) / 100)}</p>
+                        <p className="font-bold text-gray-900">{formatCurrency((bid.bid_price * bid.quantity) / 100)}</p>
                       </div>
                     </div>
 
                     <p className="text-xs text-gray-500">
-                      Received {formatDate(bid.createdAt, 'PP')}
+                      Received {formatDate(bid.created_at, 'PP')}
                     </p>
                   </div>
 

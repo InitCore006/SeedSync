@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
   },
   {
     label: 'Marketplace',
-    href: '/fpo/marketplace',
+    href: '/marketplace',
     icon: <ShoppingCart className="h-5 w-5" />,
     roles: [USER_ROLES.FPO],
   },
@@ -96,6 +96,12 @@ const navItems: NavItem[] = [
     label: 'Inventory',
     href: '/processor/inventory',
     icon: <Warehouse className="h-5 w-5" />,
+    roles: [USER_ROLES.PROCESSOR],
+  },
+  {
+    label: 'Marketplace',
+    href: '/marketplace',
+    icon: <ShoppingCart className="h-5 w-5" />,
     roles: [USER_ROLES.PROCESSOR],
   },
   

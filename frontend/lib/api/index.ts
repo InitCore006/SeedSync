@@ -152,8 +152,8 @@ export const fpoAPI = {
     api.get<PaginatedResponse<FPOMembership>>('/fpos/members/', { params }),
 
   // Add member
-  addMember: (farmer_id: string, share_capital: number) =>
-    api.post<APIResponse>('/fpos/members/add/', { farmer_id, share_capital }),
+  addMember: (phone_number: string) =>
+    api.post<APIResponse>('/fpos/members/', { phone_number }),
 
   // Get procurement opportunities
   getProcurement: (params?: { crop_type?: string; quality_grade?: string }) =>
@@ -162,16 +162,128 @@ export const fpoAPI = {
   // Get warehouses
   getWarehouses: () =>
     api.get<APIResponse>('/fpos/warehouses/'),
+  
+  // Create warehouse
+  createWarehouse: (data: {
+    warehouse_name: string;
+    warehouse_code: string;
+    warehouse_type: 'godown' | 'cold_storage' | 'warehouse' | 'shed';
+    address: string;
+    village?: string;
+    district: string;
+    state: string;
+    pincode: string;
+    capacity_quintals: number;
+    latitude?: number;
+    longitude?: number;
+    has_scientific_storage?: boolean;
+    has_pest_control?: boolean;
+    has_fire_safety?: boolean;
+    has_security?: boolean;
+    weighing_capacity_quintals?: number;
+    has_loading_unloading_facility?: boolean;
+    has_quality_testing_lab?: boolean;
+    incharge_name?: string;
+    incharge_phone?: string;
+    is_operational?: boolean;
+    operational_since?: string;
+    notes?: string;
+  }) =>
+    api.post<APIResponse>('/fpos/warehouses/', data),
+  
+  // Update warehouse
+  updateWarehouse: (id: string, data: any) =>
+    api.put<APIResponse>('/fpos/warehouses/', { id, ...data }),
+  
+  // Delete warehouse
+  deleteWarehouse: (id: string) =>
+    api.delete<APIResponse>('/fpos/warehouses/', { params: { id } }),
+  
+  // Get bids on FPO lots
+  getBids: (params?: { status?: string }) =>
+    api.get<APIResponse>('/fpos/bids/', { params }),
+  
+  // Accept bid
+  acceptBid: (bid_id: string) =>
+    api.patch<APIResponse>('/fpos/bids/', { bid_id, action: 'accept' }),
+  
+  // Reject bid
+  rejectBid: (bid_id: string) =>
+    api.patch<APIResponse>('/fpos/bids/', { bid_id, action: 'reject' }),
+  
+  // Create farmer account (for FPO to onboard farmers)
+  createFarmer: (data: {
+    phone_number: string;
+    full_name: string;
+    father_name?: string;
+    total_land_acres: number;
+    district: string;
+    state: string;
+    pincode: string;
+    village?: string;
+    primary_crops?: string[];
+  }) =>
+    api.post<APIResponse>('/fpos/create-farmer/', data),
+  
+  // Remove member (deactivate membership)
+  removeMember: (membership_id: string) =>
+    api.delete<APIResponse>(`/fpos/members/${membership_id}/remove/`),
+  
+  // Create aggregated bulk lot from member lots
+  createAggregatedLot: (data: {
+    parent_lot_ids: string[];
+    crop_type: string;
+    quality_grade: string;
+    expected_price_per_quintal: number;
+    warehouse_id?: string;
+    description?: string;
+  }) =>
+    api.post<APIResponse>('/fpos/create-aggregated-lot/', data),
+};
+
+// ============= Marketplace APIs =============
+export const marketplaceAPI = {
+  // Get marketplace listings (individual + FPO aggregated)
+  getLots: (params?: {
+    crop_type?: string;
+    quality_grade?: string;
+    listing_type?: string;
+  }) =>
+    api.get<PaginatedResponse<ProcurementLot>>('/lots/procurement/marketplace/', { params }),
 };
 
 // ============= Processor APIs =============
 export const processorAPI = {
+  // Get processor profile
+  getProfile: () =>
+    api.get<APIResponse>('/processors/profile/'),
+
+  // Update processor profile
+  updateProfile: (data: any) =>
+    api.patch<APIResponse>('/processors/profile/', data),
+
   // Get processor dashboard
   getDashboard: () =>
     api.get<APIResponse>('/processors/dashboard/'),
 
+  // Get bids
+  getBids: (params?: { status?: string; page?: number }) =>
+    api.get<PaginatedResponse<Bid>>('/processors/bids/', { params }),
+
+  // Place bid
+  placeBid: (data: { lot_id: string; bid_amount_per_quintal: number; quantity_quintals: number; remarks?: string }) =>
+    api.post<APIResponse>('/processors/bids/', data),
+
   // Get procurement opportunities
-  getProcurement: (params?: { crop_type?: string }) =>
+  getProcurement: (params?: { 
+    view?: 'available' | 'history';
+    crop_type?: string; 
+    quality_grade?: string;
+    max_price?: number;
+    min_quantity?: number;
+    source?: 'farmer' | 'fpo';
+    page?: number;
+  }) =>
     api.get<PaginatedResponse<ProcurementLot>>('/processors/procurement/', { params }),
 
   // Get processing batches
@@ -180,7 +292,7 @@ export const processorAPI = {
 
   // Create batch
   createBatch: (data: any) =>
-    api.post<APIResponse>('/processors/batches/create/', data),
+    api.post<APIResponse>('/processors/batches/', data),
 
   // Get inventory
   getInventory: () =>
@@ -282,4 +394,7 @@ export const API = {
   government: governmentAPI,
   crops: cropsAPI,
   notifications: notificationsAPI,
+  marketplace: marketplaceAPI,
 };
+
+export default API;

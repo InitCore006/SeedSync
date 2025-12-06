@@ -84,7 +84,7 @@ export function formatPhone(phone: string): string {
 export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     pending: 'text-yellow-600 bg-yellow-50',
-    active: 'text-blue-600 bg-blue-50',
+    active: 'text-green-600 bg-green-50',
     completed: 'text-green-600 bg-green-50',
     cancelled: 'text-red-600 bg-red-50',
     rejected: 'text-red-600 bg-red-50',
@@ -97,6 +97,8 @@ export function getStatusColor(status: string): string {
     withdrawn: 'text-gray-600 bg-gray-50',
     processing: 'text-blue-600 bg-blue-50',
     failed: 'text-red-600 bg-red-50',
+    under_review: 'text-orange-600 bg-orange-50',
+    inactive: 'text-gray-600 bg-gray-50',
   };
   
   return colors[status.toLowerCase()] || 'text-gray-600 bg-gray-50';
