@@ -799,23 +799,25 @@ class ProcessorInventoryAPIView(APIView):
         raw_materials = []
         finished_products = []
         
-        # Get procured lots through accepted bids
+        # Get procured lots through accepted bids - show only available quantity
         procured_lots = ProcurementLot.objects.filter(
             bids__bidder_id=processor.id,
             bids__bidder_type='processor',
-            bids__status='accepted'
+            bids__status='accepted',
+            available_quantity_quintals__gt=0  # Only lots with remaining quantity
         ).distinct().values('crop_type').annotate(
-            total_quantity=Sum('quantity_quintals')
+            available_quantity=Sum('available_quantity_quintals')  # Use available, not total
         )
         
         for lot in procured_lots:
-            raw_materials.append({
-                'name': f"{lot['crop_type']} Seeds",
-                'quantity': float(lot['total_quantity']),
-                'unit': 'quintals',
-                'category': 'raw',
-                'status': 'optimal'
-            })
+            if lot['available_quantity'] and lot['available_quantity'] > 0:
+                raw_materials.append({
+                    'name': f"{lot['crop_type']} Seeds",
+                    'quantity': float(lot['available_quantity']),
+                    'unit': 'quintals',
+                    'category': 'raw',
+                    'status': 'optimal'
+                })
         
         # Get processed batches
         processed_batches = ProcessingBatch.objects.filter(
@@ -1021,14 +1023,24 @@ class ProcessingBatchViewSet(viewsets.ModelViewSet):
             
             inventory_changes = None
             
+            # Debug logging
+            print(f"\n=== BATCH CREATION DEBUG ===")
+            print(f"Batch ID: {batch.id}")
+            print(f"Lot ID: {lot.id}")
+            print(f"Lot warehouse: {lot.warehouse}")
+            print(f"Initial quantity: {initial_quantity}")
+            print(f"Lot available before: {lot.available_quantity_quintals}")
+            
             # If lot is in warehouse, deduct inventory
             if lot.warehouse:
+                print(f"Warehouse found: {lot.warehouse.warehouse_name}")
                 try:
                     # Get inventory record
                     inventory = Inventory.objects.select_for_update().get(
                         warehouse=lot.warehouse,
                         lot=lot
                     )
+                    print(f"Inventory found - Current quantity: {inventory.quantity}")
                     
                     # Validate inventory has sufficient quantity
                     if inventory.quantity < initial_quantity:
@@ -1037,8 +1049,10 @@ class ProcessingBatchViewSet(viewsets.ModelViewSet):
                         )
                     
                     # Deduct from inventory
+                    old_inventory_qty = inventory.quantity
                     inventory.quantity -= initial_quantity
                     inventory.save()
+                    print(f"Inventory updated: {old_inventory_qty}Q -> {inventory.quantity}Q")
                     
                     # Create stock movement OUT
                     stock_movement = StockMovement.objects.create(
@@ -1048,10 +1062,13 @@ class ProcessingBatchViewSet(viewsets.ModelViewSet):
                         quantity=initial_quantity,
                         remarks=f'Moved to processing - Batch {batch.batch_number}'
                     )
+                    print(f"Stock movement created: {stock_movement.id}")
                     
                     # Update warehouse stock
+                    old_warehouse_stock = lot.warehouse.current_stock_quintals
                     lot.warehouse.current_stock_quintals -= initial_quantity
                     lot.warehouse.save(update_fields=['current_stock_quintals'])
+                    print(f"Warehouse stock updated: {old_warehouse_stock}Q -> {lot.warehouse.current_stock_quintals}Q")
                     
                     inventory_changes = {
                         'warehouse_id': str(lot.warehouse.id),
@@ -1064,16 +1081,23 @@ class ProcessingBatchViewSet(viewsets.ModelViewSet):
                     
                 except Inventory.DoesNotExist:
                     # Lot not in inventory system, just deduct from lot
+                    print(f"No inventory record found for lot {lot.id} in warehouse {lot.warehouse.id}")
                     pass
                 except ValueError as e:
+                    print(f"Validation error: {e}")
                     return Response(
                         response_error(message=str(e)),
                         status=status.HTTP_400_BAD_REQUEST
                     )
+            else:
+                print("No warehouse assigned to this lot")
             
             # Update lot available quantity
+            old_lot_qty = lot.available_quantity_quintals
             lot.available_quantity_quintals -= initial_quantity
             lot.save(update_fields=['available_quantity_quintals'])
+            print(f"Lot available quantity updated: {old_lot_qty}Q -> {lot.available_quantity_quintals}Q")
+            print(f"=== END DEBUG ===\n")
             
             # Prepare response with full batch details
             batch_serializer = ProcessingBatchSerializer(batch)
@@ -1255,12 +1279,16 @@ class ProcessingBatchViewSet(viewsets.ModelViewSet):
         batch.refined_oil_quintals = request.data.get('refined_oil_quintals')
         batch.cake_produced_quintals = request.data.get('cake_produced_quintals')
         batch.hulls_produced_quintals = request.data.get('hulls_produced_quintals')
+        
+        # Mark batch as completed when output is recorded
+        batch.status = 'completed'
+        batch.completion_date = timezone.now()
         batch.save()
         
         serializer = self.get_serializer(batch)
         return Response(
             response_success(
-                message="Output quantities recorded",
+                message="Batch completed successfully. Output quantities recorded.",
                 data=serializer.data
             )
         )
