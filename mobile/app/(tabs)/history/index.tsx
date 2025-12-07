@@ -12,11 +12,12 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
-import { ShipmentCard, Loading } from '@/components';
+import { AppHeader, Sidebar, ShipmentCard, Loading } from '@/components';
 import { logisticsAPI } from '@/services/logisticsService';
 import { useLogisticsStore } from '@/store/logisticsStore';
 
 export default function HistoryScreen() {
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { tripHistory, setTripHistory, earnings, setEarnings } = useLogisticsStore();
@@ -49,16 +50,31 @@ export default function HistoryScreen() {
   };
 
   if (loading) {
-    return <Loading fullScreen />;
+    return (
+      <View style={{ flex: 1 }}>
+        <AppHeader 
+          title="Trip History"
+          onMenuPress={() => setSidebarVisible(true)}
+        />
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <Loading fullScreen />
+      </View>
+    );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
+    <View style={{ flex: 1 }}>
+      <AppHeader 
+        title="Trip History"
+        onMenuPress={() => setSidebarVisible(true)}
+      />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <ScrollView
+        style={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
       {/* Earnings Summary */}
       {earnings && (
         <View style={styles.earningsSection}>
@@ -125,10 +141,10 @@ export default function HistoryScreen() {
           </View>
         )}
       </View>
-    </ScrollView>
+    </ScrollView> 
+    </View>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,

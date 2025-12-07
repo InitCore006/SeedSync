@@ -42,7 +42,7 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Farmer-only Tabs */}
+      {/* Farmer Tab 2: My Lots */}
       <Tabs.Screen
         name="lots"
         options={{
@@ -54,10 +54,12 @@ export default function TabsLayout() {
           ),
         }}
       />
+      
+      {/* Farmer Tab 3: My Bids */}
       <Tabs.Screen
         name="bids"
         options={{
-          title: 'Bids',
+          title: 'My Bids',
           headerShown: false,
           href: isFarmer ? undefined : null,
           tabBarIcon: ({ color, size }) => (
@@ -65,19 +67,31 @@ export default function TabsLayout() {
           ),
         }}
       />
+      
+      {/* Farmer Tab 4: AI Features - Only in bottom tabs */}
+      <Tabs.Screen
+        name="ai"
+        options={{
+          title: 'AI Features',
+          headerShown: false,
+          href: isFarmer ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="sparkles" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* Market - Hidden from tabs, accessible via Sidebar if needed */}
       <Tabs.Screen
         name="market"
         options={{
           title: 'Market',
           headerShown: false,
-          href: isFarmer ? undefined : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="stats-chart" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
 
-      {/* Logistics-only Tabs */}
+      {/* Logistics Tab 2: Trips */}
       <Tabs.Screen
         name="trips"
         options={{
@@ -89,19 +103,17 @@ export default function TabsLayout() {
           ),
         }}
       />
+      
+      {/* Hidden from bottom tabs - Accessible via Sidebar */}
       <Tabs.Screen
         name="history"
         options={{
           title: 'History',
           headerShown: false,
-          href: isLogistics ? undefined : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="time" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
       
-      {/* Payments - Common (hidden from tab bar but accessible via navigation) */}
       <Tabs.Screen
         name="payments"
         options={{
@@ -111,7 +123,6 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Schemes - Common (hidden from tab bar but accessible via sidebar) */}
       <Tabs.Screen
         name="schemes"
         options={{
@@ -121,11 +132,12 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Profile - Common to all roles */}
+      {/* Tab 5: Profile - Common to all roles */}
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),

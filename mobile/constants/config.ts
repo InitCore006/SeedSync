@@ -1,4 +1,4 @@
-export const API_URL = 'https://970cde90cdff.ngrok-free.app/api';
+export const API_URL = 'https://77d560abcfe2.ngrok-free.app/api';
 
 export const ENDPOINTS = {
   // Auth endpoints

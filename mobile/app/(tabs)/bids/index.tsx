@@ -10,10 +10,12 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { COLORS } from '@/constants/colors';
-import { BidCard, Loading } from '@/components';
+import { BidCard, Loading, AppHeader, Sidebar } from '@/components';
 import { bidsAPI } from '@/services/bidsService';
+import { lotsAPI } from '@/services/lotsService';
 import { Bid } from '@/types/api';
 import { useBidsStore } from '@/store/bidsStore';
+import { useAuthStore } from '@/store/authStore';
 
 export default function BidsScreen() {
   const [activeTab, setActiveTab] = useState<'received' | 'sent'>('received');
@@ -21,11 +23,28 @@ export default function BidsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [receivedBids, setReceivedBids] = useState<Bid[]>([]);
   const [sentBids, setSentBids] = useState<Bid[]>([]);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+  const { user } = useAuthStore();
 
   const fetchBids = async () => {
     try {
       const response = await bidsAPI.getMyBids();
-      setReceivedBids(response.data.received);
+      
+      // For farmers who are not in FPO, filter received bids to only show bids for their own lots
+      if (user?.role === 'farmer' && !user?.profile?.fpo_membership) {
+        // Fetch farmer's own lots to get lot IDs
+        const lotsResponse = await lotsAPI.getMyLots();
+        const myLotIds = lotsResponse.data.results.map((lot: any) => lot.id);
+        
+        // Filter received bids to only include bids for farmer's own lots
+        const filteredReceivedBids = response.data.received.filter(
+          (bid: Bid) => myLotIds.includes(bid.lot)
+        );
+        setReceivedBids(filteredReceivedBids);
+      } else {
+        setReceivedBids(response.data.received);
+      }
+      
       setSentBids(response.data.sent);
     } catch (error) {
       console.error('Failed to load bids:', error);
@@ -93,11 +112,19 @@ export default function BidsScreen() {
   const displayBids = activeTab === 'received' ? receivedBids : sentBids;
 
   if (loading) {
-    return <Loading fullScreen />;
+    return (
+      <View style={{ flex: 1 }}>
+        <AppHeader title="My Bids" onMenuPress={() => setSidebarVisible(true)} />
+        <Loading fullScreen />
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
+      <AppHeader title="My Bids" onMenuPress={() => setSidebarVisible(true)} />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       {/* Tabs */}
       <View style={styles.tabs}>
         <TouchableOpacity

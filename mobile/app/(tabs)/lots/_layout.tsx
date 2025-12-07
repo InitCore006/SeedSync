@@ -1,14 +1,14 @@
 import { Stack } from 'expo-router';
-import { COLORS } from '@/constants/colors';
 
 export default function LotsLayout() {
   return (
     <Stack
       screenOptions={{
+        headerShown: false,
         headerStyle: {
-          backgroundColor: COLORS.primary,
+          backgroundColor: '#4a7c0f',
         },
-        headerTintColor: COLORS.white,
+        headerTintColor: '#fff',
         headerTitleStyle: {
           fontWeight: '600',
         },
@@ -23,7 +23,13 @@ export default function LotsLayout() {
       <Stack.Screen
         name="create"
         options={{
-          title: 'Create Lot',
+          title: 'Create New Lot',
+        }}
+      />
+      <Stack.Screen
+        name="edit-lot"
+        options={{
+          title: 'Edit Lot',
         }}
       />
       <Stack.Screen

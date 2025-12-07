@@ -14,7 +14,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { COLORS } from '@/constants/colors';
-import { Loading, Sidebar } from '@/components';
+import { Loading, Sidebar, AppHeader } from '@/components';
 import { StatsSection } from '@/components/StatsCard';
 import { useAuthStore } from '@/store/authStore';
 import { farmersAPI } from '@/services/farmersService';
@@ -197,7 +197,10 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <AppHeader 
+        onMenuPress={() => setSidebarVisible(true)}
+        showNotifications={true}
+      />
       
       {/* Sidebar */}
       <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
@@ -211,23 +214,6 @@ export default function DashboardScreen() {
         {/* Hero Card - Farmer Weather / Logistics Map */}
         <View style={styles.heroCardContainer}>
           <View style={styles.heroCard}>
-            {/* Top Header Inside Card */}
-            <View style={styles.cardHeader}>
-              <TouchableOpacity 
-                style={styles.menuButton}
-                onPress={() => setSidebarVisible(true)}
-              >
-                <Ionicons name="menu" size={24} color="#fff" />
-              </TouchableOpacity>
-              <Text style={styles.cardTitle}>SeedSync</Text>
-              <TouchableOpacity 
-                style={styles.notificationButton}
-                onPress={() => router.push('/notifications')}
-              >
-                <Ionicons name="notifications-outline" size={24} color="#fff" />
-                <View style={styles.notificationBadge} />
-              </TouchableOpacity>
-            </View>
 
             {isFarmer ? (
               // Farmer Weather Card
@@ -518,7 +504,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     overflow: 'hidden',
-    paddingTop: StatusBar.currentHeight || 40,
+    paddingTop: 20,
   },
   cardHeader: {
     flexDirection: 'row',

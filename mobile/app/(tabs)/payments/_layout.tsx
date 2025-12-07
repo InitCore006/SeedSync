@@ -3,7 +3,11 @@ import { COLORS } from '@/constants/colors';
 
 export default function PaymentsLayout() {
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
       <Stack.Screen
         name="index"
         options={{

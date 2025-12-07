@@ -88,15 +88,6 @@ export const LotCard: React.FC<LotCardProps> = ({ lot, onPress, style }) => {
           </Text>
         </View>
 
-        {lot.quality_grade && (
-          <View style={styles.detailsRow}>
-            <Text style={styles.label}>Quality:</Text>
-            <Text style={styles.value}>
-              {lot.quality_grade_display || lot.quality_grade}
-            </Text>
-          </View>
-        )}
-
         {lot.warehouse_name && (
           <View style={styles.detailsRow}>
             <Text style={styles.label}>Warehouse:</Text>

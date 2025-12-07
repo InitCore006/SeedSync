@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Loading } from '@/components';
+import { AppHeader, Sidebar, Loading } from '@/components';
 import { COLORS } from '@/constants/colors';
 import { paymentsAPI } from '@/services/paymentsService';
 import { usePaymentsStore } from '@/store/paymentsStore';
@@ -19,6 +19,7 @@ import { getStatusInfo } from '@/constants/crops';
 
 export default function PaymentsScreen() {
   const { payments, setPayments } = usePaymentsStore();
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'failed'>('all');
@@ -139,11 +140,26 @@ export default function PaymentsScreen() {
   };
 
   if (loading) {
-    return <Loading />;
+    return (
+      <View style={{ flex: 1 }}>
+        <AppHeader 
+          title="Payments"
+          onMenuPress={() => setSidebarVisible(true)}
+        />
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <Loading />
+      </View>
+    );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1 }}>
+      <AppHeader 
+        title="Payments"
+        onMenuPress={() => setSidebarVisible(true)}
+      />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <View style={styles.container}>
       {/* Wallet Balance Card */}
       {walletData && (
         <View style={styles.walletCard}>
@@ -252,8 +268,11 @@ export default function PaymentsScreen() {
         }
       />
     </View>
+    </View>
   );
 }
+
+
 
 const styles = StyleSheet.create({
   container: {
@@ -394,7 +413,7 @@ const styles = StyleSheet.create({
   paymentId: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.primary,
     fontFamily: 'monospace',
   },
   paymentDate: {
@@ -429,7 +448,7 @@ const styles = StyleSheet.create({
   amountValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.primary,
     marginTop: 2,
   },
   deductionSection: {
@@ -459,7 +478,7 @@ const styles = StyleSheet.create({
   taxValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: COLORS.text,
+    color: COLORS.primary,
   },
   netRow: {
     flexDirection: 'row',
@@ -471,7 +490,7 @@ const styles = StyleSheet.create({
   netLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.primary,
   },
   netValue: {
     fontSize: 18,
@@ -504,7 +523,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.primary,
     marginTop: 16,
   },
   emptySubtext: {
@@ -514,3 +533,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+    

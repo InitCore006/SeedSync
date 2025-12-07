@@ -5,6 +5,7 @@ export default function HistoryLayout() {
   return (
     <Stack
       screenOptions={{
+        headerShown: false,
         headerStyle: {
           backgroundColor: COLORS.primary,
         },

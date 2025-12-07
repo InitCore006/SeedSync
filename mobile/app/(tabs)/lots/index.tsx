@@ -12,7 +12,7 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
-import { LotCard, Loading } from '@/components';
+import { LotCard, Loading, AppHeader, Sidebar } from '@/components';
 import { useLotsStore } from '@/store/lotsStore';
 import { lotsAPI } from '@/services/lotsService';
 import { ProcurementLot } from '@/types/api';
@@ -23,6 +23,7 @@ export default function MyLotsScreen() {
   const { myLots, setMyLots, setLoading, isLoading } = useLotsStore();
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<LotFilter>('all');
+  const [sidebarVisible, setSidebarVisible] = useState(false);
 
   const fetchLots = async () => {
     try {
@@ -52,14 +53,43 @@ export default function MyLotsScreen() {
     router.push(`/(tabs)/lots/${lot.id}`);
   };
 
+  const handleEditLot = (lot: ProcurementLot, event: any) => {
+    event.stopPropagation();
+    router.push(`/(tabs)/lots/edit-lot?id=${lot.id}`);
+  };
+
+  const handleDeleteLot = async (lot: ProcurementLot, event: any) => {
+    event.stopPropagation();
+    Alert.alert(
+      'Delete Lot',
+      `Are you sure you want to delete lot #${lot.lot_number}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await lotsAPI.deleteLot(lot.id);
+              Alert.alert('Success', 'Lot deleted successfully');
+              fetchLots(); // Refresh the list
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to delete lot');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const getFilteredLots = () => {
     switch (activeFilter) {
       case 'available':
-        return myLots.filter(lot => lot.status === 'available' || lot.status === 'open');
+        return myLots.filter(lot => lot.status === 'available');
       case 'sold':
-        return myLots.filter(lot => lot.status === 'sold' || lot.status === 'closed' || lot.status === 'awarded');
+        return myLots.filter(lot => lot.status === 'sold' || lot.status === 'delivered');
       case 'at_fpo':
-        return myLots.filter(lot => lot.listing_type === 'fpo_aggregated');
+        return myLots.filter(lot => lot.managed_by_fpo === true && lot.warehouse);
       default:
         return myLots;
     }
@@ -74,12 +104,12 @@ export default function MyLotsScreen() {
     { key: 'at_fpo', label: 'At FPO', icon: 'business' },
   ];
 
-  if (isLoading && myLots.length === 0) {
-    return <Loading fullScreen />;
-  }
+ 
 
   return (
     <View style={styles.container}>
+      <AppHeader title="My Lots" onMenuPress={() => setSidebarVisible(true)} />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       {/* Filter Pills */}
       <View style={styles.filtersContainer}>
         <ScrollView 
@@ -119,7 +149,25 @@ export default function MyLotsScreen() {
         data={filteredLots}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (
-          <LotCard lot={item} onPress={() => handleLotPress(item)} />
+          <View>
+            <LotCard lot={item} onPress={() => handleLotPress(item)} />
+            <View style={styles.actionsRow}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={(e) => handleEditLot(item, e)}
+              >
+                <Ionicons name="create-outline" size={20} color={COLORS.primary} />
+                <Text style={styles.actionText}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.deleteButton]}
+                onPress={(e) => handleDeleteLot(item, e)}
+              >
+                <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+                <Text style={[styles.actionText, styles.deleteText]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
         contentContainerStyle={styles.list}
         refreshControl={
@@ -223,5 +271,36 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: -12,
+    marginBottom: 16,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  deleteButton: {
+    borderColor: COLORS.error,
+  },
+  actionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  deleteText: {
+    color: COLORS.error,
   },
 });

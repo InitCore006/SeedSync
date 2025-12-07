@@ -8,6 +8,7 @@ import {
   Animated,
   Dimensions,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,14 +58,14 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
     },
     { 
       icon: 'pricetag', 
-      label: 'Bids', 
+      label: 'My Bids', 
       route: '/(tabs)/bids',
       roles: ['farmer']
     },
     { 
-      icon: 'stats-chart', 
-      label: 'Market', 
-      route: '/(tabs)/market',
+      icon: 'sparkles', 
+      label: 'AI Features', 
+      route: '/(tabs)/ai',
       roles: ['farmer']
     },
     { 
@@ -84,6 +85,12 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
       label: 'Payments', 
       route: '/(tabs)/payments',
       roles: ['farmer', 'logistics']
+    },
+    { 
+      icon: 'document-text', 
+      label: 'Schemes', 
+      route: '/(tabs)/schemes',
+      roles: ['farmer']
     },
     { 
       icon: 'person', 
@@ -228,7 +235,7 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   header: {
-    paddingTop: StatusBar.currentHeight || 40,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 50,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

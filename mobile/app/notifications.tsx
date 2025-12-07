@@ -1,136 +1,206 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
-  StatusBar,
+  RefreshControl,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-
-const BRAND_COLORS = {
-  primary: '#437409',
-  secondary: '#438602',
-  light: '#c8e686',
-};
-
-const notifications = [
-  {
-    id: 1,
-    title: 'New Bid Received',
-    message: 'You received a new bid of ₹15,000 for Wheat Lot #123',
-    time: '5 minutes ago',
-    type: 'bid',
-    read: false,
-  },
-  {
-    id: 2,
-    title: 'Weather Alert',
-    message: 'Heavy rainfall expected in your area tomorrow',
-    time: '1 hour ago',
-    type: 'weather',
-    read: false,
-  },
-  {
-    id: 3,
-    title: 'Payment Received',
-    message: 'Payment of ₹45,000 has been credited to your account',
-    time: '3 hours ago',
-    type: 'payment',
-    read: true,
-  },
-  {
-    id: 4,
-    title: 'Lot Sold',
-    message: 'Your Rice Lot #456 has been sold successfully',
-    time: '1 day ago',
-    type: 'success',
-    read: true,
-  },
-];
+import { COLORS } from '@/constants/colors';
+import { AppHeader, Sidebar, Loading } from '@/components';
+import { useNotificationsStore } from '@/store/notificationsStore';
+import { notificationsAPI } from '@/services/notificationsService';
+import { Notification } from '@/types/api';
 
 export default function NotificationsScreen() {
-  const getIcon = (type: string) => {
+  const { notifications, setNotifications, markAsRead } = useNotificationsStore();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      const response = await notificationsAPI.getNotifications();
+      setNotifications(response.data.results || response.data);
+    } catch (error: any) {
+      console.error('Failed to load notifications:', error);
+      Alert.alert('Error', 'Failed to load notifications');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchNotifications();
+  };
+
+  const handleNotificationPress = async (notification: Notification) => {
+    // Mark as read
+    if (!notification.is_read) {
+      try {
+        await notificationsAPI.markAsRead(notification.id);
+        markAsRead(notification.id);
+      } catch (error) {
+        console.error('Failed to mark as read:', error);
+      }
+    }
+
+    // Navigate based on notification type
+    if (notification.notification_type === 'bid_received' && notification.related_id) {
+      router.push(`/(tabs)/bids/${notification.related_id}` as any);
+    } else if (notification.notification_type === 'lot_status_change' && notification.related_id) {
+      router.push(`/(tabs)/lots/${notification.related_id}` as any);
+    } else if (notification.notification_type === 'shipment_update' && notification.related_id) {
+      router.push(`/(tabs)/trips/${notification.related_id}` as any);
+    } else if (notification.notification_type === 'payment_received' && notification.related_id) {
+      router.push(`/(tabs)/payments/${notification.related_id}` as any);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationsAPI.markAllAsRead();
+      setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+      Alert.alert('Success', 'All notifications marked as read');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to mark all as read');
+    }
+  };
+
+  const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'bid':
+      case 'bid_received':
         return 'pricetag';
-      case 'weather':
-        return 'cloudy';
-      case 'payment':
-        return 'cash';
-      case 'success':
+      case 'bid_accepted':
+      case 'bid_rejected':
         return 'checkmark-circle';
+      case 'lot_status_change':
+        return 'leaf';
+      case 'shipment_update':
+        return 'navigate';
+      case 'payment_received':
+      case 'payment_completed':
+        return 'wallet';
+      case 'weather_alert':
+        return 'cloud';
+      case 'advisory':
+        return 'information-circle';
       default:
         return 'notifications';
     }
   };
 
-  const getIconColor = (type: string) => {
+  const getNotificationColor = (type: string) => {
     switch (type) {
-      case 'bid':
-        return '#3b82f6';
-      case 'weather':
-        return '#f59e0b';
-      case 'payment':
-        return '#10b981';
-      case 'success':
-        return BRAND_COLORS.primary;
+      case 'bid_received':
+      case 'bid_accepted':
+        return COLORS.success;
+      case 'bid_rejected':
+        return COLORS.error;
+      case 'payment_received':
+      case 'payment_completed':
+        return COLORS.primary;
+      case 'weather_alert':
+        return COLORS.warning;
+      case 'shipment_update':
+        return COLORS.info;
       default:
-        return '#6b7280';
+        return COLORS.secondary;
     }
   };
 
+  const renderNotification = ({ item }: { item: Notification }) => (
+    <TouchableOpacity
+      style={[styles.notificationCard, !item.is_read && styles.unreadCard]}
+      onPress={() => handleNotificationPress(item)}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.iconContainer, { backgroundColor: getNotificationColor(item.notification_type) + '15' }]}>
+        <Ionicons
+          name={getNotificationIcon(item.notification_type) as any}
+          size={24}
+          color={getNotificationColor(item.notification_type)}
+        />
+      </View>
+      
+      <View style={styles.contentContainer}>
+        <Text style={[styles.title, !item.is_read && styles.unreadTitle]}>
+          {item.title}
+        </Text>
+        <Text style={styles.message} numberOfLines={2}>
+          {item.message}
+        </Text>
+        <Text style={styles.timestamp}>
+          {new Date(item.created_at).toLocaleString()}
+        </Text>
+      </View>
+
+      {!item.is_read && <View style={styles.unreadIndicator} />}
+    </TouchableOpacity>
+  );
+
+  if (loading && notifications.length === 0) {
+    return (
+      <View style={styles.container}>
+        <AppHeader
+          title="Notifications"
+          onMenuPress={() => setSidebarVisible(true)}
+          showNotifications={false}
+        />
+        <Loading fullScreen />
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      
-      {/* Header */}
-      <LinearGradient
-        colors={[BRAND_COLORS.primary, BRAND_COLORS.secondary]}
-        style={styles.header}
-      >
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        <TouchableOpacity style={styles.clearButton}>
-          <Text style={styles.clearText}>Clear All</Text>
-        </TouchableOpacity>
-      </LinearGradient>
+      <AppHeader
+        title="Notifications"
+        onMenuPress={() => setSidebarVisible(true)}
+        showNotifications={false}
+      />
 
-      <ScrollView style={styles.content}>
-        {notifications.map((notification) => (
-          <TouchableOpacity
-            key={notification.id}
-            style={[
-              styles.notificationCard,
-              !notification.read && styles.unreadCard,
-            ]}
-          >
-            <View style={[styles.iconContainer, { backgroundColor: getIconColor(notification.type) + '15' }]}>
-              <Ionicons 
-                name={getIcon(notification.type) as any} 
-                size={24} 
-                color={getIconColor(notification.type)} 
-              />
-            </View>
-            <View style={styles.notificationContent}>
-              <View style={styles.notificationHeader}>
-                <Text style={styles.notificationTitle}>{notification.title}</Text>
-                {!notification.read && <View style={styles.unreadDot} />}
-              </View>
-              <Text style={styles.notificationMessage}>{notification.message}</Text>
-              <Text style={styles.notificationTime}>{notification.time}</Text>
-            </View>
+      {notifications.length > 0 && (
+        <View style={styles.header}>
+          <Text style={styles.headerText}>
+            {notifications.filter(n => !n.is_read).length} unread
+          </Text>
+          <TouchableOpacity onPress={handleMarkAllAsRead}>
+            <Text style={styles.markAllButton}>Mark all as read</Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+        </View>
+      )}
+
+      <FlatList
+        data={notifications}
+        renderItem={renderNotification}
+        keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="notifications-off-outline" size={64} color={COLORS.text.tertiary} />
+            <Text style={styles.emptyText}>No Notifications</Text>
+            <Text style={styles.emptyHint}>You're all caught up!</Text>
+          </View>
+        }
+      />
+
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </View>
   );
 }
@@ -138,97 +208,99 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: COLORS.background,
   },
   header: {
-    paddingTop: StatusBar.currentHeight || 40,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    flex: 1,
-    textAlign: 'center',
-  },
-  clearButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  clearText: {
+  headerText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
+    color: COLORS.text.secondary,
   },
-  content: {
-    flex: 1,
+  markAllButton: {
+    fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  listContent: {
     padding: 16,
   },
   notificationCard: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   unreadCard: {
-    backgroundColor: '#f0fdf4',
-    borderLeftWidth: 3,
-    borderLeftColor: BRAND_COLORS.primary,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
   },
   iconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
-  notificationContent: {
+  contentContainer: {
     flex: 1,
   },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  notificationTitle: {
+  title: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#1f2937',
-    flex: 1,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: BRAND_COLORS.primary,
-  },
-  notificationMessage: {
-    fontSize: 14,
-    color: '#6b7280',
+    fontWeight: '600',
+    color: COLORS.text.primary,
     marginBottom: 4,
+  },
+  unreadTitle: {
+    fontWeight: '700',
+  },
+  message: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    marginBottom: 6,
     lineHeight: 20,
   },
-  notificationTime: {
+  timestamp: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: COLORS.text.tertiary,
+  },
+  unreadIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+    position: 'absolute',
+    top: 16,
+    right: 16,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginTop: 16,
+  },
+  emptyHint: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    marginTop: 8,
   },
 });

@@ -10,12 +10,13 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { COLORS } from '@/constants/colors';
-import { ShipmentCard, Loading } from '@/components';
+import { AppHeader, Sidebar, ShipmentCard, Loading } from '@/components';
 import { logisticsAPI } from '@/services/logisticsService';
 import { Shipment } from '@/types/api';
 import { useLogisticsStore } from '@/store/logisticsStore';
 
 export default function TripsScreen() {
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'pending' | 'active' | 'completed'>('active');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -113,11 +114,25 @@ export default function TripsScreen() {
   const displayShipments = getFilteredShipments();
 
   if (loading) {
-    return <Loading fullScreen />;
+    return (
+      <View style={{ flex: 1 }}>
+        <AppHeader 
+          title="My Trips"
+          onMenuPress={() => setSidebarVisible(true)}
+        />
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <Loading fullScreen />
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
+      <AppHeader 
+        title="My Trips"
+        onMenuPress={() => setSidebarVisible(true)}
+      />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       {/* Tabs */}
       <View style={styles.tabs}>
         <TouchableOpacity

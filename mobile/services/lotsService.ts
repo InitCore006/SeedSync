@@ -28,28 +28,32 @@ export const lotsAPI = {
     return api.get(ENDPOINTS.LOTS.DETAIL(id));
   },
 
-  // Create new lot
-  createLot: (data: {
-    crop_type: string;
+  // Create new lot with FormData (includes images)
+  createLot: (formData: FormData): Promise<AxiosResponse<ProcurementLot>> => {
+    return api.post(ENDPOINTS.LOTS.CREATE, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  // Update lot (without images)
+  updateLot: (id: string, data: {
+    crop_type?: string;
     crop_master_code?: string;
     crop_variety?: string;
     crop_variety_code?: string;
-    quantity_quintals: number;
-    quality_grade: string;
-    expected_price_per_quintal: number;
-    harvest_date: string;
+    quantity_quintals?: number;
+    quality_grade?: string;
+    expected_price_per_quintal?: number;
+    harvest_date?: string;
     moisture_content?: number;
     oil_content?: number;
     description?: string;
-    location_latitude?: number;
-    location_longitude?: number;
-    send_to_fpo_warehouse?: boolean;
+    storage_conditions?: string;
+    organic_certified?: boolean;
+    pickup_address?: string;
   }): Promise<AxiosResponse<ProcurementLot>> => {
-    return api.post(ENDPOINTS.LOTS.CREATE, data);
-  },
-
-  // Update lot
-  updateLot: (id: string, data: Partial<ProcurementLot>): Promise<AxiosResponse<ProcurementLot>> => {
     return api.patch(ENDPOINTS.LOTS.UPDATE(id), data);
   },
 
@@ -58,8 +62,8 @@ export const lotsAPI = {
     return api.delete(ENDPOINTS.LOTS.DELETE(id));
   },
 
-  // Upload image
-  uploadImage: (lotId: string, imageUri: string): Promise<AxiosResponse<any>> => {
+  // Upload image to existing lot
+  uploadImage: (lotId: string, imageUri: string, caption?: string): Promise<AxiosResponse<any>> => {
     const formData = new FormData();
     const filename = imageUri.split('/').pop() || 'image.jpg';
     
@@ -68,12 +72,29 @@ export const lotsAPI = {
       type: 'image/jpeg',
       name: filename,
     } as any);
+    
+    if (caption) {
+      formData.append('caption', caption);
+    }
 
     return api.post(ENDPOINTS.LOTS.UPLOAD_IMAGE(lotId), formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+  },
+  
+  // Update lot status
+  updateStatus: (id: string, status: string, remarks?: string): Promise<AxiosResponse<any>> => {
+    return api.post(`/lots/procurement/${id}/update_status/`, {
+      status,
+      remarks,
+    });
+  },
+  
+  // Increment view count
+  incrementViews: (id: string): Promise<AxiosResponse<void>> => {
+    return api.post(`/lots/procurement/${id}/increment_views/`, {});
   },
 
   // Get market prices

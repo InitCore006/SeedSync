@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,11 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
+import { AppHeader, Sidebar } from '@/components';
 
 export default function MarketScreen() {
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+  
   const features = [
     {
       title: 'Browse Marketplace',
@@ -43,30 +46,34 @@ export default function MarketScreen() {
   ];
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Market Intelligence</Text>
-        <Text style={styles.subtitle}>
-          Access real-time market data and AI-powered insights
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <AppHeader title="Market Intelligence" onMenuPress={() => setSidebarVisible(true)} />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.subtitle}>
+            Access real-time market data and AI-powered insights
+          </Text>
+        </View>
 
-      <View style={styles.grid}>
-        {features.map((feature, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.card}
-            onPress={() => router.push(feature.route as any)}
-          >
-            <View style={[styles.iconContainer, { backgroundColor: feature.color }]}>
-              <Ionicons name={feature.icon as any} size={32} color={COLORS.white} />
-            </View>
-            <Text style={styles.cardTitle}>{feature.title}</Text>
-            <Text style={styles.cardDescription}>{feature.description}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </ScrollView>
+        <View style={styles.grid}>
+          {features.map((feature, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.card}
+              onPress={() => router.push(feature.route as any)}
+            >
+              <View style={[styles.iconContainer, { backgroundColor: feature.color }]}>
+                <Ionicons name={feature.icon as any} size={32} color={COLORS.white} />
+              </View>
+              <Text style={styles.cardTitle}>{feature.title}</Text>
+              <Text style={styles.cardDescription}>{feature.description}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -83,7 +90,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.text.primary,
     marginBottom: 8,
   },
   subtitle: {
@@ -120,7 +127,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.text.primary,
     textAlign: 'center',
     marginBottom: 8,
   },

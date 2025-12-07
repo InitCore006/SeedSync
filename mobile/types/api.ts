@@ -126,6 +126,16 @@ export interface FarmerProfileCreateData {
   pincode: string;
   latitude?: number;
   longitude?: number;
+  // Bank Details
+  bank_account_number?: string;
+  bank_account_holder_name?: string;
+  ifsc_code?: string;
+  bank_name?: string;
+  bank_branch?: string;
+  // KYC Details
+  aadhaar_number?: string;
+  pan_number?: string;
+  // Preferences
   preferred_language?: 'en' | 'hi';
 }
 

@@ -5,6 +5,7 @@ export default function MarketLayout() {
   return (
     <Stack
       screenOptions={{
+        headerShown: false,
         headerStyle: {
           backgroundColor: COLORS.primary,
         },

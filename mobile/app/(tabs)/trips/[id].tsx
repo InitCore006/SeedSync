@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Loading } from '@/components';
+import { AppHeader, Sidebar, Loading } from '@/components';
 import { COLORS } from '@/constants/colors';
 import { logisticsAPI } from '@/services/logisticsService';
 import { Shipment } from '@/types/api';
@@ -19,6 +19,7 @@ import { getCropIcon, getCropLabel, getStatusInfo } from '@/constants/crops';
 
 export default function TripDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -87,7 +88,18 @@ export default function TripDetailsScreen() {
   };
 
   if (loading) {
-    return <Loading />;
+    return (
+      <View style={{ flex: 1 }}>
+        <AppHeader 
+          title="Trip Details"
+          onMenuPress={() => setSidebarVisible(true)}
+          showBackButton
+          onBackPress={() => router.back()}
+        />
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <Loading />
+      </View>
+    );
   }
 
   if (!shipment) {
@@ -97,7 +109,15 @@ export default function TripDetailsScreen() {
   const statusInfo = getStatusInfo('shipment', shipment.status);
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={{ flex: 1 }}>
+      <AppHeader 
+        title="Trip Details"
+        onMenuPress={() => setSidebarVisible(true)}
+        showBackButton
+        onBackPress={() => router.back()}
+      />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <ScrollView style={styles.container}>
       {/* Map Section - Placeholder (react-native-maps not installed) */}
       {shipment.pickup_location && shipment.delivery_location && (
         <View style={styles.mapPlaceholder}>
@@ -294,6 +314,8 @@ export default function TripDetailsScreen() {
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
+  </View>
+
   );
 }
 

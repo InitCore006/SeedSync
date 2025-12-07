@@ -19,7 +19,6 @@ import { COLORS } from '@/constants/colors';
 import { lotsAPI } from '@/services/lotsService';
 import { useLotsStore } from '@/store/lotsStore';
 import { useAuthStore } from '@/store/authStore';
-import { QUALITY_GRADES } from '@/constants/crops';
 import { CropMaster, CropVariety } from '@/services/cropsService';
 
 export default function CreateLotScreen() {
@@ -37,10 +36,7 @@ export default function CreateLotScreen() {
   const [formData, setFormData] = useState({
     harvest_date: new Date().toISOString().split('T')[0],
     quantity_quintals: '',
-    quality_grade: 'A',
     expected_price_per_quintal: '',
-    moisture_content: '',
-    oil_content: '',
     description: '',
   });
   const [sendToFPO, setSendToFPO] = useState(false);
@@ -107,49 +103,50 @@ export default function CreateLotScreen() {
 
     setLoading(true);
     try {
-      // Prepare lot data
-      const lotData = {
-        crop_type: selectedCrop.crop_name,
-        crop_master_code: selectedCrop.crop_code,
-        crop_variety: selectedVariety.variety_name,
-        crop_variety_code: selectedVariety.variety_code,
-        quantity_quintals: parseFloat(formData.quantity_quintals),
-        quality_grade: formData.quality_grade,
-        expected_price_per_quintal: parseFloat(formData.expected_price_per_quintal),
-        harvest_date: formData.harvest_date,
-        moisture_content: formData.moisture_content ? parseFloat(formData.moisture_content) : undefined,
-        oil_content: formData.oil_content ? parseFloat(formData.oil_content) : undefined,
-        description: formData.description || '',
-        send_to_fpo_warehouse: sendToFPO,
-      };
-
-      console.log('📦 Creating lot with data:', lotData);
+      // Prepare FormData for lot creation with images
+      const formDataToSend = new FormData();
       
-      // Create lot
-      const response = await lotsAPI.createLot(lotData);
+      // Add crop details
+      formDataToSend.append('crop_type', selectedCrop.crop_name);
+      formDataToSend.append('crop_master_code', selectedCrop.crop_code);
+      formDataToSend.append('crop_variety', selectedVariety.variety_name);
+      formDataToSend.append('crop_variety_code', selectedVariety.variety_code);
+      
+      // Add lot details
+      formDataToSend.append('quantity_quintals', formData.quantity_quintals);
+      formDataToSend.append('expected_price_per_quintal', formData.expected_price_per_quintal);
+      formDataToSend.append('harvest_date', formData.harvest_date);
+      
+      // Add optional fields
+      if (formData.description) {
+        formDataToSend.append('description', formData.description);
+      }
+      
+      // Add images to FormData
+      images.forEach((imageUri, index) => {
+        const filename = imageUri.split('/').pop() || `image_${index}.jpg`;
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        
+        formDataToSend.append('uploaded_images', {
+          uri: imageUri,
+          type,
+          name: filename,
+        } as any);
+      });
+
+      console.log('📦 Creating lot with FormData including images');
+      
+      // Create lot with images in single request
+      const response = await lotsAPI.createLot(formDataToSend);
       const newLot = response.data;
       
       console.log('✅ Lot created successfully:', {
         id: newLot.id,
         lot_number: newLot.lot_number,
-        status: newLot.status
+        status: newLot.status,
+        images_count: newLot.images?.length || 0
       });
-
-      // Upload images
-      if (newLot?.id && images.length > 0) {
-        console.log(`📸 Uploading ${images.length} images for lot: ${newLot.id}`);
-        
-        for (let i = 0; i < images.length; i++) {
-          try {
-            const imageUri = images[i];
-            await lotsAPI.uploadImage(newLot.id, imageUri);
-            console.log(`✅ Image ${i + 1}/${images.length} uploaded successfully`);
-          } catch (imgError: any) {
-            console.error(`❌ Failed to upload image ${i + 1}:`, imgError);
-            // Continue with other images
-          }
-        }
-      }
 
       // Add lot to store
       addLot(newLot);
@@ -326,26 +323,6 @@ export default function CreateLotScreen() {
             }
             placeholder="YYYY-MM-DD"
           />
-
-          <View style={styles.pickerContainer}>
-            <Text style={styles.label}>Quality Grade *</Text>
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={formData.quality_grade}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, quality_grade: value })
-                }
-              >
-                {QUALITY_GRADES.map((grade) => (
-                  <Picker.Item
-                    key={grade.value}
-                    label={grade.label}
-                    value={grade.value}
-                  />
-                ))}
-              </Picker>
-            </View>
-          </View>
         </View>
 
         {/* FPO Warehouse Option - Conditional on FPO Membership */}
@@ -406,49 +383,11 @@ export default function CreateLotScreen() {
           </View>
         )}
 
-        {/* Step 3: Quality Parameters */}
+        {/* Step 3: Images */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.stepBadge}>
               <Text style={styles.stepNumber}>3</Text>
-            </View>
-            <View style={styles.sectionTitleContainer}>
-              <Text style={styles.sectionTitle}>Quality Parameters</Text>
-              <Text style={styles.sectionHint}>Optional but recommended</Text>
-            </View>
-          </View>
-
-          <View style={styles.row}>
-            <View style={styles.halfWidth}>
-              <Input
-                label="Moisture (%)"
-                value={formData.moisture_content}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, moisture_content: text })
-                }
-                placeholder="12"
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={styles.halfWidth}>
-              <Input
-                label="Oil Content (%)"
-                value={formData.oil_content}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, oil_content: text })
-                }
-                placeholder="18"
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Step 4: Images */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.stepBadge}>
-              <Text style={styles.stepNumber}>4</Text>
             </View>
             <View style={styles.sectionTitleContainer}>
               <Text style={styles.sectionTitle}>Upload Images *</Text>
@@ -477,11 +416,11 @@ export default function CreateLotScreen() {
           </View>
         </View>
 
-        {/* Step 5: Additional Info */}
+        {/* Step 4: Additional Info */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.stepBadge}>
-              <Text style={styles.stepNumber}>5</Text>
+              <Text style={styles.stepNumber}>4</Text>
             </View>
             <View style={styles.sectionTitleContainer}>
               <Text style={styles.sectionTitle}>Additional Details</Text>

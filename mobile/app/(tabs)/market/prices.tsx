@@ -7,7 +7,8 @@ import {
   Alert,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { Button, Loading } from '@/components';
+import { useRouter } from 'expo-router';
+import { AppHeader, Sidebar, Button, Loading } from '@/components';
 import { COLORS } from '@/constants/colors';
 import { lotsAPI } from '@/services/lotsService';
 import { formatCurrency } from '@/utils/formatters';
@@ -19,6 +20,8 @@ interface MarketPrice {
 }
 
 export default function MarketPricesScreen() {
+  const router = useRouter();
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [selectedCrop, setSelectedCrop] = useState('mustard');
   const [prices, setPrices] = useState<MarketPrice[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,7 +39,15 @@ export default function MarketPricesScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={{ flex: 1 }}>
+      <AppHeader 
+        title="Market Prices"
+        onMenuPress={() => setSidebarVisible(true)}
+        showBackButton
+        onBackPress={() => router.back()}
+      />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <ScrollView style={styles.container}>
       <View style={styles.selector}>
         <Text style={styles.label}>Select Crop</Text>
         <View style={styles.pickerWrapper}>
@@ -82,7 +93,8 @@ export default function MarketPricesScreen() {
           </Text>
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -99,7 +111,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.primary,
     marginBottom: 8,
   },
   pickerWrapper: {
@@ -134,7 +146,7 @@ const styles = StyleSheet.create({
   marketName: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.primary,
   },
   date: {
     fontSize: 14,

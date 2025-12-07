@@ -8,7 +8,8 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Loading } from '@/components';
+import { useRouter } from 'expo-router';
+import { AppHeader, Sidebar, Button, Loading } from '@/components';
 import { COLORS } from '@/constants/colors';
 import { advisoryAPI } from '@/services/advisoryService';
 
@@ -21,6 +22,8 @@ interface WeatherData {
 }
 
 export default function WeatherScreen() {
+  const router = useRouter();
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [weather, setWeather] = useState<WeatherData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,7 +79,15 @@ export default function WeatherScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={{ flex: 1 }}>
+      <AppHeader 
+        title="Weather Forecast"
+        onMenuPress={() => setSidebarVisible(true)}
+        showBackButton
+        onBackPress={() => router.back()}
+      />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Weather Forecast</Text>
         <Text style={styles.subtitle}>5-day weather prediction</Text>
@@ -130,7 +141,8 @@ export default function WeatherScreen() {
           ))}
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -147,7 +159,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.primary,
     marginBottom: 8,
   },
   subtitle: {
@@ -182,7 +194,7 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.primary,
   },
   weather: {
     fontSize: 18,

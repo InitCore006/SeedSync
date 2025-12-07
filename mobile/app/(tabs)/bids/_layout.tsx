@@ -5,6 +5,7 @@ export default function BidsLayout() {
   return (
     <Stack
       screenOptions={{
+        headerShown: false,
         headerStyle: {
           backgroundColor: COLORS.primary,
         },

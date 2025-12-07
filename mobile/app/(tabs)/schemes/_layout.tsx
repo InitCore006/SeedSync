@@ -5,6 +5,7 @@ export default function SchemesLayout() {
   return (
     <Stack
       screenOptions={{
+        headerShown: false,
         headerStyle: {
           backgroundColor: COLORS.white,
         },
@@ -18,14 +19,12 @@ export default function SchemesLayout() {
         name="index"
         options={{
           title: 'Government Schemes',
-          headerShown: true,
         }}
       />
       <Stack.Screen
         name="[id]"
         options={{
           title: 'Scheme Details',
-          headerShown: true,
         }}
       />
     </Stack>

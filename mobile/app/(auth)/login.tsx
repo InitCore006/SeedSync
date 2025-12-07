@@ -83,14 +83,41 @@ export default function LoginScreen() {
             style={styles.button}
           />
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
-            <Button
-              title="Register"
-              onPress={() => router.push('/(auth)/register')}
-              variant="outline"
-              size="small"
-            />
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={styles.registerSection}>
+            <Text style={styles.registerTitle}>New User?</Text>
+            <Text style={styles.registerSubtitle}>Register as:</Text>
+            
+            <TouchableOpacity
+              style={styles.registerButton}
+              onPress={() => router.push('/(auth)/register-farmer')}
+            >
+              <View style={styles.registerButtonIcon}>
+                <Text style={styles.registerButtonEmoji}>🌾</Text>
+              </View>
+              <View style={styles.registerButtonContent}>
+                <Text style={styles.registerButtonTitle}>Farmer</Text>
+                <Text style={styles.registerButtonSubtitle}>Sell your produce directly</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.registerButton}
+              onPress={() => router.push('/(auth)/register-logistics')}
+            >
+              <View style={styles.registerButtonIcon}>
+                <Text style={styles.registerButtonEmoji}>🚚</Text>
+              </View>
+              <View style={styles.registerButtonContent}>
+                <Text style={styles.registerButtonTitle}>Logistics Partner</Text>
+                <Text style={styles.registerButtonSubtitle}>Transport agricultural products</Text>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -132,6 +159,78 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 8,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 32,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  dividerText: {
+    paddingHorizontal: 16,
+    fontSize: 14,
+    color: COLORS.secondary,
+    fontWeight: '600',
+  },
+  registerSection: {
+    marginTop: 8,
+  },
+  registerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.dark,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  registerSubtitle: {
+    fontSize: 14,
+    color: COLORS.secondary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  registerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: COLORS.primary + '20',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  registerButtonIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  registerButtonEmoji: {
+    fontSize: 28,
+  },
+  registerButtonContent: {
+    flex: 1,
+  },
+  registerButtonTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.dark,
+    marginBottom: 4,
+  },
+  registerButtonSubtitle: {
+    fontSize: 13,
+    color: COLORS.secondary,
   },
   footer: {
     marginTop: 24,

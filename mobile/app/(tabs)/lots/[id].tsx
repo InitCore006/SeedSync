@@ -7,11 +7,12 @@ import {
   Image,
   Alert,
   ImageStyle,
+  TouchableOpacity,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
-import { Loading } from '@/components';
+import { Loading, Button } from '@/components';
 import { lotsAPI } from '@/services/lotsService';
 import { ProcurementLot } from '@/types/api';
 import { formatCurrency, formatDate, formatQuantity } from '@/utils/formatters';
@@ -29,6 +30,11 @@ export default function LotDetailScreen() {
     try {
       const lotRes = await lotsAPI.getLot(id);
       setLot(lotRes.data);
+      
+      // Increment view count (don't await, fire and forget)
+      if (lotRes.data && !isMyLot) {
+        lotsAPI.incrementViews(id).catch(err => console.log('Failed to increment views:', err));
+      }
     } catch (error) {
       console.error('Failed to load lot details:', error);
       Alert.alert('Error', 'Failed to load lot details');
@@ -40,6 +46,30 @@ export default function LotDetailScreen() {
   useEffect(() => {
     fetchLotDetails();
   }, [id]);
+  
+  const handleDeleteLot = () => {
+    Alert.alert(
+      'Delete Lot',
+      'Are you sure you want to delete this lot? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await lotsAPI.deleteLot(id);
+              Alert.alert('Success', 'Lot deleted successfully', [
+                { text: 'OK', onPress: () => router.back() },
+              ]);
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to delete lot');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (loading || !lot) {
     return <Loading fullScreen />;
@@ -104,14 +134,6 @@ export default function LotDetailScreen() {
               {formatCurrency(lot.expected_price_per_quintal)}
             </Text>
           </View>
-          {lot.quality_grade && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Quality Grade</Text>
-              <Text style={styles.infoValue}>
-                {lot.quality_grade_display || lot.quality_grade}
-              </Text>
-            </View>
-          )}
           {lot.harvest_date && (
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Harvest Date</Text>
@@ -143,29 +165,6 @@ export default function LotDetailScreen() {
           </View>
         )}
 
-        {/* Quality Details */}
-        {(lot.moisture_content || lot.oil_content) && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quality Details</Text>
-            <View style={styles.qualityCard}>
-              {lot.moisture_content && (
-                <View style={styles.qualityRow}>
-                  <Ionicons name="water" size={20} color={COLORS.primary} />
-                  <Text style={styles.qualityLabel}>Moisture Content:</Text>
-                  <Text style={styles.qualityValue}>{lot.moisture_content}%</Text>
-                </View>
-              )}
-              {lot.oil_content && (
-                <View style={styles.qualityRow}>
-                  <Ionicons name="flask" size={20} color={COLORS.primary} />
-                  <Text style={styles.qualityLabel}>Oil Content:</Text>
-                  <Text style={styles.qualityValue}>{lot.oil_content}%</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
         {/* Farmer Info (if viewing someone else's lot) */}
         {!isMyLot && lot.farmer_name && (
           <View style={styles.section}>
@@ -179,6 +178,23 @@ export default function LotDetailScreen() {
                 )}
               </View>
             </View>
+          </View>
+        )}
+
+        {/* Action Buttons for My Lots */}
+        {isMyLot && (
+          <View style={styles.actionButtons}>
+            <Button
+              title="Edit Lot"
+              onPress={() => router.push(`/(tabs)/lots/edit-lot?id=${id}`)}
+              variant="outline"
+            />
+            <Button
+              title="Delete Lot"
+              onPress={handleDeleteLot}
+              variant="outline"
+              style={{ borderColor: COLORS.error }}
+            />
           </View>
         )}
       </View>
@@ -208,6 +224,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: COLORS.text.primary,
+    flex: 1,
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -267,45 +284,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.text.secondary,
     lineHeight: 24,
+    backgroundColor: COLORS.white,
+    padding: 16,
+    borderRadius: 12,
   },
-  bidCard: {
+  qualityCard: {
     backgroundColor: COLORS.white,
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
+    gap: 12,
   },
-  bidHeader: {
+  qualityRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  bidAmount: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  bidStatus: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  bidStatusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  bidDate: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    marginBottom: 12,
-  },color: COLORS.secondary,
-    marginBottom: 12,
-  },
-  bidActions: {
-    flexDirection: 'row',
     gap: 8,
   },
-  bidButton: {
+  qualityLabel: {
+    fontSize: 16,
+    color: COLORS.text.secondary,
     flex: 1,
+  },
+  qualityValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  farmerCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  farmerInfo: {
+    flex: 1,
+  },
+  farmerName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginBottom: 4,
+  },
+  farmerFpo: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+  },
+  actionButtons: {
+    gap: 12,
+    marginTop: 24,
+    marginBottom: 20,
   },
   fpoCard: {
     borderRadius: 12,

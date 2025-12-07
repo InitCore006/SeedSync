@@ -11,20 +11,20 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS } from '@/constants/colors';
-import { LotCard, Loading, Input, Button } from '@/components';
+import { AppHeader, Sidebar, LotCard, Loading, Input, Button } from '@/components';
 import { lotsAPI } from '@/services/lotsService';
 import { bidsAPI } from '@/services/bidsService';
 import { ProcurementLot } from '@/types/api';
 
-type QualityFilter = 'all' | 'A' | 'B' | 'C';
-
 export default function MarketplaceBrowseScreen() {
+  const router = useRouter();
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [lots, setLots] = useState<ProcurementLot[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCrop, setSelectedCrop] = useState<string>('all');
-  const [selectedQuality, setSelectedQuality] = useState<QualityFilter>('all');
   
   // Quick Bid Modal
   const [bidModalVisible, setBidModalVisible] = useState(false);
@@ -76,7 +76,7 @@ export default function MarketplaceBrowseScreen() {
       setSubmittingBid(true);
       await bidsAPI.createBid({
         lot: selectedLot.id,
-        bid_amount: amount,
+        offered_price_per_quintal: amount,
         bid_type: 'standard',
       });
 
@@ -102,24 +102,37 @@ export default function MarketplaceBrowseScreen() {
       filtered = filtered.filter(lot => lot.crop_type === selectedCrop);
     }
 
-    if (selectedQuality !== 'all') {
-      filtered = filtered.filter(lot => lot.quality_grade === selectedQuality);
-    }
-
     return filtered;
   };
 
   const filteredLots = getFilteredLots();
 
   const cropTypes = ['all', ...Array.from(new Set(lots.map(lot => lot.crop_type)))];
-  const qualityGrades: QualityFilter[] = ['all', 'A', 'B', 'C'];
 
   if (loading && lots.length === 0) {
-    return <Loading fullScreen />;
+    return (
+      <View style={{ flex: 1 }}>
+        <AppHeader 
+          title="Browse Marketplace"
+          onMenuPress={() => setSidebarVisible(true)}
+          showBackButton
+          onBackPress={() => router.back()}
+        />
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <Loading fullScreen />
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
+      <AppHeader 
+        title="Browse Marketplace"
+        onMenuPress={() => setSidebarVisible(true)}
+        showBackButton
+        onBackPress={() => router.back()}
+      />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       {/* Filters Section */}
       <View style={styles.filtersContainer}>
         {/* Crop Filter */}
@@ -248,12 +261,6 @@ export default function MarketplaceBrowseScreen() {
                       <Text style={styles.lotInfoLabel}>Expected Price</Text>
                       <Text style={styles.lotInfoValue}>
                         ₹{selectedLot.expected_price_per_quintal}/Q
-                      </Text>
-                    </View>
-                    <View style={styles.lotInfoItem}>
-                      <Text style={styles.lotInfoLabel}>Grade</Text>
-                      <Text style={styles.lotInfoValue}>
-                        {selectedLot.quality_grade}
                       </Text>
                     </View>
                   </View>

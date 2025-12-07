@@ -33,6 +33,17 @@ export const logisticsAPI = {
   },
 
   /**
+   * Update logistics partner profile
+   */
+  updateProfile: (id: string, data: FormData | Partial<LogisticsPartner>): Promise<AxiosResponse<LogisticsPartner>> => {
+    return api.put(`${ENDPOINTS.LOGISTICS.PARTNERS}${id}/`, data, {
+      headers: data instanceof FormData ? {
+        'Content-Type': 'multipart/form-data',
+      } : undefined,
+    });
+  },
+
+  /**
    * Get partner statistics
    */
   getStats: (): Promise<

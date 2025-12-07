@@ -8,10 +8,12 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { AppHeader, Sidebar } from '@/components';
 import { COLORS } from '@/constants/colors';
 import { GOVERNMENT_SCHEMES, SCHEME_CATEGORIES } from '@/constants/governmentSchemes';
 
 export default function GovernmentSchemesScreen() {
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
 
   const filteredSchemes = selectedCategory === 'all'
@@ -19,99 +21,107 @@ export default function GovernmentSchemesScreen() {
     : GOVERNMENT_SCHEMES.filter(scheme => scheme.category === selectedCategory);
 
   return (
-    <View style={styles.container}>
-      <ScrollView>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Government Schemes</Text>
-          <Text style={styles.subtitle}>
-            Explore {GOVERNMENT_SCHEMES.length} schemes to support your farming business
-          </Text>
-        </View>
-
-        {/* Category Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoriesContainer}
-          contentContainerStyle={styles.categoriesContent}
-        >
-          {SCHEME_CATEGORIES.map((category) => (
-            <TouchableOpacity
-              key={category.id}
-              style={[
-                styles.categoryPill,
-                selectedCategory === category.id && styles.categoryPillActive,
-              ]}
-              onPress={() => setSelectedCategory(category.id)}
-            >
-              <Ionicons
-                name={category.icon as any}
-                size={16}
-                color={selectedCategory === category.id ? COLORS.white : COLORS.text.secondary}
-              />
-              <Text
-                style={[
-                  styles.categoryText,
-                  selectedCategory === category.id && styles.categoryTextActive,
-                ]}
-              >
-                {category.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Schemes List */}
-        <View style={styles.schemesContainer}>
-          {filteredSchemes.map((scheme) => (
-            <TouchableOpacity
-              key={scheme.id}
-              style={styles.schemeCard}
-              onPress={() => router.push(`/(tabs)/schemes/${scheme.id}`)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.schemeHeader}>
-                <View style={styles.schemeTitleRow}>
-                  <Text style={styles.schemeName}>{scheme.name}</Text>
-                  <Ionicons name="chevron-forward" size={20} color={COLORS.text.tertiary} />
-                </View>
-                <View style={styles.categoryBadge}>
-                  <Text style={styles.categoryBadgeText}>{scheme.category}</Text>
-                </View>
-              </View>
-
-              <Text style={styles.schemeDesc} numberOfLines={2}>
-                {scheme.shortDesc}
-              </Text>
-
-              <View style={styles.schemeFooter}>
-                <View style={styles.benefitPreview}>
-                  <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-                  <Text style={styles.benefitText} numberOfLines={1}>
-                    {scheme.benefits[0]}
-                  </Text>
-                </View>
-                <TouchableOpacity style={styles.viewDetailsButton}>
-                  <Text style={styles.viewDetailsText}>View Details</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))}
-
-          {filteredSchemes.length === 0 && (
-            <View style={styles.emptyState}>
-              <Ionicons name="document-text-outline" size={48} color={COLORS.text.tertiary} />
-              <Text style={styles.emptyText}>No schemes found in this category</Text>
+    <View style={{ flex: 1 }}>
+      <AppHeader 
+        title="Government Schemes"
+        onMenuPress={() => setSidebarVisible(true)}
+      />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <View style={styles.container}>
+        <ScrollView>
+            {/* Header */}
+            <View style={styles.header}>
+            <Text style={styles.title}>Government Schemes</Text>
+            <Text style={styles.subtitle}>
+                Explore {GOVERNMENT_SCHEMES.length} schemes to support your farming business
+            </Text>
             </View>
-          )}
-        </View>
 
-        <View style={{ height: 32 }} />
-      </ScrollView>
+            {/* Category Pills */}
+            <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoriesContainer}
+            contentContainerStyle={styles.categoriesContent}
+            >
+            {SCHEME_CATEGORIES.map((category) => (
+                <TouchableOpacity
+                key={category.id}
+                style={[
+                    styles.categoryPill,
+                    selectedCategory === category.id && styles.categoryPillActive,
+                ]}
+                onPress={() => setSelectedCategory(category.id)}
+                >
+                <Ionicons
+                    name={category.icon as any}
+                    size={16}
+                    color={selectedCategory === category.id ? COLORS.white : COLORS.text.secondary}
+                />
+                <Text
+                    style={[
+                    styles.categoryText,
+                    selectedCategory === category.id && styles.categoryTextActive,
+                    ]}
+                >
+                    {category.name}
+                </Text>
+                </TouchableOpacity>
+            ))}
+            </ScrollView>
+
+            {/* Schemes List */}
+            <View style={styles.schemesContainer}>
+            {filteredSchemes.map((scheme) => (
+                <TouchableOpacity
+                key={scheme.id}
+                style={styles.schemeCard}
+                onPress={() => router.push(`/(tabs)/schemes/${scheme.id}`)}
+                activeOpacity={0.7}
+                >
+                <View style={styles.schemeHeader}>
+                    <View style={styles.schemeTitleRow}>
+                    <Text style={styles.schemeName}>{scheme.name}</Text>
+                    <Ionicons name="chevron-forward" size={20} color={COLORS.text.tertiary} />
+                    </View>
+                    <View style={styles.categoryBadge}>
+                    <Text style={styles.categoryBadgeText}>{scheme.category}</Text>
+                    </View>
+                </View>
+
+                <Text style={styles.schemeDesc} numberOfLines={2}>
+                    {scheme.shortDesc}
+                </Text>
+
+                <View style={styles.schemeFooter}>
+                    <View style={styles.benefitPreview}>
+                    <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
+                    <Text style={styles.benefitText} numberOfLines={1}>
+                        {scheme.benefits[0]}
+                    </Text>
+                    </View>
+                    <TouchableOpacity style={styles.viewDetailsButton}>
+                    <Text style={styles.viewDetailsText}>View Details</Text>
+                    </TouchableOpacity>
+                </View>
+                </TouchableOpacity>
+            ))}
+
+            {filteredSchemes.length === 0 && (
+                <View style={styles.emptyState}>
+                <Ionicons name="document-text-outline" size={48} color={COLORS.text.tertiary} />
+                <Text style={styles.emptyText}>No schemes found in this category</Text>
+                </View>
+            )}
+            </View>
+
+            <View style={{ height: 32 }} />
+        </ScrollView>
+      </View>
     </View>
   );
 }
+    
 
 const styles = StyleSheet.create({
   container: {
@@ -251,3 +261,4 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 });
+     

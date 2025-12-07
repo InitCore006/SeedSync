@@ -37,8 +37,12 @@ export const farmersAPI = {
   /**
    * Update farmer profile
    */
-  updateProfile: (data: Partial<FarmerProfile>): Promise<AxiosResponse<FarmerProfile>> => {
-    return api.patch(ENDPOINTS.FARMERS.MY_PROFILE, data);
+  updateProfile: (id: string, data: FormData | Partial<FarmerProfile>): Promise<AxiosResponse<FarmerProfile>> => {
+    return api.put(`${ENDPOINTS.FARMERS.PROFILE}${id}/`, data, {
+      headers: data instanceof FormData ? {
+        'Content-Type': 'multipart/form-data',
+      } : undefined,
+    });
   },
 
   /**
