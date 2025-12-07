@@ -101,13 +101,31 @@ function CreateBatchModal({ isOpen, onClose, onCreate }: CreateBatchModalProps) 
         plant: formData.plant,
         lot: formData.lot,
         initial_quantity_quintals: parseFloat(formData.initial_quantity_quintals),
-        processing_method: formData.processing_method,
+        processing_method: formData.processing_method as 'cold_pressed' | 'hot_pressed' | 'expeller_pressed' | 'solvent_extraction',
         expected_completion_date: formData.expected_completion_date || undefined,
         notes: formData.notes || '',
       };
 
-      await API.processor.createBatch(payload);
-      toast.success('Processing batch created successfully! Inventory has been deducted.');
+      const response = await API.processor.createBatch(payload);
+      console.log('Batch creation response:', response); // Debug log
+      
+      // Show detailed success message
+      if (response.data?.inventory_changes) {
+        const inv = response.data.inventory_changes;
+        toast.success(
+          `Batch created! ${inv.deducted_quantity}Q deducted from ${inv.warehouse_name}. Remaining: ${formatNumber(inv.remaining_warehouse_stock)}Q`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.success(
+          `Batch created! ${payload.initial_quantity_quintals}Q allocated from lot.`,
+          { duration: 4000 }
+        );
+      }
+      
+      // Re-fetch lots to update available quantities
+      await fetchData();
+      
       onCreate();
       onClose();
       setFormData({
@@ -154,7 +172,6 @@ function CreateBatchModal({ isOpen, onClose, onCreate }: CreateBatchModalProps) 
               value={formData.plant}
               onChange={(e) => setFormData({ ...formData, plant: e.target.value })}
               options={plants.map(plant => ({ value: plant.id, label: plant.plant_name }))}
-              placeholder="Select processing plant"
             />
             
             <Select
@@ -166,7 +183,6 @@ function CreateBatchModal({ isOpen, onClose, onCreate }: CreateBatchModalProps) 
                 value: lot.id, 
                 label: `${lot.lot_number} - ${lot.crop_type} (${formatNumber(lot.available_quantity_quintals)}Q available)` 
               }))}
-              placeholder="Select lot to process"
             />
 
             {selectedLot && (
@@ -259,15 +275,170 @@ function CreateBatchModal({ isOpen, onClose, onCreate }: CreateBatchModalProps) 
   );
 }
 
+interface CompleteBatchModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  batch: any;
+  onComplete: () => void;
+}
+
+function CompleteBatchModal({ isOpen, onClose, batch, onComplete }: CompleteBatchModalProps) {
+  const [formData, setFormData] = useState({
+    oil_extracted_quintals: '',
+    cake_produced_quintals: '',
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Reset form when modal opens
+      setFormData({
+        oil_extracted_quintals: '',
+        cake_produced_quintals: '',
+      });
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.oil_extracted_quintals || !formData.cake_produced_quintals) {
+      toast.error('Please enter both oil and cake output quantities');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await API.processor.completeBatch(batch.id, {
+        oil_extracted_quintals: parseFloat(formData.oil_extracted_quintals),
+        cake_produced_quintals: parseFloat(formData.cake_produced_quintals),
+      });
+      toast.success('Batch completed successfully!');
+      onComplete();
+      onClose();
+    } catch (error: any) {
+      console.error('Failed to complete batch:', error);
+      toast.error(error.response?.data?.error || 'Failed to complete batch');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const totalOutput = (parseFloat(formData.oil_extracted_quintals) || 0) + (parseFloat(formData.cake_produced_quintals) || 0);
+  const yieldPercentage = batch?.initial_quantity_quintals ? ((totalOutput / batch.initial_quantity_quintals) * 100).toFixed(1) : '0.0';
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Complete Batch Processing">
+      <form onSubmit={handleSubmit}>
+        <div className="space-y-4">
+          {/* Batch Info */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+            <p className="font-semibold text-blue-900">Batch Details:</p>
+            <div className="mt-2 space-y-1 text-blue-800">
+              <p>Batch Number: <span className="font-medium">{batch?.batch_number}</span></p>
+              <p>Input Quantity: <span className="font-medium">{formatNumber(batch?.initial_quantity_quintals)} Quintals</span></p>
+              <p>Input Crop: <span className="font-medium">{batch?.input_crop}</span></p>
+              <p>Processing Method: <span className="font-medium">{batch?.processing_method}</span></p>
+            </div>
+          </div>
+
+          {/* Output Fields */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Oil Extracted (Quintals)"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="e.g., 35.5"
+              required
+              value={formData.oil_extracted_quintals}
+              onChange={(e) => setFormData({ ...formData, oil_extracted_quintals: e.target.value })}
+              helperText="Total oil produced"
+            />
+
+            <Input
+              label="Cake Produced (Quintals)"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="e.g., 55.2"
+              required
+              value={formData.cake_produced_quintals}
+              onChange={(e) => setFormData({ ...formData, cake_produced_quintals: e.target.value })}
+              helperText="Total cake/meal produced"
+            />
+          </div>
+
+          {/* Yield Calculation */}
+          {(formData.oil_extracted_quintals || formData.cake_produced_quintals) && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
+              <p className="font-semibold text-green-900">Output Summary:</p>
+              <div className="mt-2 space-y-1 text-green-800">
+                <p>Total Output: <span className="font-medium">{formatNumber(totalOutput)} Quintals</span></p>
+                <p>Yield Percentage: <span className="font-medium">{yieldPercentage}%</span></p>
+                <p className="text-xs text-green-700 mt-1">
+                  Typical yield ranges: 30-45% depending on method and crop quality
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1" disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" className="flex-1" disabled={isLoading}>
+              {isLoading ? 'Completing...' : 'Complete Batch'}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function ProcessorBatchesContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState<any>(null);
   
   const { batches, isLoading, isError, mutate } = useProcessingBatches({ status: statusFilter !== 'all' ? statusFilter : undefined });
 
   const handleCreateBatch = () => {
     mutate(); // Refresh batches after creation
+  };
+
+  const handleStartBatch = async (batch: any) => {
+    try {
+      await API.processor.startBatch(batch.id);
+      toast.success('Batch started successfully!');
+      mutate(); // Refresh the list
+    } catch (error: any) {
+      console.error('Failed to start batch:', error);
+      toast.error(error.response?.data?.error || 'Failed to start batch');
+    }
+  };
+
+  const handlePauseBatch = async (batch: any) => {
+    try {
+      await API.processor.pauseBatch(batch.id);
+      toast.success('Batch paused');
+      mutate(); // Refresh the list
+    } catch (error: any) {
+      console.error('Failed to pause batch:', error);
+      toast.error(error.response?.data?.error || 'Failed to pause batch');
+    }
+  };
+
+  const handleCompleteBatchClick = (batch: any) => {
+    setSelectedBatch(batch);
+    setIsCompleteModalOpen(true);
+  };
+
+  const handleCompleteBatch = () => {
+    mutate(); // Refresh the list
   };
 
   const filteredBatches = (batches || []).filter((batch: any) =>
@@ -453,18 +624,18 @@ function ProcessorBatchesContent() {
                   </div>
                   <div className="flex gap-2">
                     {batch.status === 'pending' && (
-                      <Button variant="primary" size="sm">
+                      <Button variant="primary" size="sm" onClick={() => handleStartBatch(batch)}>
                         <Play className="w-4 h-4 mr-1" />
                         Start
                       </Button>
                     )}
                     {batch.status === 'in_progress' && (
                       <>
-                        <Button variant="outline" size="sm">
+                        <Button variant="outline" size="sm" onClick={() => handlePauseBatch(batch)}>
                           <Pause className="w-4 h-4 mr-1" />
                           Pause
                         </Button>
-                        <Button variant="primary" size="sm">
+                        <Button variant="primary" size="sm" onClick={() => handleCompleteBatchClick(batch)}>
                           <CheckCircle className="w-4 h-4 mr-1" />
                           Complete
                         </Button>
@@ -508,6 +679,14 @@ function ProcessorBatchesContent() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateBatch}
+      />
+
+      {/* Complete Batch Modal */}
+      <CompleteBatchModal
+        isOpen={isCompleteModalOpen}
+        onClose={() => setIsCompleteModalOpen(false)}
+        batch={selectedBatch}
+        onComplete={handleCompleteBatch}
       />
     </div>
   );

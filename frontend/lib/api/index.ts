@@ -348,6 +348,25 @@ export const processorAPI = {
   deletePlant: (id: string) =>
     api.delete<APIResponse>(`/processors/plants/${id}/`),
 
+  // Start batch processing
+  startBatch: (id: string) =>
+    api.post<APIResponse>(`/processors/batches-management/${id}/start_batch/`, {}),
+
+  // Pause batch (set status to on_hold)
+  pauseBatch: (id: string) =>
+    api.patch<APIResponse>(`/processors/batches-management/${id}/`, { status: 'on_hold' }),
+
+  // Cancel batch
+  cancelBatch: (id: string) =>
+    api.patch<APIResponse>(`/processors/batches-management/${id}/`, { status: 'cancelled' }),
+
+  // Complete batch with output recording
+  completeBatch: (id: string, data: {
+    oil_extracted_quintals: number;
+    cake_produced_quintals: number;
+  }) =>
+    api.post<APIResponse>(`/processors/batches-management/${id}/record_output/`, data),
+
   // Get inventory
   getInventory: () =>
     api.get<APIResponse>('/processors/inventory/'),

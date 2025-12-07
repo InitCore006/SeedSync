@@ -12,3 +12,8 @@ qrcode[pil]==7.4.2
 
 # API Integrations
 requests==2.31.0
+
+# Time Series & Forecasting
+pandas==2.0.0
+numpy==1.24.0
+statsmodels==0.14.0
