@@ -307,11 +307,46 @@ export const processorAPI = {
 
   // Get processing batches
   getBatches: (params?: { page?: number }) =>
-    api.get<PaginatedResponse<any>>('/processors/batches/', { params }),
+    api.get<PaginatedResponse<any>>('/processors/batches-management/', { params }),
 
   // Create batch
-  createBatch: (data: any) =>
-    api.post<APIResponse>('/processors/batches/', data),
+  createBatch: (data: {
+    plant: string;
+    lot: string;
+    initial_quantity_quintals: number;
+    processing_method: 'cold_pressed' | 'hot_pressed' | 'expeller_pressed' | 'solvent_extraction';
+    expected_completion_date?: string;
+    notes?: string;
+  }) =>
+    api.post<APIResponse>('/processors/batches-management/', data),
+
+  // Get processing plants
+  getPlants: () =>
+    api.get<APIResponse>('/processors/plants/'),
+
+  // Create processing plant
+  createPlant: (data: {
+    plant_name: string;
+    address: string;
+    city: string;
+    state: string;
+    capacity_quintals_per_day: number;
+  }) =>
+    api.post<APIResponse>('/processors/plants/', data),
+
+  // Update processing plant
+  updatePlant: (id: string, data: {
+    plant_name?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    capacity_quintals_per_day?: number;
+  }) =>
+    api.patch<APIResponse>(`/processors/plants/${id}/`, data),
+
+  // Delete processing plant
+  deletePlant: (id: string) =>
+    api.delete<APIResponse>(`/processors/plants/${id}/`),
 
   // Get inventory
   getInventory: () =>

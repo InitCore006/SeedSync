@@ -321,7 +321,7 @@ function FPOProcurementContent() {
   const [assigningWarehouse, setAssigningWarehouse] = useState(false);
   const [assignError, setAssignError] = useState('');
   
-  const { opportunities, isLoading, isError, meta } = useFPOProcurement({ 
+  const { opportunities, isLoading, isError, meta, mutate: refetchLots } = useFPOProcurement({ 
     crop_type: cropFilter || undefined, 
     quality_grade: gradeFilter || undefined 
   });
@@ -332,12 +332,6 @@ function FPOProcurementContent() {
   
   console.log('Warehouses API response:', warehousesData);
   console.log('Parsed warehouses:', warehouses);
-
-  // Refetch function for procurement lots
-  const { mutate: refetchLots } = useSWR(
-    ['/fpo/procurement', cropFilter, gradeFilter],
-    () => API.fpo.getProcurement({ crop_type: cropFilter || undefined, quality_grade: gradeFilter || undefined })
-  );
 
   const handleCreateLot = (data: any) => {
     console.log('Lot created successfully:', data);
