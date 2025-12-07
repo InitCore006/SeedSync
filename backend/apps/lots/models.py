@@ -35,7 +35,10 @@ class ProcurementLot(TimeStampedModel):
     farmer = models.ForeignKey(
         'farmers.FarmerProfile',
         on_delete=models.CASCADE,
-        related_name='lots'
+        related_name='lots',
+        null=True,  # Allow NULL for FPO-owned aggregated lots
+        blank=True,
+        help_text="Farmer who created the lot. NULL for FPO-aggregated lots."
     )
     fpo = models.ForeignKey(
         'fpos.FPOProfile',
@@ -71,7 +74,7 @@ class ProcurementLot(TimeStampedModel):
     
     # Warehouse Storage (for FPO-managed lots)
     warehouse = models.ForeignKey(
-        'warehouses.Warehouse',
+        'fpos.FPOWarehouse',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -81,7 +84,7 @@ class ProcurementLot(TimeStampedModel):
     
     # Multi-warehouse aggregation (for FPO aggregated lots from multiple warehouses)
     source_warehouses = models.ManyToManyField(
-        'warehouses.Warehouse',
+        'fpos.FPOWarehouse',
         blank=True,
         related_name='aggregated_from_lots',
         help_text="Source warehouses for multi-warehouse aggregated lots"

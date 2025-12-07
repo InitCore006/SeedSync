@@ -12,7 +12,9 @@ from .views import (
     FPOBidsAPIView,
     FPOCreateFarmerAPIView,
     FPORemoveMemberAPIView,
-    FPOCreateAggregatedLotAPIView
+    FPOCreateAggregatedLotAPIView,
+    FPOAssignWarehouseAPIView,
+    FPOWarehouseInventoryAPIView
 )
 
 app_name = 'fpos'
@@ -44,4 +46,10 @@ urlpatterns = [
     
     # Create aggregated lot
     path('create-aggregated-lot/', FPOCreateAggregatedLotAPIView.as_view(), name='fpo-create-aggregated-lot'),
+    
+    # Assign warehouse to lot
+    path('assign-warehouse/', FPOAssignWarehouseAPIView.as_view(), name='fpo-assign-warehouse'),
+    
+    # Warehouse inventory details
+    path('warehouse-inventory/', FPOWarehouseInventoryAPIView.as_view(), name='fpo-warehouse-inventory'),
 ]

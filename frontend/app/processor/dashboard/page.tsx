@@ -59,9 +59,9 @@ function ProcessorDashboardContent() {
               variant="ghost"
               size="sm"
               className="mt-4 text-blue-600"
-              onClick={() => router.push('/processor/procurement')}
+              onClick={() => router.push('/processor/bids')}
             >
-              View Opportunities →
+              Manage Bids →
             </Button>
           </CardContent>
         </Card>

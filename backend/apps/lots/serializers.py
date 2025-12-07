@@ -27,15 +27,17 @@ class ProcurementLotSerializer(serializers.ModelSerializer):
     """Procurement lot serializer"""
     images = LotImageSerializer(many=True, read_only=True)
     status_history = LotStatusHistorySerializer(many=True, read_only=True)
-    farmer_name = serializers.CharField(source='farmer.user.get_full_name', read_only=True)
-    fpo_name = serializers.CharField(source='fpo.fpo_name', read_only=True, allow_null=True)
+    
+    # Dynamic farmer name - shows FPO name for aggregated lots, farmer name otherwise
+    farmer_name = serializers.SerializerMethodField()
+    fpo_name = serializers.CharField(source='fpo.organization_name', read_only=True, allow_null=True)
     crop_type_display = serializers.CharField(source='get_crop_type_display', read_only=True)
     quality_grade_display = serializers.CharField(source='get_quality_grade_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     
     # Warehouse fields
     warehouse_id = serializers.UUIDField(source='warehouse.id', read_only=True, allow_null=True)
-    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True, allow_null=True)
+    warehouse_name = serializers.CharField(source='warehouse.warehouse_name', read_only=True, allow_null=True)
     warehouse_code = serializers.CharField(source='warehouse.warehouse_code', read_only=True, allow_null=True)
     warehouse_district = serializers.CharField(source='warehouse.district', read_only=True, allow_null=True)
     
@@ -48,6 +50,15 @@ class ProcurementLotSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['id', 'lot_number', 'created_at', 'updated_at', 'blockchain_hash']
     
+    def get_farmer_name(self, obj):
+        """
+        Return FPO name for FPO-aggregated lots (farmer=None), 
+        otherwise return farmer's name
+        """
+        if obj.listing_type == 'fpo_aggregated' and obj.farmer is None:
+            return obj.fpo.organization_name if obj.fpo else 'FPO'
+        return obj.farmer.user.get_full_name() if obj.farmer else 'Unknown'
+    
     def get_source_warehouse_ids(self, obj):
         """Get list of source warehouse IDs for aggregated lots"""
         if obj.listing_type == 'fpo_aggregated':
@@ -57,7 +68,7 @@ class ProcurementLotSerializer(serializers.ModelSerializer):
     def get_source_warehouse_names(self, obj):
         """Get list of source warehouse names for aggregated lots"""
         if obj.listing_type == 'fpo_aggregated':
-            return [wh.name for wh in obj.source_warehouses.all()]
+            return [wh.warehouse_name for wh in obj.source_warehouses.all()]
         return []
 
 
@@ -73,23 +84,8 @@ class ProcurementLotCreateSerializer(serializers.ModelSerializer):
         model = ProcurementLot
         fields = ['farmer', 'crop_type', 'quantity_quintals', 'expected_price_per_quintal',
                   'harvest_date', 'quality_grade', 'moisture_content', 'oil_content',
-                  'location_latitude', 'location_longitude', 'description', 'uploaded_images',
-                  'warehouse']
-    
-    def validate(self, attrs):
-        """Validate warehouse capacity before creating lot"""
-        warehouse = attrs.get('warehouse')
-        quantity_quintals = attrs.get('quantity_quintals')
-        
-        if warehouse and quantity_quintals:
-            available_capacity = warehouse.get_available_capacity()
-            
-            if quantity_quintals > available_capacity:
-                raise serializers.ValidationError({
-                    'warehouse': f'Insufficient warehouse capacity. Available: {available_capacity} quintals, Required: {quantity_quintals} quintals'
-                })
-        
-        return attrs
+                  'location_latitude', 'location_longitude', 'description', 'uploaded_images']
+        # Removed 'warehouse' - farmers cannot assign warehouse, only FPO can
     
     def create(self, validated_data):
         from django.utils import timezone
@@ -97,7 +93,7 @@ class ProcurementLotCreateSerializer(serializers.ModelSerializer):
         
         uploaded_images = validated_data.pop('uploaded_images', [])
         farmer = validated_data['farmer']
-        warehouse = validated_data.get('warehouse')
+        # NO warehouse assignment here - FPO will assign later
         
         # Check if farmer belongs to an FPO
         try:
@@ -112,7 +108,7 @@ class ProcurementLotCreateSerializer(serializers.ModelSerializer):
                 validated_data['fpo'] = membership.fpo
                 validated_data['managed_by_fpo'] = True
                 validated_data['listing_type'] = 'fpo_managed'
-                validated_data['status'] = 'available'  # FPO can see it immediately
+                validated_data['status'] = 'available'  # Available for FPO to manage
             else:
                 # Individual farmer - direct to marketplace
                 validated_data['managed_by_fpo'] = False
@@ -130,28 +126,7 @@ class ProcurementLotCreateSerializer(serializers.ModelSerializer):
         for image in uploaded_images:
             LotImage.objects.create(lot=lot, image=image)
         
-        # Auto-create inventory and stock movement if warehouse assigned
-        if warehouse:
-            # Create inventory record
-            inventory = Inventory.objects.create(
-                warehouse=warehouse,
-                lot=lot,
-                quantity=lot.quantity_quintals,
-                entry_date=timezone.now().date()
-            )
-            
-            # Create stock movement record
-            StockMovement.objects.create(
-                warehouse=warehouse,
-                lot=lot,
-                movement_type='in',
-                quantity=lot.quantity_quintals,
-                movement_date=timezone.now().date(),
-                remarks=f'Initial stock from farmer {farmer.user.get_full_name()}'
-            )
-            
-            # Update warehouse current stock
-            warehouse.current_stock_quintals += lot.quantity_quintals
-            warehouse.save(update_fields=['current_stock_quintals'])
+        # NO inventory or stock movement created here
+        # FPO will assign warehouse later via assign-warehouse endpoint
         
         return lot

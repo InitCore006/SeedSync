@@ -60,26 +60,57 @@ function WarehouseModal({ isOpen, onClose, onSuccess, warehouse }: WarehouseModa
     setError('');
 
     try {
-      const submitData = {
-        ...formData,
+      // Clean up data: remove empty strings and convert to proper types
+      const submitData: any = {
+        warehouse_name: formData.warehouse_name,
+        warehouse_code: formData.warehouse_code,
+        warehouse_type: formData.warehouse_type,
+        address: formData.address,
+        village: formData.village || '',
+        district: formData.district,
+        state: formData.state,
+        pincode: formData.pincode,
         capacity_quintals: parseFloat(formData.capacity_quintals as any),
-        latitude: formData.latitude ? parseFloat(formData.latitude as any) : undefined,
-        longitude: formData.longitude ? parseFloat(formData.longitude as any) : undefined,
-        weighing_capacity_quintals: formData.weighing_capacity_quintals 
-          ? parseFloat(formData.weighing_capacity_quintals as any) 
-          : undefined,
+        has_scientific_storage: formData.has_scientific_storage,
+        has_pest_control: formData.has_pest_control,
+        has_fire_safety: formData.has_fire_safety,
+        has_security: formData.has_security,
+        has_loading_unloading_facility: formData.has_loading_unloading_facility,
+        has_quality_testing_lab: formData.has_quality_testing_lab,
+        incharge_name: formData.incharge_name || '',
+        incharge_phone: formData.incharge_phone || '',
+        is_operational: formData.is_operational,
+        notes: formData.notes || '',
       };
+
+      // Add optional numeric fields only if provided
+      if (formData.latitude && formData.latitude !== '') {
+        submitData.latitude = parseFloat(formData.latitude as any);
+      }
+      if (formData.longitude && formData.longitude !== '') {
+        submitData.longitude = parseFloat(formData.longitude as any);
+      }
+      if (formData.weighing_capacity_quintals && formData.weighing_capacity_quintals !== '') {
+        submitData.weighing_capacity_quintals = parseFloat(formData.weighing_capacity_quintals as any);
+      }
+      if (formData.operational_since && formData.operational_since !== '') {
+        submitData.operational_since = formData.operational_since;
+      }
 
       if (isEdit) {
         await API.fpo.updateWarehouse(warehouse.id, submitData);
       } else {
-        await API.fpo.createWarehouse(submitData as any);
+        await API.fpo.createWarehouse(submitData);
       }
       
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to save warehouse');
+      console.error('Warehouse save error:', err.response?.data);
+      const errorMessage = err.response?.data?.errors 
+        ? Object.entries(err.response.data.errors).map(([key, val]) => `${key}: ${val}`).join(', ')
+        : err.response?.data?.message || err.message || 'Failed to save warehouse';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -130,16 +161,19 @@ function WarehouseModal({ isOpen, onClose, onSuccess, warehouse }: WarehouseModa
                 { value: 'shed', label: 'Open Shed' },
               ]}
             />
-            <Input
-              label="Capacity (Quintals)"
-              type="number"
-              required
-              value={formData.capacity_quintals}
-              onChange={(e) => setFormData({ ...formData, capacity_quintals: e.target.value })}
-              placeholder="e.g., 10000"
-              min="1"
-              step="0.01"
-            />
+            <div>
+              <Input
+                label="Storage Capacity (Quintals)"
+                type="number"
+                required
+                value={formData.capacity_quintals}
+                onChange={(e) => setFormData({ ...formData, capacity_quintals: e.target.value })}
+                placeholder="e.g., 10000"
+                min="1"
+                step="0.01"
+              />
+              <p className="text-xs text-gray-500 mt-1">Total storage capacity of the warehouse</p>
+            </div>
           </div>
         </div>
 
@@ -266,15 +300,18 @@ function WarehouseModal({ isOpen, onClose, onSuccess, warehouse }: WarehouseModa
             </label>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <Input
-              label="Weighing Capacity (Quintals)"
-              type="number"
-              value={formData.weighing_capacity_quintals}
-              onChange={(e) => setFormData({ ...formData, weighing_capacity_quintals: e.target.value })}
-              placeholder="Optional"
-              min="0"
-              step="0.01"
-            />
+            <div>
+              <Input
+                label="Weighing Machine Capacity (Quintals)"
+                type="number"
+                value={formData.weighing_capacity_quintals}
+                onChange={(e) => setFormData({ ...formData, weighing_capacity_quintals: e.target.value })}
+                placeholder="Optional"
+                min="0"
+                step="0.01"
+              />
+              <p className="text-xs text-gray-500 mt-1">Maximum weight the weighing machine can measure (not storage capacity)</p>
+            </div>
           </div>
         </div>
 

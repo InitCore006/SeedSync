@@ -15,6 +15,8 @@ import { CROPS, QUALITY_GRADES } from '@/lib/constants';
 import useSWR from 'swr';
 import API from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/lib/stores/authStore';
+import { toast } from 'react-hot-toast';
 
 // Helper function to get crop icon
 const getCropIcon = (cropType: string) => {
@@ -40,14 +42,18 @@ const getCropIcon = (cropType: string) => {
 
 function MarketplaceContent() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [cropFilter, setCropFilter] = useState('');
   const [gradeFilter, setGradeFilter] = useState('');
   const [listingTypeFilter, setListingTypeFilter] = useState('');
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isBidModalOpen, setIsBidModalOpen] = useState(false);
   const [selectedLot, setSelectedLot] = useState<any>(null);
+  const [bidAmount, setBidAmount] = useState('');
+  const [bidQuantity, setBidQuantity] = useState('');
 
-  const { data, error, isLoading } = useSWR(
+  const { data, error, isLoading, mutate } = useSWR(
     ['/marketplace/lots', cropFilter, gradeFilter, listingTypeFilter],
     () => API.marketplace.getLots({
       crop_type: cropFilter || undefined,
@@ -58,12 +64,63 @@ function MarketplaceContent() {
 
   const handleViewLot = (lot: any) => {
     setSelectedLot(lot);
-    
     setIsViewModalOpen(true);
   };
 
   const handlePlaceBid = (lot: any) => {
-    router.push(`/bids/create?lot_id=${lot.id}`);
+    // Check if user is processor or retailer (who can place bids)
+    if (user?.role !== 'processor' && user?.role !== 'retailer') {
+      toast.error('Only processors and retailers can place bids');
+      return;
+    }
+    
+    setSelectedLot(lot);
+    setBidAmount(lot.expected_price_per_quintal?.toString() || '');
+    setBidQuantity(lot.quantity_quintals?.toString() || '');
+    setIsBidModalOpen(true);
+  };
+
+  const handleSubmitBid = async () => {
+    if (!bidAmount || parseFloat(bidAmount) <= 0) {
+      toast.error('Please enter a valid bid amount');
+      return;
+    }
+
+    if (!bidQuantity || parseFloat(bidQuantity) <= 0) {
+      toast.error('Please enter a valid quantity');
+      return;
+    }
+
+    if (parseFloat(bidQuantity) > selectedLot.quantity_quintals) {
+      toast.error('Quantity exceeds available quantity');
+      return;
+    }
+
+    try {
+      if (user?.role === 'processor') {
+        await API.processor.placeBid({
+          lot_id: selectedLot.id,
+          bid_amount_per_quintal: parseFloat(bidAmount),
+          quantity_quintals: parseFloat(bidQuantity),
+        });
+      } else if (user?.role === 'retailer') {
+        // Assuming similar API for retailer
+        await API.processor.placeBid({
+          lot_id: selectedLot.id,
+          bid_amount_per_quintal: parseFloat(bidAmount),
+          quantity_quintals: parseFloat(bidQuantity),
+        });
+      }
+      
+      toast.success('Bid placed successfully!');
+      setIsBidModalOpen(false);
+      setSelectedLot(null);
+      setBidAmount('');
+      setBidQuantity('');
+      mutate(); // Refresh lots
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to place bid');
+    }
   };
 
   if (isLoading) return <Loading fullScreen />;
@@ -368,6 +425,75 @@ function MarketplaceContent() {
             <div className="flex gap-3 pt-4 border-t">
               <Button variant="outline" onClick={() => setIsViewModalOpen(false)} className="flex-1">Close</Button>
               <Button variant="primary" onClick={() => { setIsViewModalOpen(false); handlePlaceBid(selectedLot); }} className="flex-1">Place Bid</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bid Modal */}
+      {selectedLot && (
+        <Modal isOpen={isBidModalOpen} onClose={() => setIsBidModalOpen(false)} title="Place Bid">
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-bold text-lg">{selectedLot.crop_type}</h3>
+              <p className="text-sm text-gray-600">{selectedLot.lot_number}</p>
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Available Quantity:</span>
+                <span className="font-medium">{formatNumber(selectedLot.quantity_quintals)} qtl</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Expected Price:</span>
+                <span className="font-medium">{formatCurrency(selectedLot.expected_price_per_quintal)}/qtl</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Quality Grade:</span>
+                <span className="font-medium">Grade {selectedLot.quality_grade}</span>
+              </div>
+            </div>
+
+            <Input
+              label="Quantity (quintals)"
+              type="number"
+              placeholder="Enter quantity"
+              value={bidQuantity}
+              onChange={(e) => setBidQuantity(e.target.value)}
+              required
+            />
+
+            <Input
+              label="Your Bid Amount (₹/quintal)"
+              type="number"
+              placeholder="Enter your bid"
+              value={bidAmount}
+              onChange={(e) => setBidAmount(e.target.value)}
+              required
+            />
+
+            {bidAmount && bidQuantity && (
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-sm font-medium text-blue-900">
+                  Total Bid Value: {formatCurrency(parseFloat(bidQuantity) * parseFloat(bidAmount || '0'))}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="primary"
+                className="flex-1"
+                onClick={handleSubmitBid}
+              >
+                Submit Bid
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsBidModalOpen(false)}
+              >
+                Cancel
+              </Button>
             </div>
           </div>
         </Modal>

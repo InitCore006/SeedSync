@@ -49,7 +49,6 @@ interface CreateLotModalProps {
 }
 
 function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onRefresh }: CreateLotModalProps) {
-  const [lotType, setLotType] = useState<'direct' | 'aggregated'>('direct');
   const [formData, setFormData] = useState({
     crop_type: '',
     quantity_kg: '',
@@ -57,15 +56,18 @@ function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onR
     expected_price_per_quintal: '',
     moisture_content: '',
     description: '',
-    warehouse_id: '',
   });
   const [selectedLotIds, setSelectedLotIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Filter member lots by selected crop type for aggregation
-  const filteredMemberLots = lotType === 'aggregated' && formData.crop_type
-    ? memberLots.filter(lot => lot.crop_type === formData.crop_type && lot.status === 'available')
+  const filteredMemberLots = formData.crop_type
+    ? memberLots.filter(lot => 
+        lot.crop_type === formData.crop_type && 
+        lot.status === 'available' &&
+        lot.warehouse_id // ONLY lots with warehouses can be aggregated
+      )
     : [];
 
   // Calculate total quantity for aggregated lots
@@ -85,33 +87,38 @@ function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onR
     setIsLoading(true);
 
     try {
-      if (lotType === 'aggregated') {
-        // Create aggregated bulk lot
-        if (selectedLotIds.length === 0) {
-          setError('Please select at least one member lot to aggregate');
-          setIsLoading(false);
-          return;
-        }
+      // Create aggregated bulk lot
+      if (selectedLotIds.length === 0) {
+        setError('Please select at least one member lot to aggregate');
+        setIsLoading(false);
+        return;
+      }
 
-        const response = await API.fpo.createAggregatedLot({
-          parent_lot_ids: selectedLotIds,
-          crop_type: formData.crop_type,
-          quality_grade: formData.quality_grade,
-          expected_price_per_quintal: parseFloat(formData.expected_price_per_quintal),
-          warehouse_id: formData.warehouse_id || undefined,
-          description: formData.description,
-        });
+      // Validate all selected lots have warehouses
+      const selectedLots = memberLots.filter(lot => selectedLotIds.includes(lot.id));
+      const lotsWithoutWarehouse = selectedLots.filter(lot => !lot.warehouse_id);
+      
+      if (lotsWithoutWarehouse.length > 0) {
+        const lotNumbers = lotsWithoutWarehouse.map(l => l.lot_number).join(', ');
+        setError(`Cannot aggregate lots without warehouses: ${lotNumbers}`);
+        setIsLoading(false);
+        return;
+      }
 
-        if (response.data.status === 'success') {
-          onCreate(response.data.data);
-          onRefresh();
-          resetForm();
-        } else {
-          setError(response.data.message || 'Failed to create aggregated lot');
-        }
+      const response = await API.fpo.createAggregatedLot({
+        parent_lot_ids: selectedLotIds,
+        crop_type: formData.crop_type,
+        quality_grade: formData.quality_grade,
+        expected_price_per_quintal: parseFloat(formData.expected_price_per_quintal),
+        description: formData.description,
+      });
+
+      if (response.data.status === 'success') {
+        onCreate(response.data.data);
+        onRefresh();
+        resetForm();
       } else {
-        // Direct lot creation (for future implementation)
-        setError('Direct lot creation not yet implemented');
+        setError(response.data.message || 'Failed to create aggregated lot');
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'An error occurred');
@@ -128,7 +135,6 @@ function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onR
       expected_price_per_quintal: '',
       moisture_content: '',
       description: '',
-      warehouse_id: '',
     });
     setSelectedLotIds([]);
     setError('');
@@ -136,41 +142,31 @@ function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onR
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={resetForm} title="Create Procurement Lot" size="xl">
+    <Modal isOpen={isOpen} onClose={resetForm} title="Create Aggregated Bulk Lot" size="xl">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Lot Type Selection */}
-        <div className="flex gap-4 p-4 bg-gray-50 rounded-lg">
-          <button
-            type="button"
-            onClick={() => { setLotType('direct'); setSelectedLotIds([]); }}
-            className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
-              lotType === 'direct'
-                ? 'bg-primary text-white shadow-md'
-                : 'bg-white text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Package className="w-5 h-5 mx-auto mb-1" />
-            Direct Lot
-          </button>
-          <button
-            type="button"
-            onClick={() => { setLotType('aggregated'); setSelectedLotIds([]); }}
-            className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
-              lotType === 'aggregated'
-                ? 'bg-primary text-white shadow-md'
-                : 'bg-white text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Users className="w-5 h-5 mx-auto mb-1" />
-            Aggregated Bulk Lot
-          </button>
-        </div>
-
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
             {error}
           </div>
         )}
+
+        {/* Aggregation Information Banner */}
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="text-blue-600 mt-0.5">ℹ️</div>
+            <div className="text-sm text-blue-800">
+              <p className="font-medium mb-1">How Aggregation Works:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Select multiple farmer lots that are already stored in warehouses</li>
+                <li>All selected lots must be the same crop type</li>
+                <li>Stock will be <strong>deducted from source warehouses</strong></li>
+                <li>A new <strong>FPO-owned bulk lot</strong> will be created and <strong>listed in marketplace</strong></li>
+                <li>Original lots will be marked as "aggregated" (used for traceability)</li>
+                <li>The aggregated lot is ready for sale to processors/retailers</li>
+              </ul>
+            </div>
+          </div>
+        </div>
 
         {/* Basic Fields */}
         <div className="grid grid-cols-2 gap-4">
@@ -213,22 +209,16 @@ function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onR
             onChange={(e) => setFormData({ ...formData, expected_price_per_quintal: e.target.value })}
           />
 
-          <Select
-            label="Target Warehouse (Optional)"
-            value={formData.warehouse_id}
-            onChange={(e) => setFormData({ ...formData, warehouse_id: e.target.value })}
-            options={[
-              { value: '', label: 'No Warehouse' },
-              ...warehouses.map(wh => ({
-                value: wh.id,
-                label: `${wh.warehouse_name} (${wh.district}) - ${formatNumber(wh.capacity_quintals - wh.current_stock_quintals)} Q available`
-              }))
-            ]}
-          />
+          <div className="flex items-end">
+            <div className="text-sm text-gray-600">
+              <p className="font-medium mb-1">Stock Management:</p>
+              <p>Stock will be deducted from source warehouses and listed in marketplace</p>
+            </div>
+          </div>
         </div>
 
-        {/* Member Lot Selection for Aggregated Type */}
-        {lotType === 'aggregated' && formData.crop_type && (
+        {/* Member Lot Selection */}
+        {formData.crop_type && (
           <div className="border rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">Select Member Lots to Aggregate</h3>
@@ -238,7 +228,18 @@ function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onR
             </div>
 
             {filteredMemberLots.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No available lots for this crop type</p>
+              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <div className="text-yellow-600 mt-0.5">⚠️</div>
+                  <div>
+                    <p className="text-sm font-medium text-yellow-800">No lots available for aggregation</p>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      Aggregation requires lots to be stored in warehouses. 
+                      Please assign warehouses to individual lots first in the "Pending Warehouse Assignment" section below.
+                    </p>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="max-h-64 overflow-y-auto space-y-2">
                 {filteredMemberLots.map((lot: any) => (
@@ -259,49 +260,26 @@ function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onR
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-gray-900">{lot.lot_number}</span>
-                        <Badge className="bg-blue-100 text-blue-800">{lot.quality_grade}</Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-blue-100 text-blue-800">{lot.quality_grade}</Badge>
+                          {lot.warehouse_name && (
+                            <Badge className="bg-green-100 text-green-800 flex items-center gap-1">
+                              <Warehouse className="w-3 h-3" />
+                              {lot.warehouse_name}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
                         <span>{lot.farmer?.full_name || lot.farmer_name}</span>
                         <span>•</span>
                         <span>{formatNumber(lot.quantity_quintals)} Q</span>
-                        {lot.warehouse_name && (
-                          <>
-                            <span>•</span>
-                            <span className="flex items-center gap-1">
-                              <Warehouse className="w-3 h-3" />
-                              {lot.warehouse_name}
-                            </span>
-                          </>
-                        )}
                       </div>
                     </div>
                   </label>
                 ))}
               </div>
             )}
-          </div>
-        )}
-
-        {/* Direct Lot Fields (shown only for direct type) */}
-        {lotType === 'direct' && (
-          <div className="space-y-4">
-            <Input
-              label="Quantity (kg)"
-              type="number"
-              placeholder="Enter quantity"
-              required
-              value={formData.quantity_kg}
-              onChange={(e) => setFormData({ ...formData, quantity_kg: e.target.value })}
-            />
-            <Input
-              label="Moisture Content (%)"
-              type="number"
-              step="0.1"
-              placeholder="Enter moisture percentage"
-              value={formData.moisture_content}
-              onChange={(e) => setFormData({ ...formData, moisture_content: e.target.value })}
-            />
           </div>
         )}
 
@@ -312,7 +290,7 @@ function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onR
           <textarea
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
             rows={3}
-            placeholder="Add any additional details..."
+            placeholder="Add any additional details about this aggregated lot..."
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           />
@@ -323,7 +301,7 @@ function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onR
             Cancel
           </Button>
           <Button type="submit" variant="primary" isLoading={isLoading} className="flex-1">
-            {lotType === 'aggregated' ? 'Create Aggregated Lot' : 'Create Lot'}
+            Create Aggregated Lot
           </Button>
         </div>
       </form>
@@ -337,7 +315,12 @@ function FPOProcurementContent() {
   const [gradeFilter, setGradeFilter] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isAssignWarehouseModalOpen, setIsAssignWarehouseModalOpen] = useState(false);
   const [selectedLot, setSelectedLot] = useState<any>(null);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
+  const [assigningWarehouse, setAssigningWarehouse] = useState(false);
+  const [assignError, setAssignError] = useState('');
+  
   const { opportunities, isLoading, isError, meta } = useFPOProcurement({ 
     crop_type: cropFilter || undefined, 
     quality_grade: gradeFilter || undefined 
@@ -345,7 +328,10 @@ function FPOProcurementContent() {
   
   // Fetch warehouses
   const { data: warehousesData } = useSWR('/fpo/warehouses', () => API.fpo.getWarehouses());
-  const warehouses = warehousesData?.data?.data || [];
+  const warehouses = warehousesData?.data || [];
+  
+  console.log('Warehouses API response:', warehousesData);
+  console.log('Parsed warehouses:', warehouses);
 
   // Refetch function for procurement lots
   const { mutate: refetchLots } = useSWR(
@@ -363,6 +349,46 @@ function FPOProcurementContent() {
     setSelectedLot(lot);
     setIsViewModalOpen(true);
   };
+  
+  const handleOpenAssignWarehouse = (lot: any) => {
+    setSelectedLot(lot);
+    setSelectedWarehouseId('');
+    setAssignError('');
+    setIsAssignWarehouseModalOpen(true);
+  };
+  
+  const handleAssignWarehouse = async () => {
+    if (!selectedLot || !selectedWarehouseId) {
+      setAssignError('Please select a warehouse');
+      return;
+    }
+    
+    setAssigningWarehouse(true);
+    setAssignError('');
+    
+    try {
+      const response = await API.fpo.assignWarehouse({
+        lot_id: selectedLot.id,
+        warehouse_id: selectedWarehouseId
+      });
+      
+      if (response.data.status === 'success') {
+        // Refresh the lot list
+        refetchLots();
+        setIsAssignWarehouseModalOpen(false);
+        setSelectedLot(null);
+        setSelectedWarehouseId('');
+      }
+    } catch (error: any) {
+      setAssignError(error.response?.data?.message || 'Failed to assign warehouse');
+    } finally {
+      setAssigningWarehouse(false);
+    }
+  };
+  
+  // Separate lots into with/without warehouse
+  const lotsWithoutWarehouse = (opportunities || []).filter((lot: any) => !lot.warehouse_id);
+  const lotsWithWarehouse = (opportunities || []).filter((lot: any) => lot.warehouse_id);
 
   if (isLoading) return <Loading fullScreen />;
   if (isError) {
@@ -394,7 +420,7 @@ function FPOProcurementContent() {
           className="flex items-center gap-2"
         >
           <Plus className="w-5 h-5" />
-          Create Lot
+          Create Aggregated Lot
         </Button>
       </div>
 
@@ -471,9 +497,94 @@ function FPOProcurementContent() {
       </Card>
 
       {/* Lots Grid */}
-      {filteredLots.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredLots.map((lot: any) => (
+      <div className="space-y-4">
+        {/* Pending Storage Section */}
+        {lotsWithoutWarehouse.length > 0 && (
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm">
+                {lotsWithoutWarehouse.length}
+              </span>
+              Pending Warehouse Assignment
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {lotsWithoutWarehouse
+                .filter((lot: any) =>
+                  lot.crop_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  lot.lot_number?.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+                .map((lot: any) => (
+                  <Card key={lot.id} className="hover:shadow-lg transition-shadow border-yellow-200">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                            {getCropIcon(lot.crop_type)}
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">{lot.lot_number}</p>
+                            <CardTitle className="mt-1">{lot.crop_type}</CardTitle>
+                            {lot.farmer?.full_name && (
+                              <p className="text-sm text-gray-600 mt-1">Farmer: {lot.farmer.full_name}</p>
+                            )}
+                          </div>
+                        </div>
+                        <Badge variant="status" status="pending" className="bg-yellow-100 text-yellow-800">
+                          No Warehouse
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Quantity:</span>
+                          <span className="font-semibold">{formatNumber(lot.quantity_quintals)} quintals</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Grade:</span>
+                          <span className="font-semibold">Grade {lot.quality_grade}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Expected Price:</span>
+                          <span className="font-semibold">{formatCurrency(lot.expected_price_per_quintal)}/qtl</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Created:</span>
+                          <span className="text-gray-900">{formatDate(lot.created_at, 'P')}</span>
+                        </div>
+                      </div>
+
+                      <Button 
+                        variant="primary" 
+                        className="w-full mt-4 flex items-center justify-center gap-2"
+                        onClick={() => handleOpenAssignWarehouse(lot)}
+                      >
+                        <Warehouse className="w-4 h-4" />
+                        Assign to Warehouse
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Stored Lots Section */}
+        {lotsWithWarehouse.length > 0 && (
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+                {lotsWithWarehouse.length}
+              </span>
+              Lots in Storage
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {lotsWithWarehouse
+                .filter((lot: any) =>
+                  lot.crop_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  lot.lot_number?.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+                .map((lot: any) => (
             <Card key={lot.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -557,24 +668,96 @@ function FPOProcurementContent() {
               </CardContent>
             </Card>
           ))}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center">
-              <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {searchQuery || cropFilter || gradeFilter ? 'No lots found' : 'No procurement opportunities available'}
-              </h3>
-              <p className="text-gray-600 mb-4">
-                {searchQuery || cropFilter || gradeFilter
-                  ? 'Try adjusting your filters'
-                  : 'No lots available for procurement at this time'}
-              </p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+        
+        {/* Empty State */}
+        {lotsWithoutWarehouse.length === 0 && lotsWithWarehouse.length === 0 && (
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center">
+                <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No procurement opportunities available
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  No lots available for procurement at this time
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Assign Warehouse Modal */}
+      <Modal
+        isOpen={isAssignWarehouseModalOpen}
+        onClose={() => setIsAssignWarehouseModalOpen(false)}
+        title="Assign Warehouse to Lot"
+        size="md"
+      >
+        {selectedLot && (
+          <div className="space-y-4">
+            {assignError && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
+                {assignError}
+              </div>
+            )}
+            
+            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+              <p className="text-sm font-medium text-gray-700">Lot Details:</p>
+              <div className="text-sm text-gray-600">
+                <p>Lot Number: <span className="font-semibold">{selectedLot.lot_number}</span></p>
+                <p>Crop: <span className="font-semibold">{selectedLot.crop_type}</span></p>
+                <p>Quantity: <span className="font-semibold">{formatNumber(selectedLot.quantity_quintals)} quintals</span></p>
+                <p>Farmer: <span className="font-semibold">{selectedLot.farmer?.full_name || 'N/A'}</span></p>
+              </div>
+            </div>
+            
+            <Select
+              label="Select Warehouse"
+              value={selectedWarehouseId}
+              onChange={(e) => setSelectedWarehouseId(e.target.value)}
+              required
+              options={warehouses.map((wh: any) => ({
+                value: String(wh.id),
+                label: `${wh.warehouse_name} (${wh.district}) - Available: ${wh.available_capacity?.toFixed(2) || '0.00'} Q`
+              }))}
+            />
+            
+            {selectedWarehouseId && (
+              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
+                <p className="font-medium mb-1">This will:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Create inventory record</li>
+                  <li>Create stock movement IN</li>
+                  <li>Update warehouse stock by +{formatNumber(selectedLot.quantity_quintals)}Q</li>
+                </ul>
+              </div>
+            )}
+            
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setIsAssignWarehouseModalOpen(false)}
+                className="flex-1"
+                disabled={assigningWarehouse}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleAssignWarehouse}
+                className="flex-1"
+                disabled={!selectedWarehouseId || assigningWarehouse}
+              >
+                {assigningWarehouse ? 'Assigning...' : 'Assign Warehouse'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Create Lot Modal */}
       <CreateLotModal
