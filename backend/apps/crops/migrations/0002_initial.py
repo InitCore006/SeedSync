@@ -9,14 +9,14 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('fpos', '0001_initial'),
         ('farmers', '0001_initial'),
+        ('crops', '0001_initial'),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='farmerprofile',
-            name='fpo',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='farmer_members', to='fpos.fpoprofile'),
+            model_name='cropvarietyrequest',
+            name='farmer',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='variety_requests', to='farmers.farmerprofile'),
         ),
     ]

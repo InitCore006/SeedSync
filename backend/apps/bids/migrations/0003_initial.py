@@ -9,14 +9,14 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('bids', '0001_initial'),
-        ('logistics', '0001_initial'),
+        ('bids', '0002_initial'),
+        ('payments', '0001_initial'),
     ]
 
     operations = [
         migrations.AddField(
             model_name='bidacceptance',
-            name='logistics_partner',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='bid_deliveries', to='logistics.logisticspartner'),
+            name='payment',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='bid_acceptance', to='payments.payment'),
         ),
     ]
