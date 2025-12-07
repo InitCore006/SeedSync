@@ -123,6 +123,8 @@ class ProcurementLot(TimeStampedModel):
     )
     quality_grade = models.CharField(
         max_length=3,
+        null=True,
+        blank=True,
         choices=QUALITY_GRADE_CHOICES
     )
     moisture_content = models.DecimalField(
