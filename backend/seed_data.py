@@ -17,12 +17,326 @@ from apps.fpos.models import FPOProfile, FPOMembership
 from apps.processors.models import ProcessorProfile, ProcessingPlant
 from apps.retailers.models import RetailerProfile, Store
 from apps.lots.models import ProcurementLot
-from apps.crops.models import CropMaster, MandiPrice, MSPRecord
+from apps.crops.models import CropMaster, CropVariety, MandiPrice, MSPRecord
 
 User = get_user_model()
 
 print("🌾 SeedSync Sample Data Seeder")
 print("=" * 50)
+
+# -------------------------------------------------------------
+# CROP MASTER DATA
+# -------------------------------------------------------------
+print("\n🌱 Creating crop master data...")
+
+crop_masters_data = [
+    {
+        'crop_code': 'SOYBEAN01',
+        'crop_name': 'soybean',
+        'hindi_name': 'सोयाबीन',
+        'scientific_name': 'Glycine max',
+        'oil_content_percentage': 18.5,
+        'growing_season': ['kharif'],
+        'maturity_days': 95,
+        'water_requirement': 'medium',
+        'suitable_soil_types': ['Black Cotton', 'Red Loamy', 'Alluvial'],
+        'suitable_states': ['Maharashtra', 'Madhya Pradesh', 'Rajasthan', 'Karnataka'],
+        'description': 'Soybean is a major oilseed and protein crop grown during kharif season.',
+        'cultivation_tips': 'Requires well-drained soil, moderate rainfall, and timely weed management.'
+    },
+    {
+        'crop_code': 'MUSTARD01',
+        'crop_name': 'mustard',
+        'hindi_name': 'सरसों',
+        'scientific_name': 'Brassica juncea',
+        'oil_content_percentage': 40.0,
+        'growing_season': ['rabi'],
+        'maturity_days': 120,
+        'water_requirement': 'low',
+        'suitable_soil_types': ['Loamy', 'Sandy Loam', 'Clay Loam'],
+        'suitable_states': ['Rajasthan', 'Haryana', 'Uttar Pradesh', 'Madhya Pradesh'],
+        'description': 'Mustard is a major rabi oilseed crop with high oil content.',
+        'cultivation_tips': 'Grows well in cool weather, requires minimal irrigation.'
+    },
+    {
+        'crop_code': 'GROUNDNUT01',
+        'crop_name': 'groundnut',
+        'hindi_name': 'मूंगफली',
+        'scientific_name': 'Arachis hypogaea',
+        'oil_content_percentage': 48.0,
+        'growing_season': ['kharif', 'rabi'],
+        'maturity_days': 110,
+        'water_requirement': 'medium',
+        'suitable_soil_types': ['Sandy Loam', 'Red Soil', 'Black Soil'],
+        'suitable_states': ['Gujarat', 'Andhra Pradesh', 'Tamil Nadu', 'Karnataka', 'Maharashtra'],
+        'description': 'Groundnut is a major oilseed crop with high oil and protein content.',
+        'cultivation_tips': 'Requires well-drained sandy loam soil and calcium for pod development.'
+    },
+    {
+        'crop_code': 'SUNFLOWER01',
+        'crop_name': 'sunflower',
+        'hindi_name': 'सूरजमुखी',
+        'scientific_name': 'Helianthus annuus',
+        'oil_content_percentage': 40.0,
+        'growing_season': ['kharif', 'rabi'],
+        'maturity_days': 90,
+        'water_requirement': 'medium',
+        'suitable_soil_types': ['Loamy', 'Clay Loam', 'Sandy Loam'],
+        'suitable_states': ['Karnataka', 'Maharashtra', 'Andhra Pradesh', 'Tamil Nadu'],
+        'description': 'Sunflower is a fast-growing oilseed crop suitable for both seasons.',
+        'cultivation_tips': 'Adaptable to various soil types, requires good drainage and sunlight.'
+    },
+    {
+        'crop_code': 'SESAME01',
+        'crop_name': 'sesame',
+        'hindi_name': 'तिल',
+        'scientific_name': 'Sesamum indicum',
+        'oil_content_percentage': 50.0,
+        'growing_season': ['kharif', 'summer'],
+        'maturity_days': 85,
+        'water_requirement': 'low',
+        'suitable_soil_types': ['Sandy Loam', 'Red Soil', 'Black Soil'],
+        'suitable_states': ['Gujarat', 'Rajasthan', 'Madhya Pradesh', 'Uttar Pradesh'],
+        'description': 'Sesame is a drought-tolerant oilseed crop with highest oil content.',
+        'cultivation_tips': 'Grows well in warm climate, minimal water requirement.'
+    },
+]
+
+crop_masters = []
+for data in crop_masters_data:
+    crop, created = CropMaster.objects.get_or_create(
+        crop_code=data['crop_code'],
+        defaults=data
+    )
+    crop_masters.append(crop)
+    status = "Created" if created else "Exists"
+    print(f"  ✓ {status}: {crop.crop_name} ({crop.hindi_name})")
+
+# -------------------------------------------------------------
+# CROP VARIETIES DATA
+# -------------------------------------------------------------
+print("\n🌾 Creating crop varieties...")
+
+varieties_data = [
+    # Soybean Varieties
+    {
+        'crop_code': 'SOYBEAN01',
+        'variety_name': 'JS 335',
+        'variety_code': 'SOY-JS335',
+        'maturity_days': 95,
+        'yield_potential_quintals_per_acre': 12.0,
+        'oil_content_percentage': 19.5,
+        'season': 'kharif',
+        'suitable_regions': ['Maharashtra', 'Madhya Pradesh', 'Rajasthan'],
+        'disease_resistance': ['Yellow Mosaic Virus', 'Bacterial Blight'],
+        'description': 'Most popular soybean variety with excellent yield and disease resistance.',
+        'seed_rate_kg_per_acre': 30.0
+    },
+    {
+        'crop_code': 'SOYBEAN01',
+        'variety_name': 'JS 95-60',
+        'variety_code': 'SOY-JS9560',
+        'maturity_days': 92,
+        'yield_potential_quintals_per_acre': 13.5,
+        'oil_content_percentage': 20.0,
+        'season': 'kharif',
+        'suitable_regions': ['Maharashtra', 'Karnataka', 'Madhya Pradesh'],
+        'disease_resistance': ['Yellow Mosaic Virus', 'Rust', 'Leaf Spot'],
+        'description': 'High-yielding variety with better oil content.',
+        'seed_rate_kg_per_acre': 32.0
+    },
+    {
+        'crop_code': 'SOYBEAN01',
+        'variety_name': 'MAUS 71',
+        'variety_code': 'SOY-MAUS71',
+        'maturity_days': 90,
+        'yield_potential_quintals_per_acre': 11.5,
+        'oil_content_percentage': 19.0,
+        'season': 'kharif',
+        'suitable_regions': ['Maharashtra', 'Gujarat'],
+        'disease_resistance': ['Yellow Mosaic Virus'],
+        'description': 'Early maturing variety suitable for Maharashtra region.',
+        'seed_rate_kg_per_acre': 28.0
+    },
+    
+    # Mustard Varieties
+    {
+        'crop_code': 'MUSTARD01',
+        'variety_name': 'Pusa Bold',
+        'variety_code': 'MUS-PBOLD',
+        'maturity_days': 120,
+        'yield_potential_quintals_per_acre': 8.0,
+        'oil_content_percentage': 40.0,
+        'season': 'rabi',
+        'suitable_regions': ['Haryana', 'Punjab', 'Uttar Pradesh', 'Rajasthan'],
+        'disease_resistance': ['White Rust', 'Alternaria Blight'],
+        'description': 'High-yielding mustard variety with bold seeds.',
+        'seed_rate_kg_per_acre': 2.0
+    },
+    {
+        'crop_code': 'MUSTARD01',
+        'variety_name': 'Varuna',
+        'variety_code': 'MUS-VARUNA',
+        'maturity_days': 125,
+        'yield_potential_quintals_per_acre': 8.5,
+        'oil_content_percentage': 41.0,
+        'season': 'rabi',
+        'suitable_regions': ['Rajasthan', 'Madhya Pradesh', 'Uttar Pradesh'],
+        'disease_resistance': ['White Rust'],
+        'description': 'Popular variety with higher oil content.',
+        'seed_rate_kg_per_acre': 2.5
+    },
+    {
+        'crop_code': 'MUSTARD01',
+        'variety_name': 'Pusa Mustard 25 (NPJ-112)',
+        'variety_code': 'MUS-PM25',
+        'maturity_days': 115,
+        'yield_potential_quintals_per_acre': 9.0,
+        'oil_content_percentage': 39.5,
+        'season': 'rabi',
+        'suitable_regions': ['Haryana', 'Punjab', 'Delhi'],
+        'disease_resistance': ['White Rust', 'Alternaria Blight', 'Powdery Mildew'],
+        'description': 'Early maturing, high-yielding variety with multiple disease resistance.',
+        'seed_rate_kg_per_acre': 2.0
+    },
+    
+    # Groundnut Varieties
+    {
+        'crop_code': 'GROUNDNUT01',
+        'variety_name': 'TAG 24',
+        'variety_code': 'GNT-TAG24',
+        'maturity_days': 110,
+        'yield_potential_quintals_per_acre': 10.0,
+        'oil_content_percentage': 48.0,
+        'season': 'kharif',
+        'suitable_regions': ['Gujarat', 'Andhra Pradesh', 'Karnataka'],
+        'disease_resistance': ['Tikka Disease', 'Rust'],
+        'description': 'Widely cultivated groundnut variety with good oil content.',
+        'seed_rate_kg_per_acre': 40.0
+    },
+    {
+        'crop_code': 'GROUNDNUT01',
+        'variety_name': 'Kadiri 6',
+        'variety_code': 'GNT-K6',
+        'maturity_days': 115,
+        'yield_potential_quintals_per_acre': 11.0,
+        'oil_content_percentage': 49.0,
+        'season': 'kharif',
+        'suitable_regions': ['Andhra Pradesh', 'Karnataka', 'Tamil Nadu'],
+        'disease_resistance': ['Tikka Disease', 'Leaf Spot'],
+        'description': 'High-yielding variety developed for South India.',
+        'seed_rate_kg_per_acre': 42.0
+    },
+    {
+        'crop_code': 'GROUNDNUT01',
+        'variety_name': 'GG 20',
+        'variety_code': 'GNT-GG20',
+        'maturity_days': 105,
+        'yield_potential_quintals_per_acre': 9.5,
+        'oil_content_percentage': 47.5,
+        'season': 'rabi',
+        'suitable_regions': ['Gujarat', 'Maharashtra'],
+        'disease_resistance': ['Rust', 'Tikka Disease'],
+        'description': 'Short duration variety suitable for rabi season.',
+        'seed_rate_kg_per_acre': 38.0
+    },
+    
+    # Sunflower Varieties
+    {
+        'crop_code': 'SUNFLOWER01',
+        'variety_name': 'KBSH 44',
+        'variety_code': 'SUN-KBSH44',
+        'maturity_days': 90,
+        'yield_potential_quintals_per_acre': 7.5,
+        'oil_content_percentage': 40.0,
+        'season': 'kharif',
+        'suitable_regions': ['Karnataka', 'Andhra Pradesh', 'Maharashtra'],
+        'disease_resistance': ['Downy Mildew', 'Rust'],
+        'description': 'Hybrid variety with uniform maturity and high oil content.',
+        'seed_rate_kg_per_acre': 2.5
+    },
+    {
+        'crop_code': 'SUNFLOWER01',
+        'variety_name': 'MSFH 17',
+        'variety_code': 'SUN-MSFH17',
+        'maturity_days': 85,
+        'yield_potential_quintals_per_acre': 8.0,
+        'oil_content_percentage': 41.0,
+        'season': 'rabi',
+        'suitable_regions': ['Karnataka', 'Maharashtra', 'Tamil Nadu'],
+        'disease_resistance': ['Downy Mildew', 'Alternaria Blight'],
+        'description': 'Early maturing hybrid with excellent yield potential.',
+        'seed_rate_kg_per_acre': 2.5
+    },
+    {
+        'crop_code': 'SUNFLOWER01',
+        'variety_name': 'PAC 36',
+        'variety_code': 'SUN-PAC36',
+        'maturity_days': 95,
+        'yield_potential_quintals_per_acre': 8.5,
+        'oil_content_percentage': 42.0,
+        'season': 'kharif',
+        'suitable_regions': ['Andhra Pradesh', 'Karnataka', 'Maharashtra'],
+        'disease_resistance': ['Rust', 'Powdery Mildew'],
+        'description': 'High oil content variety with good disease tolerance.',
+        'seed_rate_kg_per_acre': 3.0
+    },
+    
+    # Sesame Varieties
+    {
+        'crop_code': 'SESAME01',
+        'variety_name': 'Gujarat Til 10',
+        'variety_code': 'SES-GT10',
+        'maturity_days': 85,
+        'yield_potential_quintals_per_acre': 2.5,
+        'oil_content_percentage': 50.0,
+        'season': 'kharif',
+        'suitable_regions': ['Gujarat', 'Rajasthan', 'Madhya Pradesh'],
+        'disease_resistance': ['Phyllody Disease'],
+        'description': 'Popular sesame variety with high oil content.',
+        'seed_rate_kg_per_acre': 1.5
+    },
+    {
+        'crop_code': 'SESAME01',
+        'variety_name': 'TKG 22',
+        'variety_code': 'SES-TKG22',
+        'maturity_days': 80,
+        'yield_potential_quintals_per_acre': 2.8,
+        'oil_content_percentage': 51.0,
+        'season': 'kharif',
+        'suitable_regions': ['Gujarat', 'Madhya Pradesh', 'Rajasthan'],
+        'disease_resistance': ['Phyllody Disease', 'Bacterial Blight'],
+        'description': 'Early maturing variety with excellent oil quality.',
+        'seed_rate_kg_per_acre': 1.5
+    },
+    {
+        'crop_code': 'SESAME01',
+        'variety_name': 'Rama',
+        'variety_code': 'SES-RAMA',
+        'maturity_days': 90,
+        'yield_potential_quintals_per_acre': 3.0,
+        'oil_content_percentage': 49.5,
+        'season': 'summer',
+        'suitable_regions': ['Uttar Pradesh', 'Madhya Pradesh', 'Bihar'],
+        'disease_resistance': ['Phyllody Disease'],
+        'description': 'Summer season variety with good yield potential.',
+        'seed_rate_kg_per_acre': 2.0
+    },
+]
+
+# Create varieties
+crop_varieties = []
+for var_data in varieties_data:
+    crop_code = var_data.pop('crop_code')
+    crop_master = CropMaster.objects.get(crop_code=crop_code)
+    
+    variety, created = CropVariety.objects.get_or_create(
+        variety_code=var_data['variety_code'],
+        defaults={**var_data, 'crop': crop_master}
+    )
+    crop_varieties.append(variety)
+    status = "Created" if created else "Exists"
+    print(f"  ✓ {status}: {variety.variety_name} - {crop_master.get_crop_name_display()}")
 
 # -------------------------------------------------------------
 # USERS
@@ -269,6 +583,8 @@ print("\n" + "=" * 50)
 print("✅ Sample data created successfully!")
 print("\n📊 Summary:")
 print(f"  - Users: {User.objects.count()}")
+print(f"  - Crop Masters: {CropMaster.objects.count()}")
+print(f"  - Crop Varieties: {CropVariety.objects.count()}")
 print(f"  - Farmers: {FarmerProfile.objects.count()}")
 print(f"  - FPOs: {FPOProfile.objects.count()}")
 print(f"  - Processors: {ProcessorProfile.objects.count()}")

@@ -114,15 +114,15 @@ export default function WeatherScreen() {
               <Text style={styles.weather}>{day.weather}</Text>
               <View style={styles.weatherDetails}>
                 <View style={styles.detailItem}>
-                  <Ionicons name="thermometer" size={20} color={COLORS.textSecondary} />
+                  <Ionicons name="thermometer" size={20} color={COLORS.secondary} />
                   <Text style={styles.detailText}>{day.temperature}°C</Text>
                 </View>
                 <View style={styles.detailItem}>
-                  <Ionicons name="water" size={20} color={COLORS.textSecondary} />
+                  <Ionicons name="water" size={20} color={COLORS.secondary} />
                   <Text style={styles.detailText}>{day.humidity}%</Text>
                 </View>
                 <View style={styles.detailItem}>
-                  <Ionicons name="rainy" size={20} color={COLORS.textSecondary} />
+                  <Ionicons name="rainy" size={20} color={COLORS.secondary} />
                   <Text style={styles.detailText}>{day.rainfall}mm</Text>
                 </View>
               </View>
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     marginBottom: 16,
   },
   button: {
@@ -201,6 +201,6 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
 });

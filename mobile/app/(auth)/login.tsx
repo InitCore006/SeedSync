@@ -7,11 +7,13 @@ import {
   Platform,
   ScrollView,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Button, Input } from '@/components';
 import { COLORS } from '@/constants/colors';
 import { authAPI } from '@/services/authService';
+import { getErrorMessage, getErrorTitle, logDetailedError } from '@/utils/errorHandler';
 
 export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -19,19 +21,32 @@ export default function LoginScreen() {
 
   const handleSendOTP = async () => {
     if (!phoneNumber || phoneNumber.length !== 10) {
-      Alert.alert('Error', 'Please enter a valid 10-digit phone number');
+      Alert.alert('Validation Error', 'Please enter a valid 10-digit phone number');
       return;
     }
 
+    console.log('\n📱 === LOGIN ATTEMPT ===');
+    console.log('📱 Phone:', phoneNumber);
+    
     setLoading(true);
     try {
-      await authAPI.sendLoginOTP(phoneNumber);
+      console.log('🔄 Sending OTP for login...');
+      const response = await authAPI.sendLoginOTP(phoneNumber);
+      
+      console.log('✅ OTP sent successfully');
+      console.log('📄 Response:', JSON.stringify(response.data, null, 2));
+      
       router.push({
         pathname: '/(auth)/verify-otp',
         params: { phone: phoneNumber, type: 'login' },
       });
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to send OTP');
+      logDetailedError(error, 'Login Screen - Send OTP');
+      const errorTitle = getErrorTitle(error);
+      const errorMessage = getErrorMessage(error);
+      
+      console.log('❌ Showing error alert:', errorTitle, '-', errorMessage);
+      Alert.alert(errorTitle, errorMessage);
     } finally {
       setLoading(false);
     }
@@ -109,7 +124,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     textAlign: 'center',
   },
   form: {
@@ -124,7 +139,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     marginBottom: 8,
   },
 });

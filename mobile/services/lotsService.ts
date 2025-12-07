@@ -18,37 +18,48 @@ export const lotsAPI = {
     return api.get(ENDPOINTS.LOTS.MY_LOTS);
   },
 
+  // Get marketplace lots
+  getMarketplaceLots: (): Promise<AxiosResponse<PaginatedResponse<ProcurementLot>>> => {
+    return api.get(ENDPOINTS.LOTS.MARKETPLACE);
+  },
+
   // Get single lot
-  getLot: (id: number): Promise<AxiosResponse<ProcurementLot>> => {
+  getLot: (id: string): Promise<AxiosResponse<ProcurementLot>> => {
     return api.get(ENDPOINTS.LOTS.DETAIL(id));
   },
 
   // Create new lot
   createLot: (data: {
     crop_type: string;
+    crop_master_code?: string;
+    crop_variety?: string;
+    crop_variety_code?: string;
     quantity_quintals: number;
     quality_grade: string;
     expected_price_per_quintal: number;
     harvest_date: string;
     moisture_content?: number;
     oil_content?: number;
-    storage_location: string;
+    description?: string;
+    location_latitude?: number;
+    location_longitude?: number;
+    send_to_fpo_warehouse?: boolean;
   }): Promise<AxiosResponse<ProcurementLot>> => {
     return api.post(ENDPOINTS.LOTS.CREATE, data);
   },
 
   // Update lot
-  updateLot: (id: number, data: Partial<ProcurementLot>): Promise<AxiosResponse<ProcurementLot>> => {
+  updateLot: (id: string, data: Partial<ProcurementLot>): Promise<AxiosResponse<ProcurementLot>> => {
     return api.patch(ENDPOINTS.LOTS.UPDATE(id), data);
   },
 
   // Delete lot
-  deleteLot: (id: number): Promise<AxiosResponse<void>> => {
+  deleteLot: (id: string): Promise<AxiosResponse<void>> => {
     return api.delete(ENDPOINTS.LOTS.DELETE(id));
   },
 
   // Upload image
-  uploadImage: (lotId: number, imageUri: string): Promise<AxiosResponse<any>> => {
+  uploadImage: (lotId: string, imageUri: string): Promise<AxiosResponse<any>> => {
     const formData = new FormData();
     const filename = imageUri.split('/').pop() || 'image.jpg';
     

@@ -41,6 +41,6 @@ const styles = StyleSheet.create({
   message: {
     marginTop: 12,
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
 });

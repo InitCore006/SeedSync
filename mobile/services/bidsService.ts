@@ -1,6 +1,6 @@
 import api from './api';
 import { ENDPOINTS } from '@/constants/config';
-import { Bid, MyBidsResponse, PaginatedResponse } from '@/types/api';
+import { Bid, BidCreateData, MyBidsResponse, PaginatedResponse, ApiSuccess } from '@/types/api';
 import { AxiosResponse } from 'axios';
 
 export const bidsAPI = {
@@ -15,26 +15,27 @@ export const bidsAPI = {
   },
 
   // Get bids for a specific lot
-  getLotBids: (lotId: number): Promise<AxiosResponse<PaginatedResponse<Bid>>> => {
+  getLotBids: (lotId: string): Promise<AxiosResponse<PaginatedResponse<Bid>>> => {
     return api.get(ENDPOINTS.BIDS.LOT_BIDS(lotId));
   },
 
+  // Get bid details
+  getBidDetail: (id: number): Promise<AxiosResponse<Bid>> => {
+    return api.get(ENDPOINTS.BIDS.DETAIL(id));
+  },
+
   // Create new bid
-  createBid: (data: {
-    lot: number;
-    offered_price_per_quintal: number;
-    payment_terms?: string;
-  }): Promise<AxiosResponse<Bid>> => {
+  createBid: (data: BidCreateData): Promise<AxiosResponse<Bid>> => {
     return api.post(ENDPOINTS.BIDS.CREATE, data);
   },
 
   // Accept bid
-  acceptBid: (id: number): Promise<AxiosResponse<Bid>> => {
-    return api.post(ENDPOINTS.BIDS.ACCEPT(id));
+  acceptBid: (id: number, data?: { farmer_response?: string }): Promise<AxiosResponse<ApiSuccess<Bid>>> => {
+    return api.post(ENDPOINTS.BIDS.ACCEPT(id), data || {});
   },
 
   // Reject bid
-  rejectBid: (id: number): Promise<AxiosResponse<Bid>> => {
-    return api.post(ENDPOINTS.BIDS.REJECT(id));
+  rejectBid: (id: number, data?: { reason?: string }): Promise<AxiosResponse<ApiSuccess<Bid>>> => {
+    return api.post(ENDPOINTS.BIDS.REJECT(id), data || {});
   },
 };

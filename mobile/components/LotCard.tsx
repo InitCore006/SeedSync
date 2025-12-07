@@ -20,22 +20,27 @@ interface LotCardProps {
 export const LotCard: React.FC<LotCardProps> = ({ lot, onPress, style }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'draft':
-        return COLORS.textSecondary;
-      case 'open':
+      case 'available':
         return COLORS.success;
-      case 'closed':
-        return COLORS.error;
-      case 'awarded':
+      case 'bidding':
+        return COLORS.warning;
+      case 'sold':
         return COLORS.primary;
+      case 'delivered':
+        return COLORS.secondary;
       default:
-        return COLORS.textSecondary;
+        return COLORS.secondary;
     }
   };
 
   const getStatusText = (status: string) => {
-    return status.charAt(0).toUpperCase() + status.slice(1);
+    return lot.status_display || status.charAt(0).toUpperCase() + status.slice(1);
   };
+
+  // Get primary image URL
+  const primaryImage = lot.images && lot.images.length > 0 
+    ? lot.images.find(img => img.is_primary)?.image || lot.images[0]?.image
+    : null;
 
   return (
     <TouchableOpacity
@@ -44,13 +49,15 @@ export const LotCard: React.FC<LotCardProps> = ({ lot, onPress, style }) => {
       activeOpacity={0.7}
       disabled={!onPress}
     >
-      {lot.images && lot.images.length > 0 && (
-        <Image source={{ uri: lot.images[0] }} style={styles.image} />
+      {primaryImage && (
+        <Image source={{ uri: primaryImage }} style={styles.image} />
       )}
       
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.cropType}>{lot.crop_type}</Text>
+          <Text style={styles.cropType}>
+            {lot.crop_type_display || lot.crop_type}
+          </Text>
           <View
             style={[
               styles.statusBadge,
@@ -61,35 +68,50 @@ export const LotCard: React.FC<LotCardProps> = ({ lot, onPress, style }) => {
           </View>
         </View>
 
-        <Text style={styles.variety} numberOfLines={1}>
-          {lot.variety}
-        </Text>
+        {lot.crop_variety && (
+          <Text style={styles.variety} numberOfLines={1}>
+            {lot.crop_variety}
+          </Text>
+        )}
 
         <View style={styles.detailsRow}>
           <Text style={styles.label}>Quantity:</Text>
           <Text style={styles.value}>
-            {formatQuantity(lot.quantity)} {lot.unit}
+            {formatQuantity(lot.quantity_quintals)} Quintals
           </Text>
         </View>
 
         <View style={styles.detailsRow}>
-          <Text style={styles.label}>Base Price:</Text>
-          <Text style={styles.value}>{formatCurrency(lot.base_price)}</Text>
+          <Text style={styles.label}>Price/Quintal:</Text>
+          <Text style={styles.value}>
+            {formatCurrency(lot.expected_price_per_quintal)}
+          </Text>
         </View>
 
-        {lot.location && (
+        {lot.quality_grade && (
           <View style={styles.detailsRow}>
-            <Text style={styles.label}>Location:</Text>
+            <Text style={styles.label}>Quality:</Text>
+            <Text style={styles.value}>
+              {lot.quality_grade_display || lot.quality_grade}
+            </Text>
+          </View>
+        )}
+
+        {lot.warehouse_name && (
+          <View style={styles.detailsRow}>
+            <Text style={styles.label}>Warehouse:</Text>
             <Text style={styles.value} numberOfLines={1}>
-              {lot.location}
+              {lot.warehouse_name}
             </Text>
           </View>
         )}
 
         <View style={styles.footer}>
-          <Text style={styles.date}>Listed: {formatDate(lot.created_at)}</Text>
-          {lot.bid_count !== undefined && (
-            <Text style={styles.bids}>{lot.bid_count} bids</Text>
+          <Text style={styles.date}>
+            {formatDate(lot.created_at)}
+          </Text>
+          {lot.lot_number && (
+            <Text style={styles.lotNumber}>{lot.lot_number}</Text>
           )}
         </View>
       </View>
@@ -126,7 +148,7 @@ const styles = StyleSheet.create({
   cropType: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.text.primary,
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -140,7 +162,7 @@ const styles = StyleSheet.create({
   },
   variety: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.text.secondary,
     marginBottom: 12,
   },
   detailsRow: {
@@ -150,12 +172,12 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.text.secondary,
   },
   value: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.text.primary,
     flex: 1,
     textAlign: 'right',
   },
@@ -169,9 +191,9 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: COLORS.text.secondary,
   },
-  bids: {
+  lotNumber: {
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,

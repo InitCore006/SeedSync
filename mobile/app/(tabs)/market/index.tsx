@@ -13,10 +13,17 @@ import { COLORS } from '@/constants/colors';
 export default function MarketScreen() {
   const features = [
     {
+      title: 'Browse Marketplace',
+      description: 'Find and bid on available lots',
+      icon: 'basket',
+      color: COLORS.primary,
+      route: '/(tabs)/market/browse',
+    },
+    {
       title: 'Market Prices',
       description: 'View live mandi prices and MSP',
       icon: 'pricetag',
-      color: COLORS.primary,
+      color: COLORS.success,
       route: '/(tabs)/market/prices',
     },
     {
@@ -30,15 +37,8 @@ export default function MarketScreen() {
       title: 'Disease Detection',
       description: 'AI-powered leaf disease detection',
       icon: 'camera',
-      color: COLORS.success,
-      route: '/ai/disease-detection',
-    },
-    {
-      title: 'Price Prediction',
-      description: '30-day price forecasting',
-      icon: 'trending-up',
       color: COLORS.warning,
-      route: '/ai/price-prediction',
+      route: '/ai/disease-detection',
     },
   ];
 
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
   },
   grid: {
     padding: 10,
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   },
   cardDescription: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: COLORS.secondary,
     textAlign: 'center',
   },
 });

@@ -2,7 +2,7 @@
 Serializers for Crops App
 """
 from rest_framework import serializers
-from .models import CropMaster, CropVariety, MandiPrice, MSPRecord
+from .models import CropMaster, CropVariety, MandiPrice, MSPRecord, CropVarietyRequest
 
 
 class CropMasterSerializer(serializers.ModelSerializer):
@@ -42,3 +42,30 @@ class MSPRecordSerializer(serializers.ModelSerializer):
     
     def get_total_msp(self, obj):
         return float(obj.get_total_msp())
+
+
+class CropVarietyRequestSerializer(serializers.ModelSerializer):
+    """Serializer for crop variety requests"""
+    crop_type_display = serializers.CharField(source='get_crop_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    requester_name = serializers.SerializerMethodField()
+    requester_type = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CropVarietyRequest
+        fields = '__all__'
+        read_only_fields = ['status', 'admin_notes', 'reviewed_by', 'reviewed_at', 'created_variety']
+    
+    def get_requester_name(self, obj):
+        if obj.farmer:
+            return obj.farmer.full_name
+        elif obj.fpo:
+            return obj.fpo.organization_name
+        return None
+    
+    def get_requester_type(self, obj):
+        if obj.farmer:
+            return 'farmer'
+        elif obj.fpo:
+            return 'fpo'
+        return None

@@ -12,6 +12,7 @@ class FarmerProfileSerializer(serializers.ModelSerializer):
     fpo_name = serializers.CharField(source='get_fpo_name', read_only=True)
     state_display = serializers.CharField(source='get_state_display', read_only=True)
     kyc_status_display = serializers.CharField(source='get_kyc_status_display', read_only=True)
+    fpo_membership = serializers.SerializerMethodField()
     
     class Meta:
         model = FarmerProfile
@@ -20,14 +21,50 @@ class FarmerProfileSerializer(serializers.ModelSerializer):
             'id', 'user', 'total_lots_created', 'total_quantity_sold_quintals',
             'total_earnings', 'kyc_status', 'created_at', 'updated_at'
         ]
+    
+    def get_fpo_membership(self, obj):
+        """Get FPO membership details if farmer is a member"""
+        try:
+            from apps.fpos.models import FPOMembership
+            membership = FPOMembership.objects.filter(
+                farmer=obj, 
+                status='active'
+            ).select_related('fpo').first()
+            
+            if membership:
+                return {
+                    'fpo_id': str(membership.fpo.id),
+                    'fpo_name': membership.fpo.fpo_name,
+                    'joined_date': membership.created_at.isoformat(),
+                    'status': membership.status,
+                    'warehouse_name': membership.fpo.warehouses.first().warehouse_name if membership.fpo.warehouses.exists() else None
+                }
+            return None
+        except Exception:
+            return None
 
 
 class FarmerProfileCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating farmer profile"""
+    """Serializer for creating farmer profile - Single step registration"""
     
     class Meta:
         model = FarmerProfile
-        exclude = ['user', 'total_lots_created', 'total_quantity_sold_quintals', 'total_earnings']
+        fields = [
+            'full_name', 'father_name', 'total_land_acres', 'district', 'state', 'pincode',
+            'date_of_birth', 'gender', 'farming_experience_years', 'primary_crops',
+            'village', 'post_office', 'tehsil', 'latitude', 'longitude',
+            'aadhaar_number', 'pan_number', 'bank_account_number', 
+            'bank_account_holder_name', 'ifsc_code', 'bank_name', 'bank_branch',
+            'preferred_language', 'profile_photo'
+        ]
+    
+    def validate(self, attrs):
+        # Ensure required fields for initial registration
+        required_fields = ['full_name', 'total_land_acres', 'district', 'state', 'pincode']
+        for field in required_fields:
+            if field not in attrs or not attrs[field]:
+                raise serializers.ValidationError({field: f"{field.replace('_', ' ').title()} is required"})
+        return attrs
 
 
 class FarmerProfileUpdateSerializer(serializers.ModelSerializer):

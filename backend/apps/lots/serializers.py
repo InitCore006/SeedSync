@@ -47,7 +47,7 @@ class ProcurementLotSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ProcurementLot
-        fields = '__all__'
+        exclude = ['source_warehouses', 'parent_lots']  # Exclude M2M fields, use SerializerMethodFields instead
         read_only_fields = ['id', 'lot_number', 'created_at', 'updated_at', 'blockchain_hash']
     
     def get_farmer_name(self, obj):
@@ -82,7 +82,8 @@ class ProcurementLotCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ProcurementLot
-        fields = ['farmer', 'crop_type', 'quantity_quintals', 'expected_price_per_quintal',
+        fields = ['crop_type', 'crop_master_code', 'crop_variety', 'crop_variety_code',
+                  'quantity_quintals', 'expected_price_per_quintal',
                   'harvest_date', 'quality_grade', 'moisture_content', 'oil_content',
                   'location_latitude', 'location_longitude', 'description', 'uploaded_images']
         # Removed 'warehouse' - farmers cannot assign warehouse, only FPO can
@@ -94,6 +95,9 @@ class ProcurementLotCreateSerializer(serializers.ModelSerializer):
         uploaded_images = validated_data.pop('uploaded_images', [])
         farmer = validated_data['farmer']
         # NO warehouse assignment here - FPO will assign later
+        
+        # Set available_quantity_quintals equal to quantity_quintals initially
+        validated_data['available_quantity_quintals'] = validated_data['quantity_quintals']
         
         # Check if farmer belongs to an FPO
         try:
