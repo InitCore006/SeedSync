@@ -50,6 +50,26 @@ class LogisticsPartnerViewSet(viewsets.ModelViewSet):
         return queryset
     
     def create(self, request, *args, **kwargs):
+        # Check if user has UserProfile first
+        if not hasattr(request.user, 'profile'):
+            return Response(
+                response_error(
+                    message="User profile required. Please complete your profile first.",
+                    errors={"user_profile": "UserProfile must be created before creating LogisticsPartner profile"}
+                ),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if logistics profile already exists
+        if hasattr(request.user, 'logistics_profile'):
+            return Response(
+                response_error(
+                    message="Logistics partner profile already exists",
+                    errors={"logistics_profile": "You already have a logistics partner profile"}
+                ),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             serializer.save(user=request.user)
@@ -89,11 +109,16 @@ class LogisticsPartnerViewSet(viewsets.ModelViewSet):
         partner = self.get_object()
         
         stats_data = {
-            'total_vehicles': partner.vehicles.count(),
+            'total_vehicles': partner.vehicles.filter(is_active=True).count(),
+            'available_vehicles': partner.vehicles.filter(is_active=True, is_available=True).count(),
             'total_shipments': partner.shipments.count(),
-            'active_shipments': partner.shipments.filter(status='in_transit').count(),
+            'pending_shipments': partner.shipments.filter(status='pending').count(),
+            'active_shipments': partner.shipments.filter(status__in=['accepted', 'in_transit']).count(),
             'completed_shipments': partner.shipments.filter(status='delivered').count(),
             'is_verified': partner.is_verified,
+            'average_rating': float(partner.average_rating),
+            'total_deliveries': partner.total_deliveries,
+            'on_time_delivery_rate': float(partner.on_time_delivery_rate),
         }
         
         return Response(
@@ -110,11 +135,16 @@ class LogisticsPartnerViewSet(viewsets.ModelViewSet):
             partner = LogisticsPartner.objects.select_related('user').get(user=request.user)
             
             stats_data = {
-                'total_vehicles': partner.vehicles.count(),
+                'total_vehicles': partner.vehicles.filter(is_active=True).count(),
+                'available_vehicles': partner.vehicles.filter(is_active=True, is_available=True).count(),
                 'total_shipments': partner.shipments.count(),
-                'active_shipments': partner.shipments.filter(status='in_transit').count(),
+                'pending_shipments': partner.shipments.filter(status='pending').count(),
+                'active_shipments': partner.shipments.filter(status__in=['accepted', 'in_transit']).count(),
                 'completed_shipments': partner.shipments.filter(status='delivered').count(),
                 'is_verified': partner.is_verified,
+                'average_rating': float(partner.average_rating),
+                'total_deliveries': partner.total_deliveries,
+                'on_time_delivery_rate': float(partner.on_time_delivery_rate),
             }
             
             return Response(
@@ -239,6 +269,8 @@ class ShipmentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
         """Update shipment status"""
+        from django.utils import timezone
+        
         shipment = self.get_object()
         new_status = request.data.get('status')
         
@@ -248,14 +280,27 @@ class ShipmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        valid_statuses = ['pending', 'in_transit', 'delivered', 'cancelled']
+        valid_statuses = ['pending', 'accepted', 'in_transit', 'delivered', 'cancelled', 'rejected']
         if new_status not in valid_statuses:
             return Response(
                 response_error(message=f"Invalid status. Valid options: {', '.join(valid_statuses)}"),
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Update timestamps based on status
+        if new_status == 'in_transit' and not shipment.actual_pickup_date:
+            shipment.actual_pickup_date = timezone.now()
+        elif new_status == 'delivered' and not shipment.actual_delivery_date:
+            shipment.actual_delivery_date = timezone.now()
+        
         shipment.status = new_status
+        
+        # Update cancellation reason if provided
+        if new_status in ['cancelled', 'rejected']:
+            cancellation_reason = request.data.get('cancellation_reason', '')
+            if cancellation_reason:
+                shipment.cancellation_reason = cancellation_reason
+        
         shipment.save()
         
         return Response(
