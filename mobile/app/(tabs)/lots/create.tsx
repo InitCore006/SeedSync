@@ -14,17 +14,27 @@ import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Input } from '@/components';
+import { Button, Input, CropSelector, VarietySelector, RequestVarietyModal } from '@/components';
 import { COLORS } from '@/constants/colors';
 import { lotsAPI } from '@/services/lotsService';
 import { useLotsStore } from '@/store/lotsStore';
-import { CROP_TYPES, QUALITY_GRADES } from '@/constants/crops';
+import { useAuthStore } from '@/store/authStore';
+import { QUALITY_GRADES } from '@/constants/crops';
+import { CropMaster, CropVariety } from '@/services/cropsService';
 
 export default function CreateLotScreen() {
   const { addLot } = useLotsStore();
+  const { user } = useAuthStore();
+  
+  // Crop Selection States
+  const [selectedCrop, setSelectedCrop] = useState<CropMaster | null>(null);
+  const [selectedVariety, setSelectedVariety] = useState<CropVariety | null>(null);
+  const [cropSelectorVisible, setCropSelectorVisible] = useState(false);
+  const [varietySelectorVisible, setVarietySelectorVisible] = useState(false);
+  const [requestModalVisible, setRequestModalVisible] = useState(false);
+  
+  // Form States
   const [formData, setFormData] = useState({
-    crop_type: 'soybean',
-    crop_variety: '',
     harvest_date: new Date().toISOString().split('T')[0],
     quantity_quintals: '',
     quality_grade: 'A',
@@ -32,12 +42,19 @@ export default function CreateLotScreen() {
     moisture_content: '',
     oil_content: '',
     description: '',
-    storage_conditions: '',
-    organic_certified: false,
-    pickup_address: '',
   });
+  const [sendToFPO, setSendToFPO] = useState(false);
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const handleCropSelect = (crop: CropMaster) => {
+    setSelectedCrop(crop);
+    setSelectedVariety(null); // Reset variety when crop changes
+  };
+
+  const handleVarietySelect = (variety: CropVariety) => {
+    setSelectedVariety(variety);
+  };
 
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -65,48 +82,91 @@ export default function CreateLotScreen() {
   };
 
   const handleCreate = async () => {
-    if (!formData.crop_type || !formData.quantity_quintals || !formData.expected_price_per_quintal) {
-      Alert.alert('Error', 'Please fill all required fields');
+    // Validation
+    if (!selectedCrop) {
+      Alert.alert('Required Field', 'Please select a crop type');
+      setCropSelectorVisible(true);
+      return;
+    }
+
+    if (!selectedVariety) {
+      Alert.alert('Required Field', 'Please select a crop variety');
+      setVarietySelectorVisible(true);
+      return;
+    }
+
+    if (!formData.quantity_quintals || !formData.expected_price_per_quintal) {
+      Alert.alert('Required Fields', 'Please fill quantity and expected price');
       return;
     }
 
     if (images.length < 2) {
-      Alert.alert('Error', 'Please upload at least 2 images');
+      Alert.alert('Images Required', 'Please upload at least 2 images of your crop');
       return;
     }
 
     setLoading(true);
     try {
+      // Prepare lot data
       const lotData = {
-        crop_type: formData.crop_type,
-        crop_variety: formData.crop_variety || undefined,
-        harvest_date: formData.harvest_date,
+        crop_type: selectedCrop.crop_name,
+        crop_master_code: selectedCrop.crop_code,
+        crop_variety: selectedVariety.variety_name,
+        crop_variety_code: selectedVariety.variety_code,
         quantity_quintals: parseFloat(formData.quantity_quintals),
         quality_grade: formData.quality_grade,
         expected_price_per_quintal: parseFloat(formData.expected_price_per_quintal),
+        harvest_date: formData.harvest_date,
         moisture_content: formData.moisture_content ? parseFloat(formData.moisture_content) : undefined,
         oil_content: formData.oil_content ? parseFloat(formData.oil_content) : undefined,
-        description: formData.description || undefined,
-        storage_conditions: formData.storage_conditions || undefined,
-        organic_certified: formData.organic_certified,
-        pickup_address: formData.pickup_address || undefined,
+        description: formData.description || '',
+        send_to_fpo_warehouse: sendToFPO,
       };
 
+      console.log('📦 Creating lot with data:', lotData);
+      
+      // Create lot
       const response = await lotsAPI.createLot(lotData);
       const newLot = response.data;
+      
+      console.log('✅ Lot created successfully:', {
+        id: newLot.id,
+        lot_number: newLot.lot_number,
+        status: newLot.status
+      });
 
       // Upload images
-      for (const imageUri of images) {
-        await lotsAPI.uploadImage(newLot.id, imageUri);
+      if (newLot?.id && images.length > 0) {
+        console.log(`📸 Uploading ${images.length} images for lot: ${newLot.id}`);
+        
+        for (let i = 0; i < images.length; i++) {
+          try {
+            const imageUri = images[i];
+            await lotsAPI.uploadImage(newLot.id, imageUri);
+            console.log(`✅ Image ${i + 1}/${images.length} uploaded successfully`);
+          } catch (imgError: any) {
+            console.error(`❌ Failed to upload image ${i + 1}:`, imgError);
+            // Continue with other images
+          }
+        }
       }
 
+      // Add lot to store
       addLot(newLot);
-      Alert.alert('Success', 'Lot created successfully! QR code will be generated.', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      console.log('✅ Lot added to store');
+
+      Alert.alert(
+        'Success! 🎉',
+        `Your lot "${newLot.lot_number}" has been created successfully and is now visible to buyers.`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
     } catch (error: any) {
-      console.error('Failed to create lot:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to create lot');
+      console.error('❌ Failed to create lot:', error);
+      const errorMessage = error.response?.data?.detail || 
+                          error.response?.data?.message || 
+                          error.message ||
+                          'Failed to create lot. Please try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -116,11 +176,286 @@ export default function CreateLotScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      keyboardVerticalOffset={100}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Image Upload Section */}
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Create Procurement Lot</Text>
+          <Text style={styles.headerSubtitle}>
+            List your crop for sale in the marketplace
+          </Text>
+        </View>
+
+        {/* Step 1: Government Crop Selection */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Lot Images * (2-3 required)</Text>
+          <View style={styles.sectionHeader}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepNumber}>1</Text>
+            </View>
+            <View style={styles.sectionTitleContainer}>
+              <Text style={styles.sectionTitle}>Select Crop & Variety</Text>
+              <Text style={styles.sectionHint}>Government-registered crops only</Text>
+            </View>
+          </View>
+
+          {/* Crop Selection */}
+          <TouchableOpacity
+            style={[styles.selectionButton, selectedCrop && styles.selectionButtonActive]}
+            onPress={() => setCropSelectorVisible(true)}
+          >
+            <View style={styles.selectionContent}>
+              {selectedCrop ? (
+                <>
+                  <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
+                  <View style={styles.selectionTextContainer}>
+                    <Text style={styles.selectionLabel}>Crop Selected</Text>
+                    <Text style={styles.selectionValue}>
+                      {selectedCrop.crop_name_display}
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="leaf-outline" size={24} color={COLORS.secondary} />
+                  <View style={styles.selectionTextContainer}>
+                    <Text style={styles.selectionPlaceholder}>Select Crop Type *</Text>
+                  </View>
+                </>
+              )}
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.secondary} />
+          </TouchableOpacity>
+
+          {/* Variety Selection */}
+          {selectedCrop && (
+            <TouchableOpacity
+              style={[styles.selectionButton, selectedVariety && styles.selectionButtonActive]}
+              onPress={() => setVarietySelectorVisible(true)}
+            >
+              <View style={styles.selectionContent}>
+                {selectedVariety ? (
+                  <>
+                    <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
+                    <View style={styles.selectionTextContainer}>
+                      <Text style={styles.selectionLabel}>Variety Selected</Text>
+                      <Text style={styles.selectionValue}>
+                        {selectedVariety.variety_name}
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="flower-outline" size={24} color={COLORS.secondary} />
+                    <View style={styles.selectionTextContainer}>
+                      <Text style={styles.selectionPlaceholder}>Select Variety *</Text>
+                    </View>
+                  </>
+                )}
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.secondary} />
+            </TouchableOpacity>
+          )}
+
+          {/* Variety Info Card */}
+          {selectedCrop && selectedVariety && (
+            <View style={styles.cropInfoCard}>
+              <View style={styles.cropInfoRow}>
+                <Text style={styles.cropInfoLabel}>Maturity:</Text>
+                <Text style={styles.cropInfoValue}>{selectedVariety.maturity_days} days</Text>
+              </View>
+              <View style={styles.cropInfoRow}>
+                <Text style={styles.cropInfoLabel}>Yield:</Text>
+                <Text style={styles.cropInfoValue}>
+                  {selectedVariety.yield_potential_quintals_per_acre} Q/acre
+                </Text>
+              </View>
+              <View style={styles.cropInfoRow}>
+                <Text style={styles.cropInfoLabel}>Oil:</Text>
+                <Text style={styles.cropInfoValue}>{selectedVariety.oil_content_percentage}%</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Step 2: Quantity & Pricing */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepNumber}>2</Text>
+            </View>
+            <View style={styles.sectionTitleContainer}>
+              <Text style={styles.sectionTitle}>Quantity & Pricing</Text>
+              <Text style={styles.sectionHint}>Enter lot details</Text>
+            </View>
+          </View>
+
+          <View style={styles.row}>
+            <View style={styles.halfWidth}>
+              <Input
+                label="Quantity (Quintals) *"
+                value={formData.quantity_quintals}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, quantity_quintals: text })
+                }
+                placeholder="100"
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.halfWidth}>
+              <Input
+                label="Expected Price (₹/Q) *"
+                value={formData.expected_price_per_quintal}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, expected_price_per_quintal: text })
+                }
+                placeholder="4500"
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+
+          <Input
+            label="Harvest Date *"
+            value={formData.harvest_date}
+            onChangeText={(text) =>
+              setFormData({ ...formData, harvest_date: text })
+            }
+            placeholder="YYYY-MM-DD"
+          />
+
+          <View style={styles.pickerContainer}>
+            <Text style={styles.label}>Quality Grade *</Text>
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={formData.quality_grade}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, quality_grade: value })
+                }
+              >
+                {QUALITY_GRADES.map((grade) => (
+                  <Picker.Item
+                    key={grade.value}
+                    label={grade.label}
+                    value={grade.value}
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+        </View>
+
+        {/* FPO Warehouse Option - Conditional on FPO Membership */}
+        {user?.profile?.fpo_membership && (
+          <View style={styles.section}>
+            <View style={styles.fpoSection}>
+              <View style={styles.fpoHeader}>
+                <Ionicons name="business" size={24} color={COLORS.primary} />
+                <View style={styles.fpoHeaderText}>
+                  <Text style={styles.fpoTitle}>FPO Aggregated Listing</Text>
+                  <Text style={styles.fpoSubtitle}>
+                    Send to {user.profile.fpo_membership.fpo_name}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setSendToFPO(!sendToFPO)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.checkboxContainer}>
+                  <View style={[styles.checkbox, sendToFPO && styles.checkboxChecked]}>
+                    {sendToFPO && (
+                      <Ionicons name="checkmark" size={18} color={COLORS.white} />
+                    )}
+                  </View>
+                  <View style={styles.checkboxTextContainer}>
+                    <Text style={styles.checkboxLabel}>
+                      Send to FPO warehouse for collective listing
+                    </Text>
+                    <Text style={styles.checkboxHint}>
+                      Your lot will be aggregated with others for better pricing
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              {sendToFPO && (
+                <View style={styles.fpoInfoCard}>
+                  <View style={styles.fpoInfoRow}>
+                    <Ionicons name="location" size={16} color={COLORS.secondary} />
+                    <Text style={styles.fpoInfoLabel}>Warehouse:</Text>
+                    <Text style={styles.fpoInfoValue}>
+                      {user.profile.fpo_membership.warehouse_name || 'Main Warehouse'}
+                    </Text>
+                  </View>
+                  <View style={styles.fpoInfoRow}>
+                    <Ionicons name="information-circle" size={16} color={COLORS.secondary} />
+                    <Text style={styles.fpoInfoLabel}>Status:</Text>
+                    <Text style={styles.fpoInfoValue}>
+                      Auto-assigned to FPO lot
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Step 3: Quality Parameters */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepNumber}>3</Text>
+            </View>
+            <View style={styles.sectionTitleContainer}>
+              <Text style={styles.sectionTitle}>Quality Parameters</Text>
+              <Text style={styles.sectionHint}>Optional but recommended</Text>
+            </View>
+          </View>
+
+          <View style={styles.row}>
+            <View style={styles.halfWidth}>
+              <Input
+                label="Moisture (%)"
+                value={formData.moisture_content}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, moisture_content: text })
+                }
+                placeholder="12"
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.halfWidth}>
+              <Input
+                label="Oil Content (%)"
+                value={formData.oil_content}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, oil_content: text })
+                }
+                placeholder="18"
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Step 4: Images */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepNumber}>4</Text>
+            </View>
+            <View style={styles.sectionTitleContainer}>
+              <Text style={styles.sectionTitle}>Upload Images *</Text>
+              <Text style={styles.sectionHint}>Add 2-3 clear photos</Text>
+            </View>
+          </View>
+
           <View style={styles.imagesRow}>
             {images.map((uri, index) => (
               <View key={index} style={styles.imageWrapper}>
@@ -142,149 +477,68 @@ export default function CreateLotScreen() {
           </View>
         </View>
 
-        {/* Crop Details Section */}
+        {/* Step 5: Additional Info */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Crop Details</Text>
-          
-          <View style={styles.pickerContainer}>
-            <Text style={styles.label}>Crop Type *</Text>
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={formData.crop_type}
-                onValueChange={(value) => setFormData({ ...formData, crop_type: value })}
-              >
-                {Object.entries(CROP_TYPES).map(([key, crop]) => (
-                  <Picker.Item key={key} label={`${crop.icon} ${crop.label}`} value={key} />
-                ))}
-              </Picker>
+          <View style={styles.sectionHeader}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepNumber}>5</Text>
+            </View>
+            <View style={styles.sectionTitleContainer}>
+              <Text style={styles.sectionTitle}>Additional Details</Text>
+              <Text style={styles.sectionHint}>Optional</Text>
             </View>
           </View>
-
-          <Input
-            label="Crop Variety"
-            placeholder="e.g., Pusa Bold, JS-335"
-            value={formData.crop_variety}
-            onChangeText={(text) => setFormData({ ...formData, crop_variety: text })}
-          />
-
-          <Input
-            label="Harvest Date *"
-            placeholder="YYYY-MM-DD"
-            value={formData.harvest_date}
-            onChangeText={(text) => setFormData({ ...formData, harvest_date: text })}
-          />
-
-          <View style={styles.row}>
-            <View style={styles.halfWidth}>
-              <Input
-                label="Quantity (Quintals) *"
-                placeholder="e.g., 50"
-                value={formData.quantity_quintals}
-                onChangeText={(text) => setFormData({ ...formData, quantity_quintals: text })}
-                keyboardType="decimal-pad"
-              />
-            </View>
-            <View style={styles.halfWidth}>
-              <View style={styles.pickerContainer}>
-                <Text style={styles.label}>Quality Grade *</Text>
-                <View style={styles.pickerWrapper}>
-                  <Picker
-                    selectedValue={formData.quality_grade}
-                    onValueChange={(value) => setFormData({ ...formData, quality_grade: value })}
-                  >
-                    {Object.entries(QUALITY_GRADES).map(([key, grade]) => (
-                      <Picker.Item key={key} label={`${key} - ${grade.label}`} value={key} />
-                    ))}
-                  </Picker>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          <Input
-            label="Expected Price (₹/Quintal) *"
-            placeholder="e.g., 5500"
-            value={formData.expected_price_per_quintal}
-            onChangeText={(text) => setFormData({ ...formData, expected_price_per_quintal: text })}
-            keyboardType="decimal-pad"
-          />
-        </View>
-
-        {/* Quality Parameters Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quality Parameters (Optional)</Text>
-          
-          <View style={styles.row}>
-            <View style={styles.halfWidth}>
-              <Input
-                label="Moisture Content (%)"
-                placeholder="e.g., 8.5"
-                value={formData.moisture_content}
-                onChangeText={(text) => setFormData({ ...formData, moisture_content: text })}
-                keyboardType="decimal-pad"
-              />
-            </View>
-            <View style={styles.halfWidth}>
-              <Input
-                label="Oil Content (%)"
-                placeholder="e.g., 38.5"
-                value={formData.oil_content}
-                onChangeText={(text) => setFormData({ ...formData, oil_content: text })}
-                keyboardType="decimal-pad"
-              />
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.checkboxRow}
-            onPress={() => setFormData({ ...formData, organic_certified: !formData.organic_certified })}
-          >
-            <Ionicons
-              name={formData.organic_certified ? 'checkbox' : 'square-outline'}
-              size={24}
-              color={formData.organic_certified ? COLORS.primary : COLORS.secondary}
-            />
-            <Text style={styles.checkboxLabel}>Organic Certified</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Storage & Pickup Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Storage & Pickup Details</Text>
-          
-          <Input
-            label="Storage Conditions"
-            placeholder="e.g., Cold storage, Warehouse"
-            value={formData.storage_conditions}
-            onChangeText={(text) => setFormData({ ...formData, storage_conditions: text })}
-          />
-
-          <Input
-            label="Pickup Address"
-            placeholder="Complete address for pickup"
-            value={formData.pickup_address}
-            onChangeText={(text) => setFormData({ ...formData, pickup_address: text })}
-            multiline
-            numberOfLines={3}
-          />
 
           <Input
             label="Description"
-            placeholder="Additional details about the lot"
             value={formData.description}
-            onChangeText={(text) => setFormData({ ...formData, description: text })}
+            onChangeText={(text) =>
+              setFormData({ ...formData, description: text })
+            }
+            placeholder="Any additional information about your crop lot..."
             multiline
             numberOfLines={4}
           />
         </View>
 
+        {/* Create Button */}
         <Button
-          title="Create Lot"
+          title={loading ? "Creating Lot..." : "Create Procurement Lot"}
           onPress={handleCreate}
           loading={loading}
-          style={styles.button}
+          disabled={loading}
+          style={styles.submitButton}
         />
       </ScrollView>
+
+      {/* Modals */}
+      <CropSelector
+        visible={cropSelectorVisible}
+        onClose={() => setCropSelectorVisible(false)}
+        onSelect={handleCropSelect}
+        selectedCropCode={selectedCrop?.crop_code}
+      />
+
+      {selectedCrop && (
+        <>
+          <VarietySelector
+            visible={varietySelectorVisible}
+            onClose={() => setVarietySelectorVisible(false)}
+            onSelect={handleVarietySelect}
+            onRequestNew={() => setRequestModalVisible(true)}
+            cropCode={selectedCrop.crop_code}
+            cropName={selectedCrop.crop_name_display}
+            selectedVarietyCode={selectedVariety?.variety_code}
+          />
+
+          <RequestVarietyModal
+            visible={requestModalVisible}
+            onClose={() => setRequestModalVisible(false)}
+            cropType={selectedCrop.crop_name}
+            cropName={selectedCrop.crop_name_display}
+          />
+        </>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -292,20 +546,121 @@ export default function CreateLotScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#f8fafc',
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: 16,
+    paddingBottom: 120,
+  },
+  header: {
+    marginBottom: 24,
+    paddingTop: 8,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: COLORS.secondary,
   },
   section: {
     marginBottom: 24,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+    gap: 12,
+  },
+  stepBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepNumber: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  sectionTitleContainer: {
+    flex: 1,
+  },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginBottom: 2,
+  },
+  sectionHint: {
+    fontSize: 13,
+    color: COLORS.secondary,
+  },
+  selectionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: COLORS.border,
     marginBottom: 12,
+  },
+  selectionButtonActive: {
+    borderColor: COLORS.success,
+    backgroundColor: '#f0fdf4',
+  },
+  selectionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  selectionTextContainer: {
+    flex: 1,
+  },
+  selectionLabel: {
+    fontSize: 12,
+    color: COLORS.secondary,
+    marginBottom: 3,
+  },
+  selectionValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+  },
+  selectionPlaceholder: {
+    fontSize: 15,
+    color: COLORS.secondary,
+  },
+  cropInfoCard: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#86efac',
+    marginTop: 8,
+  },
+  cropInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+  },
+  cropInfoLabel: {
+    fontSize: 13,
+    color: '#166534',
+  },
+  cropInfoValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#166534',
   },
   imagesRow: {
     flexDirection: 'row',
@@ -320,64 +675,141 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: 8,
+    borderRadius: 12,
   },
   removeImageBtn: {
     position: 'absolute',
     top: -8,
     right: -8,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#fff',
     borderRadius: 12,
   },
   addImageBtn: {
     width: 100,
     height: 100,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: COLORS.border,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fafafa',
   },
   addImageText: {
     fontSize: 12,
     color: COLORS.secondary,
-    marginTop: 4,
+    marginTop: 6,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  halfWidth: {
+    flex: 1,
   },
   pickerContainer: {
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text.primary,
     marginBottom: 8,
   },
   pickerWrapper: {
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 8,
-    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
   },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
+  submitButton: {
+    marginTop: 8,
+    marginBottom: 40,
   },
-  halfWidth: {
-    flex: 1,
+  fpoSection: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+    backgroundColor: COLORS.primary + '08',
+    padding: 16,
   },
-  checkboxRow: {
+  fpoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    gap: 12,
+    marginBottom: 16,
+  },
+  fpoHeaderText: {
+    flex: 1,
+  },
+  fpoTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginBottom: 2,
+  },
+  fpoSubtitle: {
+    fontSize: 13,
+    color: COLORS.text.secondary,
+  },
+  checkboxRow: {
+    marginBottom: 12,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  checkboxTextContainer: {
+    flex: 1,
   },
   checkboxLabel: {
-    fontSize: 14,
-    color: COLORS.text,
-    marginLeft: 8,
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: 4,
   },
-  button: {
-    marginTop: 8,
+  checkboxHint: {
+    fontSize: 13,
+    color: COLORS.text.secondary,
+    lineHeight: 18,
+  },
+  fpoInfoCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 8,
+    padding: 12,
+    gap: 8,
+  },
+  fpoInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  fpoInfoLabel: {
+    fontSize: 13,
+    color: COLORS.text.secondary,
+  },
+  fpoInfoValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    flex: 1,
   },
 });
- 

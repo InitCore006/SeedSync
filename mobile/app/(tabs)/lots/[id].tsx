@@ -6,15 +6,14 @@ import {
   ScrollView,
   Image,
   Alert,
-  TouchableOpacity,
+  ImageStyle,
 } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
-import { Button, Loading, Input } from '@/components';
+import { Loading } from '@/components';
 import { lotsAPI } from '@/services/lotsService';
-import { bidsAPI } from '@/services/bidsService';
-import { ProcurementLot, Bid } from '@/types/api';
+import { ProcurementLot } from '@/types/api';
 import { formatCurrency, formatDate, formatQuantity } from '@/utils/formatters';
 import { useAuthStore } from '@/store/authStore';
 
@@ -22,22 +21,16 @@ export default function LotDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuthStore();
   const [lot, setLot] = useState<ProcurementLot | null>(null);
-  const [bids, setBids] = useState<Bid[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bidAmount, setBidAmount] = useState('');
-  const [submittingBid, setSubmittingBid] = useState(false);
 
   const isMyLot = lot?.farmer === user?.id;
 
   const fetchLotDetails = async () => {
     try {
-      const [lotRes, bidsRes] = await Promise.all([
-        lotsAPI.getLot(parseInt(id)),
-        bidsAPI.getLotBids(parseInt(id)),
-      ]);
+      const lotRes = await lotsAPI.getLot(id);
       setLot(lotRes.data);
-      setBids(bidsRes.data);
     } catch (error) {
+      console.error('Failed to load lot details:', error);
       Alert.alert('Error', 'Failed to load lot details');
     } finally {
       setLoading(false);
@@ -48,56 +41,6 @@ export default function LotDetailScreen() {
     fetchLotDetails();
   }, [id]);
 
-  const handlePlaceBid = async () => {
-    if (!bidAmount) {
-      Alert.alert('Error', 'Please enter bid amount');
-      return;
-    }
-
-    setSubmittingBid(true);
-    try {
-      await bidsAPI.createBid({
-        lot: parseInt(id),
-        bid_amount: parseFloat(bidAmount),
-      });
-      Alert.alert('Success', 'Bid placed successfully');
-      fetchLotDetails();
-      setBidAmount('');
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to place bid');
-    } finally {
-      setSubmittingBid(false);
-    }
-  };
-
-  const handleAcceptBid = async (bidId: number) => {
-    Alert.alert('Accept Bid', 'Are you sure you want to accept this bid?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Accept',
-        onPress: async () => {
-          try {
-            await bidsAPI.acceptBid(bidId);
-            Alert.alert('Success', 'Bid accepted successfully');
-            fetchLotDetails();
-          } catch (error) {
-            Alert.alert('Error', 'Failed to accept bid');
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleRejectBid = async (bidId: number) => {
-    try {
-      await bidsAPI.rejectBid(bidId);
-      Alert.alert('Success', 'Bid rejected');
-      fetchLotDetails();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to reject bid');
-    }
-  };
-
   if (loading || !lot) {
     return <Loading fullScreen />;
   }
@@ -105,34 +48,86 @@ export default function LotDetailScreen() {
   return (
     <ScrollView style={styles.container}>
       {lot.images && lot.images.length > 0 && (
-        <Image source={{ uri: lot.images[0] }} style={styles.image} />
+        <Image source={{ uri: lot.images[0].image }} style={styles.image} />
       )}
 
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.cropType}>{lot.crop_type}</Text>
+          <Text style={styles.cropType}>
+            {lot.crop_type_display || lot.crop_type}
+          </Text>
           <View style={[styles.statusBadge, { backgroundColor: COLORS.success }]}>
-            <Text style={styles.statusText}>{lot.status.toUpperCase()}</Text>
+            <Text style={styles.statusText}>
+              {lot.status_display || lot.status.toUpperCase()}
+            </Text>
           </View>
         </View>
 
-        <Text style={styles.variety}>{lot.variety}</Text>
+        {lot.crop_variety && (
+          <Text style={styles.variety}>{lot.crop_variety}</Text>
+        )}
+
+        {/* Lot Number */}
+        {lot.lot_number && (
+          <Text style={styles.lotNumber}>Lot #{lot.lot_number}</Text>
+        )}
+
+        {/* FPO Info Card - If FPO Aggregated */}
+        {lot.listing_type === 'fpo_aggregated' && lot.fpo_name && (
+          <View style={styles.fpoCard}>
+            <View style={styles.fpoHeader}>
+              <Ionicons name="business" size={24} color={COLORS.primary} />
+              <View style={styles.fpoHeaderText}>
+                <Text style={styles.fpoTitle}>FPO Aggregated Lot</Text>
+                <Text style={styles.fpoName}>{lot.fpo_name}</Text>
+              </View>
+            </View>
+            {lot.warehouse_name && (
+              <View style={styles.fpoDetail}>
+                <Ionicons name="location" size={16} color={COLORS.text.secondary} />
+                <Text style={styles.fpoDetailText}>Warehouse: {lot.warehouse_name}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         <View style={styles.infoSection}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Quantity</Text>
             <Text style={styles.infoValue}>
-              {formatQuantity(lot.quantity)} {lot.unit}
+              {formatQuantity(lot.quantity_quintals)} Quintals
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Base Price</Text>
-            <Text style={styles.infoValue}>{formatCurrency(lot.base_price)}</Text>
+            <Text style={styles.infoLabel}>Price/Quintal</Text>
+            <Text style={styles.infoValue}>
+              {formatCurrency(lot.expected_price_per_quintal)}
+            </Text>
           </View>
-          {lot.location && (
+          {lot.quality_grade && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Location</Text>
-              <Text style={styles.infoValue}>{lot.location}</Text>
+              <Text style={styles.infoLabel}>Quality Grade</Text>
+              <Text style={styles.infoValue}>
+                {lot.quality_grade_display || lot.quality_grade}
+              </Text>
+            </View>
+          )}
+          {lot.harvest_date && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Harvest Date</Text>
+              <Text style={styles.infoValue}>{formatDate(lot.harvest_date)}</Text>
+            </View>
+          )}
+          {lot.warehouse_name && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Warehouse</Text>
+              <Text style={styles.infoValue}>{lot.warehouse_name}</Text>
+            </View>
+          )}
+          {lot.pickup_address && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Pickup Location</Text>
+              <Text style={styles.infoValue}>{lot.pickup_address}</Text>
             </View>
           )}
           <View style={styles.infoRow}>
@@ -148,66 +143,42 @@ export default function LotDetailScreen() {
           </View>
         )}
 
-        {!isMyLot && lot.status === 'open' && (
+        {/* Quality Details */}
+        {(lot.moisture_content || lot.oil_content) && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Place Bid</Text>
-            <Input
-              placeholder="Enter your bid amount"
-              value={bidAmount}
-              onChangeText={setBidAmount}
-              keyboardType="decimal-pad"
-            />
-            <Button
-              title="Place Bid"
-              onPress={handlePlaceBid}
-              loading={submittingBid}
-            />
+            <Text style={styles.sectionTitle}>Quality Details</Text>
+            <View style={styles.qualityCard}>
+              {lot.moisture_content && (
+                <View style={styles.qualityRow}>
+                  <Ionicons name="water" size={20} color={COLORS.primary} />
+                  <Text style={styles.qualityLabel}>Moisture Content:</Text>
+                  <Text style={styles.qualityValue}>{lot.moisture_content}%</Text>
+                </View>
+              )}
+              {lot.oil_content && (
+                <View style={styles.qualityRow}>
+                  <Ionicons name="flask" size={20} color={COLORS.primary} />
+                  <Text style={styles.qualityLabel}>Oil Content:</Text>
+                  <Text style={styles.qualityValue}>{lot.oil_content}%</Text>
+                </View>
+              )}
+            </View>
           </View>
         )}
 
-        {isMyLot && bids.length > 0 && (
+        {/* Farmer Info (if viewing someone else's lot) */}
+        {!isMyLot && lot.farmer_name && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Bids ({bids.length})</Text>
-            {bids.map((bid) => (
-              <View key={bid.id} style={styles.bidCard}>
-                <View style={styles.bidHeader}>
-                  <Text style={styles.bidAmount}>{formatCurrency(bid.bid_amount)}</Text>
-                  <View
-                    style={[
-                      styles.bidStatus,
-                      {
-                        backgroundColor:
-                          bid.status === 'accepted'
-                            ? COLORS.success
-                            : bid.status === 'rejected'
-                            ? COLORS.error
-                            : COLORS.warning,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.bidStatusText}>{bid.status}</Text>
-                  </View>
-                </View>
-                <Text style={styles.bidDate}>{formatDate(bid.created_at)}</Text>
-                {bid.status === 'pending' && (
-                  <View style={styles.bidActions}>
-                    <Button
-                      title="Accept"
-                      onPress={() => handleAcceptBid(bid.id)}
-                      size="small"
-                      style={styles.bidButton}
-                    />
-                    <Button
-                      title="Reject"
-                      onPress={() => handleRejectBid(bid.id)}
-                      variant="outline"
-                      size="small"
-                      style={styles.bidButton}
-                    />
-                  </View>
+            <Text style={styles.sectionTitle}>Farmer Information</Text>
+            <View style={styles.farmerCard}>
+              <Ionicons name="person-circle" size={48} color={COLORS.primary} />
+              <View style={styles.farmerInfo}>
+                <Text style={styles.farmerName}>{lot.farmer_name}</Text>
+                {lot.fpo_name && (
+                  <Text style={styles.farmerFpo}>Member of {lot.fpo_name}</Text>
                 )}
               </View>
-            ))}
+            </View>
           </View>
         )}
       </View>
@@ -223,7 +194,7 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: 250,
-  },
+  } as ImageStyle,
   content: {
     padding: 20,
   },
@@ -236,7 +207,7 @@ const styles = StyleSheet.create({
   cropType: {
     fontSize: 28,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.text.primary,
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -250,7 +221,13 @@ const styles = StyleSheet.create({
   },
   variety: {
     fontSize: 18,
-    color: COLORS.secondary,
+    color: COLORS.text.secondary,
+    marginBottom: 8,
+  },
+  lotNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
     marginBottom: 20,
   },
   infoSection: {
@@ -268,12 +245,14 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 16,
-    color: COLORS.secondary,
+    color: COLORS.text.secondary,
   },
   infoValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.text.primary,
+    flex: 1,
+    textAlign: 'right',
   },
   section: {
     marginBottom: 20,
@@ -281,12 +260,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.text.primary,
     marginBottom: 12,
   },
   description: {
     fontSize: 16,
-    color: COLORS.secondary,
+    color: COLORS.text.secondary,
     lineHeight: 24,
   },
   bidCard: {
@@ -314,11 +293,11 @@ const styles = StyleSheet.create({
   bidStatusText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.white,
-  },
   bidDate: {
     fontSize: 14,
-    color: COLORS.secondary,
+    color: COLORS.text.secondary,
+    marginBottom: 12,
+  },color: COLORS.secondary,
     marginBottom: 12,
   },
   bidActions: {
@@ -327,5 +306,42 @@ const styles = StyleSheet.create({
   },
   bidButton: {
     flex: 1,
+  },
+  fpoCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+    backgroundColor: COLORS.primary + '08',
+    padding: 16,
+    marginBottom: 20,
+  },
+  fpoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  fpoHeaderText: {
+    flex: 1,
+  },
+  fpoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
+    marginBottom: 2,
+  },
+  fpoName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  fpoDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  fpoDetailText: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
   },
 });

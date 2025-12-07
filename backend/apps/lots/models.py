@@ -95,7 +95,17 @@ class ProcurementLot(TimeStampedModel):
         max_length=50,
         choices=OILSEED_CHOICES
     )
+    crop_master_code = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Government-registered crop code (e.g., MUSTARD01)"
+    )
     crop_variety = models.CharField(max_length=100, blank=True)
+    crop_variety_code = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Government-approved variety code (e.g., MUS-PBOLD)"
+    )
     harvest_date = models.DateField()
     
     # Quantity & Quality

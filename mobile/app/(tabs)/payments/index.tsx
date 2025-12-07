@@ -22,6 +22,7 @@ export default function PaymentsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'failed'>('all');
+  const [walletData, setWalletData] = useState<any>(null);
 
   useEffect(() => {
     fetchPayments();
@@ -29,8 +30,12 @@ export default function PaymentsScreen() {
 
   const fetchPayments = async () => {
     try {
-      const response = await paymentsAPI.getMyPayments();
-      setPayments(response.data);
+      const [paymentsRes, walletRes] = await Promise.all([
+        paymentsAPI.getMyPayments(),
+        paymentsAPI.getMyWallet(),
+      ]);
+      setPayments(paymentsRes.data);
+      setWalletData(walletRes.data);
     } catch (error) {
       console.error('Failed to fetch payments:', error);
       Alert.alert('Error', 'Failed to load payments');
@@ -139,6 +144,32 @@ export default function PaymentsScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Wallet Balance Card */}
+      {walletData && (
+        <View style={styles.walletCard}>
+          <View style={styles.walletHeader}>
+            <Ionicons name="wallet" size={24} color={COLORS.primary} />
+            <Text style={styles.walletTitle}>Wallet Balance</Text>
+          </View>
+          <Text style={styles.walletBalance}>₹{walletData.balance.toLocaleString('en-IN')}</Text>
+          <View style={styles.walletStats}>
+            <View style={styles.walletStat}>
+              <Text style={styles.walletStatLabel}>Pending</Text>
+              <Text style={styles.walletStatValue}>
+                ₹{walletData.pending_payments.toLocaleString('en-IN')}
+              </Text>
+            </View>
+            <View style={styles.walletDivider} />
+            <View style={styles.walletStat}>
+              <Text style={styles.walletStatLabel}>Total Earned</Text>
+              <Text style={styles.walletStatValue}>
+                ₹{walletData.total_earned.toLocaleString('en-IN')}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
         <TouchableOpacity
@@ -228,6 +259,57 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  walletCard: {
+    backgroundColor: COLORS.primary,
+    padding: 20,
+    margin: 16,
+    borderRadius: 16,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  walletHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  walletTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  walletBalance: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: COLORS.white,
+    marginBottom: 16,
+  },
+  walletStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  walletStat: {
+    flex: 1,
+  },
+  walletStatLabel: {
+    fontSize: 13,
+    color: COLORS.white + 'CC',
+    marginBottom: 4,
+  },
+  walletStatValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  walletDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: COLORS.white + '40',
+    marginHorizontal: 16,
   },
   filterContainer: {
     flexDirection: 'row',

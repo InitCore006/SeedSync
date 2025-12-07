@@ -1,15 +1,4 @@
-<<<<<<< Updated upstream
-export const API_URL = 'http://https://d65d17911a7c.ngrok-free.app/api';
-=======
-export const API_URL = 'https://d28f59076585.ngrok-free.app/api';
-
-// Log API configuration on app start
-console.log('\n========== API CONFIGURATION ==========');
-console.log('🌐 Base URL:', API_URL);
-console.log('⏱️  Request Timeout: 30 seconds');
-console.log('📱 App Version: 1.0.0');
-console.log('======================================\n');
->>>>>>> Stashed changes
+export const API_URL = 'https://970cde90cdff.ngrok-free.app/api';
 
 export const ENDPOINTS = {
   // Auth endpoints
@@ -41,31 +30,33 @@ export const ENDPOINTS = {
   
   // Lots endpoints
   LOTS: {
-    LIST: '/lots/',
-    CREATE: '/lots/create/',
-    DETAIL: (id: number) => `/lots/${id}/`,
-    UPDATE: (id: number) => `/lots/${id}/update/`,
-    DELETE: (id: number) => `/lots/${id}/delete/`,
-    MY_LOTS: '/lots/my-lots/',
-    UPLOAD_IMAGE: (id: number) => `/lots/${id}/upload-image/`,
+    LIST: '/lots/procurement/',
+    CREATE: '/lots/procurement/',
+    DETAIL: (id: string) => `/lots/procurement/${id}/`,
+    UPDATE: (id: string) => `/lots/procurement/${id}/`,
+    DELETE: (id: string) => `/lots/procurement/${id}/`,
+    MY_LOTS: '/lots/procurement/my_lots/',
+    MARKETPLACE: '/lots/procurement/marketplace/',
+    UPLOAD_IMAGE: (id: string) => `/lots/procurement/${id}/upload_image/`,
     MARKET_PRICES: '/lots/market-prices/',
   },
   
   // Bids endpoints
   BIDS: {
-    LIST: '/bids/',
-    CREATE: '/bids/create/',
-    MY_BIDS: '/bids/my-bids/',
-    LOT_BIDS: (lotId: number) => `/bids/lot/${lotId}/`,
-    DETAIL: (id: number) => `/bids/${id}/`,
-    ACCEPT: (id: number) => `/bids/${id}/accept/`,
-    REJECT: (id: number) => `/bids/${id}/reject/`,
+    LIST: '/bids/bids/',
+    CREATE: '/bids/bids/',
+    MY_BIDS: '/bids/bids/my_bids/',
+    LOT_BIDS: (lotId: string) => `/bids/bids/?lot=${lotId}`,
+    DETAIL: (id: number) => `/bids/bids/${id}/`,
+    ACCEPT: (id: number) => `/bids/bids/${id}/accept_bid/`,
+    REJECT: (id: number) => `/bids/bids/${id}/reject_bid/`,
   },
   
   // Payments endpoints
   PAYMENTS: {
     LIST: '/payments/',
     MY_PAYMENTS: '/payments/my-payments/',
+    MY_WALLET: '/payments/my-wallet/',
     DETAIL: (id: number) => `/payments/${id}/`,
     CREATE: '/payments/create/',
     VERIFY: (id: number) => `/payments/${id}/verify/`,

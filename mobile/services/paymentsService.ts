@@ -16,6 +16,18 @@ export const paymentsAPI = {
   },
 
   /**
+   * Get wallet balance and summary
+   */
+  getMyWallet: (): Promise<AxiosResponse<ApiSuccess<{
+    balance: number;
+    pending_payments: number;
+    total_earned: number;
+    currency: string;
+  }>>> => {
+    return api.get(ENDPOINTS.PAYMENTS.MY_WALLET);
+  },
+
+  /**
    * Get payment details by ID
    */
   getPaymentDetail: (id: number): Promise<AxiosResponse<Payment>> => {

@@ -15,7 +15,7 @@ export const bidsAPI = {
   },
 
   // Get bids for a specific lot
-  getLotBids: (lotId: number): Promise<AxiosResponse<Bid[]>> => {
+  getLotBids: (lotId: string): Promise<AxiosResponse<PaginatedResponse<Bid>>> => {
     return api.get(ENDPOINTS.BIDS.LOT_BIDS(lotId));
   },
 
@@ -35,7 +35,7 @@ export const bidsAPI = {
   },
 
   // Reject bid
-  rejectBid: (id: number, data?: { farmer_response?: string }): Promise<AxiosResponse<ApiSuccess<Bid>>> => {
+  rejectBid: (id: number, data?: { reason?: string }): Promise<AxiosResponse<ApiSuccess<Bid>>> => {
     return api.post(ENDPOINTS.BIDS.REJECT(id), data || {});
   },
 };

@@ -32,6 +32,33 @@ class ProcurementLotViewSet(viewsets.ModelViewSet):
             return [IsFarmer()]
         return super().get_permissions()
     
+    def perform_create(self, serializer):
+        """Auto-assign farmer from logged-in user"""
+        user = self.request.user
+        
+        # Get farmer profile from user
+        try:
+            from apps.farmers.models import FarmerProfile
+            farmer_profile = FarmerProfile.objects.get(user=user)
+            serializer.save(farmer=farmer_profile)
+        except FarmerProfile.DoesNotExist:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({
+                'farmer': 'Farmer profile not found. Please complete your farmer profile first.'
+            })
+    
+    def create(self, request, *args, **kwargs):
+        """Override create to return full serializer with id"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        
+        # Use the full serializer for response
+        instance = serializer.instance
+        response_serializer = ProcurementLotSerializer(instance)
+        headers = self.get_success_headers(response_serializer.data)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
         """Update lot status"""
@@ -74,6 +101,26 @@ class ProcurementLotViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def upload_image(self, request, pk=None):
+        """Upload image for a lot"""
+        lot = self.get_object()
+        image = request.FILES.get('image')
+        
+        if not image:
+            return Response({'error': 'No image provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create lot image
+        lot_image = LotImage.objects.create(
+            lot=lot,
+            image=image,
+            caption=request.data.get('caption', ''),
+            is_primary=lot.images.count() == 0  # First image is primary
+        )
+        
+        serializer = LotImageSerializer(lot_image)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
     
     @action(detail=False, methods=['get'])
     def marketplace(self, request):

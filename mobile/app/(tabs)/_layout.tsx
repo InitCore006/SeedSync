@@ -111,6 +111,16 @@ export default function TabsLayout() {
         }}
       />
 
+      {/* Schemes - Common (hidden from tab bar but accessible via sidebar) */}
+      <Tabs.Screen
+        name="schemes"
+        options={{
+          title: 'Schemes',
+          headerShown: false,
+          href: null,
+        }}
+      />
+
       {/* Profile - Common to all roles */}
       <Tabs.Screen
         name="profile"

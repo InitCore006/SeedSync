@@ -18,6 +18,13 @@ export interface User {
     address?: string;
     city?: string;
     state?: string;
+    fpo_membership?: {
+      fpo_id: number;
+      fpo_name: string;
+      joined_date: string;
+      status: string;
+      warehouse_name?: string;
+    };
   };
 }
 
@@ -64,6 +71,13 @@ export interface FarmerProfile {
   user: User;
   fpo?: number;
   fpo_name?: string;
+  fpo_membership?: {
+    fpo_id: number;
+    fpo_name: string;
+    joined_date: string;
+    status: string;
+    warehouse_name?: string;
+  };
   full_name: string;
   father_name?: string;
   date_of_birth?: string;
@@ -127,17 +141,31 @@ export interface LotImage {
 }
 
 export interface ProcurementLot {
-  id: number;
+  id: string; // UUID from backend
   lot_number: string;
-  farmer: number;
+  farmer: string;
   farmer_name?: string;
+  fpo?: string;
+  fpo_name?: string;
+  managed_by_fpo?: boolean;
+  listing_type?: 'individual' | 'fpo_managed' | 'fpo_aggregated';
+  warehouse?: string;
+  warehouse_name?: string;
+  warehouse_code?: string;
+  warehouse_district?: string;
+  source_warehouse_ids?: string[];
+  source_warehouse_names?: string[];
   crop_type: 'soybean' | 'mustard' | 'groundnut' | 'sunflower' | 'safflower' | 'sesame' | 'linseed' | 'niger';
   crop_type_display?: string;
+  crop_master_code?: string;
   crop_variety?: string;
+  crop_variety_code?: string;
   quantity_quintals: number;
+  available_quantity_quintals?: number;
   quality_grade: 'A+' | 'A' | 'B' | 'C';
   quality_grade_display?: string;
   expected_price_per_quintal: number;
+  final_price_per_quintal?: number;
   harvest_date: string;
   moisture_content?: number;
   oil_content?: number;
@@ -149,18 +177,22 @@ export interface ProcurementLot {
   pickup_address?: string;
   status: 'available' | 'bidding' | 'sold' | 'delivered';
   status_display?: string;
-  bid_count: number;
-  view_count: number;
+  bid_count?: number;
+  view_count?: number;
   qr_code_url?: string;
   blockchain_tx_id?: string;
-  images: LotImage[];
+  blockchain_hash?: string;
+  images?: LotImage[];
+  status_history?: any[];
   created_at: string;
   updated_at: string;
 }
 
 export interface LotCreateData {
   crop_type: string;
+  crop_master_code?: string;
   crop_variety?: string;
+  crop_variety_code?: string;
   harvest_date: string;
   quantity_quintals: number;
   quality_grade: string;
@@ -179,7 +211,7 @@ export interface LotCreateData {
 
 export interface Bid {
   id: number;
-  lot: number;
+  lot: string; // UUID
   lot_number?: string;
   lot_details?: {
     crop_type: string;
@@ -208,10 +240,10 @@ export interface Bid {
 }
 
 export interface BidCreateData {
-  lot: number;
+  lot: string; // UUID
   offered_price_per_quintal: number;
   quantity_quintals: number;
-  payment_terms: string;
+  payment_terms?: string;
   expected_pickup_date?: string;
   advance_payment_percentage?: number;
   message?: string;

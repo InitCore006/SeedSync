@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { COLORS } from '@/constants/colors';
 import { Loading, Sidebar } from '@/components';
@@ -20,18 +19,13 @@ import { StatsSection } from '@/components/StatsCard';
 import { useAuthStore } from '@/store/authStore';
 import { farmersAPI } from '@/services/farmersService';
 import { logisticsAPI } from '@/services/logisticsService';
+import { paymentsAPI } from '@/services/paymentsService';
 import { weatherService, WeatherData } from '@/services/weatherService';
 import { statsService, FarmerStats, LogisticsStats } from '@/services/statsService';
 import { useFarmerStore } from '@/store/farmerStore';
 import { useLogisticsStore } from '@/store/logisticsStore';
 
 const { width, height } = Dimensions.get('window');
-const BRAND_COLORS = {
-  primary: '#4a7c0f',
-  secondary: '#65a30d',
-  dark: '#365314',
-  darker: '#1a2e05',
-};
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
@@ -40,6 +34,7 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [walletData, setWalletData] = useState<{balance: number; pending_payments: number; total_earned: number} | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [locationPermission, setLocationPermission] = useState(false);
 
@@ -52,6 +47,15 @@ export default function DashboardScreen() {
       setFarmerStats(response.data);
     } catch (error) {
       console.error('Failed to load farmer stats:', error);
+    }
+  };
+
+  const fetchWalletData = async () => {
+    try {
+      const response = await paymentsAPI.getMyWallet();
+      setWalletData(response.data.data);
+    } catch (error) {
+      console.error('Failed to load wallet data:', error);
     }
   };
 
@@ -112,7 +116,7 @@ export default function DashboardScreen() {
   const fetchStats = async () => {
     try {
       if (isFarmer) {
-        await Promise.all([fetchFarmerStats(), fetchWeather()]);
+        await Promise.all([fetchFarmerStats(), fetchWeather(), fetchWalletData()]);
       } else if (isLogistics) {
         await fetchLogisticsStats();
       }
@@ -137,26 +141,26 @@ export default function DashboardScreen() {
     {
       title: 'Create Lot',
       icon: 'add-circle',
-      color: BRAND_COLORS.primary,
+      color: COLORS.primary,
       onPress: () => router.push('/(tabs)/lots/create'),
     },
     {
       title: 'Market Prices',
       icon: 'trending-up',
-      color: BRAND_COLORS.secondary,
+      color: COLORS.info,
       onPress: () => router.push('/(tabs)/market/prices'),
     },
     {
       title: 'Disease AI',
       icon: 'scan',
-      color: '#10b981',
+      color: COLORS.success,
       onPress: () => router.push('/ai/disease-detection'),
     },
     {
-      title: 'Find FPO',
-      icon: 'location',
-      color: '#8b5cf6',
-      onPress: () => router.push('/fpos'),
+      title: user?.profile?.fpo_membership ? 'My FPO' : 'Gov Schemes',
+      icon: user?.profile?.fpo_membership ? 'business' : 'shield-checkmark',
+      color: COLORS.warning,
+      onPress: () => router.push(user?.profile?.fpo_membership ? '/fpos/my-fpo' : '/(tabs)/schemes'),
     },
   ];
 
@@ -164,26 +168,26 @@ export default function DashboardScreen() {
     {
       title: 'New Bookings',
       icon: 'notifications',
-      color: BRAND_COLORS.primary,
+      color: COLORS.primary,
       onPress: () => router.push('/(tabs)/trips'),
     },
     {
       title: 'Active Trips',
       icon: 'navigate-circle',
-      color: BRAND_COLORS.secondary,
+      color: COLORS.info,
       onPress: () => router.push('/(tabs)/trips'),
     },
     {
       title: 'Earnings',
       icon: 'wallet',
-      color: '#f59e0b',
+      color: COLORS.warning,
       onPress: () => router.push('/(tabs)/history'),
     },
     {
       title: 'My Vehicles',
       icon: 'car-sport',
-      color: '#3b82f6',
-      onPress: () => router.push('/vehicles'),
+      color: COLORS.success,
+      onPress: () => router.push('/(tabs)/vehicles'),
     },
   ];
 
@@ -206,12 +210,7 @@ export default function DashboardScreen() {
       >
         {/* Hero Card - Farmer Weather / Logistics Map */}
         <View style={styles.heroCardContainer}>
-          <LinearGradient
-            colors={[BRAND_COLORS.darker, BRAND_COLORS.dark, BRAND_COLORS.primary]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.heroCard}
-          >
+          <View style={styles.heroCard}>
             {/* Top Header Inside Card */}
             <View style={styles.cardHeader}>
               <TouchableOpacity 
@@ -311,7 +310,7 @@ export default function DashboardScreen() {
                 >
                   <View style={styles.cropRecommendationHeader}>
                     <View style={styles.cropIconContainer}>
-                      <Ionicons name="leaf" size={20} color={BRAND_COLORS.primary} />
+                      <Ionicons name="leaf" size={20} color={COLORS.primary} />
                     </View>
                     <View style={styles.cropRecommendationText}>
                       <Text style={styles.cropRecommendationTitle}>Crop Recommendations</Text>
@@ -367,8 +366,35 @@ export default function DashboardScreen() {
                 </View>
               </View>
             )}
-          </LinearGradient>
+          </View>
         </View>
+
+        {/* Wallet Section - Farmer Only */}
+        {isFarmer && walletData && (
+          <View style={styles.walletSection}>
+            <View style={styles.walletCard}>
+              <View style={styles.walletHeader}>
+                <Ionicons name="wallet" size={24} color={COLORS.primary} />
+                <Text style={styles.walletTitle}>My Wallet</Text>
+              </View>
+              <View style={styles.walletBalance}>
+                <Text style={styles.balanceLabel}>Total Balance</Text>
+                <Text style={styles.balanceAmount}>₹{walletData.balance.toLocaleString('en-IN', {minimumFractionDigits: 2})}</Text>
+              </View>
+              <View style={styles.walletStats}>
+                <View style={styles.walletStatItem}>
+                  <Text style={styles.walletStatLabel}>Pending</Text>
+                  <Text style={styles.walletStatValue}>₹{walletData.pending_payments.toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={styles.walletDivider} />
+                <View style={styles.walletStatItem}>
+                  <Text style={styles.walletStatLabel}>Total Earned</Text>
+                  <Text style={styles.walletStatValue}>₹{walletData.total_earned.toLocaleString('en-IN')}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Stats Section */}
         {isFarmer && farmerStats && (
@@ -478,15 +504,16 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.background,
   },
   scrollView: {
     flex: 1,
   },
   heroCardContainer: {
-    marginBottom: 28,
+    marginBottom: 20,
   },
   heroCard: {
+    backgroundColor: COLORS.primary,
     borderRadius: 0,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
@@ -671,7 +698,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: BRAND_COLORS.primary + '15',
+    backgroundColor: COLORS.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -873,6 +900,70 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#475569',
     textAlign: 'center',
+  },
+  // Wallet Section
+  walletSection: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  walletCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  walletHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  walletTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  walletBalance: {
+    marginBottom: 16,
+  },
+  balanceLabel: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    marginBottom: 4,
+  },
+  balanceAmount: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: COLORS.primary,
+    letterSpacing: -1,
+  },
+  walletStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  walletStatItem: {
+    flex: 1,
+  },
+  walletStatLabel: {
+    fontSize: 12,
+    color: COLORS.text.secondary,
+    marginBottom: 4,
+  },
+  walletStatValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  walletDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 16,
   },
 });
   

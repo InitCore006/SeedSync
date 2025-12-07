@@ -10,8 +10,8 @@ interface LotsState {
   setMyLots: (lots: ProcurementLot[]) => void;
   setSelectedLot: (lot: ProcurementLot | null) => void;
   addLot: (lot: ProcurementLot) => void;
-  updateLot: (id: number, updates: Partial<ProcurementLot>) => void;
-  removeLot: (id: number) => void;
+  updateLot: (id: string, updates: Partial<ProcurementLot>) => void;
+  removeLot: (id: string) => void;
   setLoading: (loading: boolean) => void;
 }
 
