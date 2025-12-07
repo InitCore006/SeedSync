@@ -36,10 +36,17 @@ function TrackingContent() {
   const handleViewDetails = async (lot: any) => {
     try {
       const response = await API.lots.getLot(lot.id);
-      setSelectedLot(response.data);
+      console.log('Lot details response:', response);
+      
+      // Handle both response.data and response.data.data structures
+      const lotData = (response.data as any)?.data || response.data;
+      console.log('Parsed lot data:', lotData);
+      
+      setSelectedLot(lotData);
       setIsDetailModalOpen(true);
-    } catch (error) {
-      toast.error('Failed to load lot details');
+    } catch (error: any) {
+      console.error('Error loading lot details:', error);
+      toast.error(error?.response?.data?.message || 'Failed to load lot details');
     }
   };
 

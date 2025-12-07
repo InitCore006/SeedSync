@@ -8,6 +8,9 @@ from django.utils import timezone
 from datetime import timedelta
 from apps.core.utils import response_success
 import random
+from .utils.demand_forecast import get_all_market_insights
+from .utils.market_insights_serializers import MarketInsightsResponseSerializer
+from rest_framework.permissions import AllowAny
 
 
 class WeatherForecastAPIView(APIView):
@@ -209,3 +212,68 @@ class MarketInsightsAPIView(APIView):
                 data=insights
             )
         )
+
+class MarketInsightsViewSet(APIView):
+    """
+    Market Insights and Demand Forecasting API
+    
+    Provides role-based market analysis:
+    - FPO: Buyer demand, state-wise crop demand
+    - RETAILER: Price trends, monthly demand seasonality
+    - PROCESSOR: Procurement volume by state, completion rates
+    
+    Query Parameters:
+    - role: 'fpo', 'retailer', 'processor' (optional)
+    - If role not specified, returns all market data
+    
+    Endpoint:
+    GET /api/market-insights/?role=fpo
+    
+    Response includes:
+    - data_available: Boolean indicating if data exists
+    - total_orders: Total orders count for the filter
+    - date_range: Start and end dates of orders
+    - market_summary: Complete demand/supply/price trends
+    - farmer_insights: Market shortages and best price crops
+    - role_insights: Role-specific insights (if role provided)
+    """
+    
+    permission_classes = [AllowAny]
+    
+    def list(self, request):
+        """
+        Get comprehensive market insights for requested role
+        
+        Query Parameters:
+        - role: 'fpo' | 'retailer' | 'processor' | 'trader' | 'exporter' (optional)
+        """
+        role = request.query_params.get('role', None)
+        
+        # Validate role if provided
+        valid_roles = ['fpo', 'retailer', 'processor', 'trader', 'exporter']
+        if role and role.lower() not in valid_roles:
+            return Response(
+                {
+                    'error': f'Invalid role. Must be one of: {", ".join(valid_roles)}',
+                    'received': role
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Fetch market insights from utility function
+            insights = get_all_market_insights(role)
+            
+            return Response(
+                insights,
+                status=status.HTTP_200_OK
+            )
+        
+        except Exception as e:
+            return Response(
+                {
+                    'error': 'Failed to fetch market insights',
+                    'details': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

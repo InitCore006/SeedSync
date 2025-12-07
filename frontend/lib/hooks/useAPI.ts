@@ -158,7 +158,7 @@ export function useFPOMembers(params?: any) {
 }
 
 export function useFPOProcurement(params?: any) {
-  const { data, error, isLoading } = useSWR(
+  const { data, error, isLoading, mutate } = useSWR(
     params ? ['/fpo/procurement', params] : '/fpo/procurement',
     () => API.fpo.getProcurement(params),
     defaultConfig
@@ -169,6 +169,7 @@ export function useFPOProcurement(params?: any) {
     meta: data?.meta,
     isLoading,
     isError: error,
+    mutate,
   };
 }
 

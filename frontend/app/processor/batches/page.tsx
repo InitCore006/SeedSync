@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -25,39 +25,104 @@ interface CreateBatchModalProps {
 
 function CreateBatchModal({ isOpen, onClose, onCreate }: CreateBatchModalProps) {
   const [formData, setFormData] = useState({
-    lot_id: '',
-    input_crop: '',
-    input_quantity_kg: '',
-    output_product: '',
-    processing_method: '',
-    expected_output_kg: '',
+    plant: '',
+    lot: '',
+    initial_quantity_quintals: '',
+    processing_method: 'cold_pressed',
+    expected_completion_date: '',
+    notes: '',
   });
+  const [plants, setPlants] = useState<any[]>([]);
+  const [lots, setLots] = useState<any[]>([]);
+  const [selectedLot, setSelectedLot] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Fetch plants and lots when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchData();
+    }
+  }, [isOpen]);
+
+  const fetchData = async () => {
+    setIsLoadingData(true);
+    try {
+      // Fetch processing plants directly
+      const plantsRes = await API.processor.getPlants();
+      console.log('Plants response:', plantsRes); // Debug log
+      if (plantsRes.data) {
+        setPlants(plantsRes.data);
+      }
+
+      // Fetch purchased lots (procurement history)
+      const lotsRes = await API.processor.getProcurement({ view: 'history' });
+      console.log('Lots response:', lotsRes); // Debug log
+      if (lotsRes.data?.results) {
+        // Filter for lots with available quantity
+        const availableLots = lotsRes.data.results.filter(
+          (lot: any) => lot.available_quantity_quintals > 0
+        );
+        setLots(availableLots);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch data:', error);
+      toast.error('Failed to load plants and lots');
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  const handleLotChange = (lotId: string) => {
+    setFormData({ ...formData, lot: lotId });
+    const lot = lots.find(l => l.id === lotId);
+    setSelectedLot(lot);
+    // Auto-fill initial quantity with available quantity
+    if (lot) {
+      setFormData(prev => ({ 
+        ...prev, 
+        lot: lotId,
+        initial_quantity_quintals: lot.available_quantity_quintals.toString() 
+      }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.plant || !formData.lot) {
+      toast.error('Please select both plant and lot');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      await API.processor.createBatch({
-        lot_id: parseInt(formData.lot_id),
-        input_quantity_kg: parseFloat(formData.input_quantity_kg),
+      const payload = {
+        plant: formData.plant,
+        lot: formData.lot,
+        initial_quantity_quintals: parseFloat(formData.initial_quantity_quintals),
         processing_method: formData.processing_method,
-        expected_output_kg: parseFloat(formData.expected_output_kg),
-        output_product: formData.output_product,
-      });
-      toast.success('Processing batch created successfully');
+        expected_completion_date: formData.expected_completion_date || undefined,
+        notes: formData.notes || '',
+      };
+
+      await API.processor.createBatch(payload);
+      toast.success('Processing batch created successfully! Inventory has been deducted.');
       onCreate();
       onClose();
       setFormData({
-        lot_id: '',
-        input_crop: '',
-        input_quantity_kg: '',
-        output_product: '',
-        processing_method: '',
-        expected_output_kg: '',
+        plant: '',
+        lot: '',
+        initial_quantity_quintals: '',
+        processing_method: 'cold_pressed',
+        expected_completion_date: '',
+        notes: '',
       });
+      setSelectedLot(null);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create batch');
+      const errorMsg = error.response?.data?.message || 'Failed to create batch';
+      toast.error(errorMsg);
+      console.error('Create batch error:', error.response?.data);
     } finally {
       setIsLoading(false);
     }
@@ -65,67 +130,131 @@ function CreateBatchModal({ isOpen, onClose, onCreate }: CreateBatchModalProps) 
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create Processing Batch" size="lg">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Select
-            label="Input Crop"
-            required
-            value={formData.input_crop}
-            onChange={(e) => setFormData({ ...formData, input_crop: e.target.value })}
-            options={CROPS.map(crop => ({ value: crop.value, label: crop.label }))}
-          />
-          
-          <Input
-            label="Input Quantity (kg)"
-            type="number"
-            placeholder="Enter quantity"
-            required
-            value={formData.input_quantity_kg}
-            onChange={(e) => setFormData({ ...formData, input_quantity_kg: e.target.value })}
-          />
+      {isLoadingData ? (
+        <div className="py-8 flex justify-center">
+          <Loading />
         </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Input
-            label="Output Product"
-            placeholder="e.g., Mustard Oil, Groundnut Oil"
-            required
-            value={formData.output_product}
-            onChange={(e) => setFormData({ ...formData, output_product: e.target.value })}
-          />
-          
-          <Input
-            label="Expected Output (kg)"
-            type="number"
-            placeholder="Expected output quantity"
-            required
-            value={formData.expected_output_kg}
-            onChange={(e) => setFormData({ ...formData, expected_output_kg: e.target.value })}
-          />
+      ) : plants.length === 0 ? (
+        <div className="py-8 text-center">
+          <p className="text-gray-600 mb-4">No processing plants found. Please add a processing plant first.</p>
+          <Button onClick={onClose}>Close</Button>
         </div>
-
-        <Select
-          label="Processing Method"
-          required
-          value={formData.processing_method}
-          onChange={(e) => setFormData({ ...formData, processing_method: e.target.value })}
-          options={[
-            { value: 'cold_press', label: 'Cold Press' },
-            { value: 'expeller', label: 'Expeller Press' },
-            { value: 'solvent_extraction', label: 'Solvent Extraction' },
-            { value: 'traditional', label: 'Traditional Method' },
-          ]}
-        />
-
-        <div className="flex gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" isLoading={isLoading} className="flex-1">
-            Create Batch
-          </Button>
+      ) : lots.length === 0 ? (
+        <div className="py-8 text-center">
+          <p className="text-gray-600 mb-4">No purchased lots available for processing. Please purchase lots first.</p>
+          <Button onClick={onClose}>Close</Button>
         </div>
-      </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Plant and Lot Selection */}
+          <div className="grid grid-cols-1 gap-4">
+            <Select
+              label="Processing Plant"
+              required
+              value={formData.plant}
+              onChange={(e) => setFormData({ ...formData, plant: e.target.value })}
+              options={plants.map(plant => ({ value: plant.id, label: plant.plant_name }))}
+              placeholder="Select processing plant"
+            />
+            
+            <Select
+              label="Procurement Lot"
+              required
+              value={formData.lot}
+              onChange={(e) => handleLotChange(e.target.value)}
+              options={lots.map(lot => ({ 
+                value: lot.id, 
+                label: `${lot.lot_number} - ${lot.crop_type} (${formatNumber(lot.available_quantity_quintals)}Q available)` 
+              }))}
+              placeholder="Select lot to process"
+            />
+
+            {selectedLot && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                <p className="font-semibold text-blue-900">Lot Details:</p>
+                <div className="mt-2 space-y-1 text-blue-800">
+                  <p>Crop: <span className="font-medium">{selectedLot.crop_type}</span></p>
+                  <p>Available: <span className="font-medium">{formatNumber(selectedLot.available_quantity_quintals)} Quintals</span></p>
+                  <p>Quality: <span className="font-medium">{selectedLot.quality_grade}</span></p>
+                  {selectedLot.warehouse_name && (
+                    <p>Warehouse: <span className="font-medium">{selectedLot.warehouse_name}</span></p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Quantity and Method */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Quantity to Process (Quintals)"
+              type="number"
+              step="0.01"
+              min="0.01"
+              max={selectedLot?.available_quantity_quintals}
+              placeholder="Enter quantity"
+              required
+              value={formData.initial_quantity_quintals}
+              onChange={(e) => setFormData({ ...formData, initial_quantity_quintals: e.target.value })}
+              helperText={selectedLot ? `Max: ${formatNumber(selectedLot.available_quantity_quintals)}Q` : '1 Quintal = 100 kg'}
+            />
+
+            <Select
+              label="Processing Method"
+              required
+              value={formData.processing_method}
+              onChange={(e) => setFormData({ ...formData, processing_method: e.target.value })}
+              options={[
+                { value: 'cold_pressed', label: 'Cold Pressed' },
+                { value: 'hot_pressed', label: 'Hot Pressed' },
+                { value: 'expeller_pressed', label: 'Expeller Pressed' },
+                { value: 'solvent_extraction', label: 'Solvent Extraction' },
+              ]}
+            />
+          </div>
+
+          {/* Optional Fields */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Expected Completion Date (Optional)"
+              type="date"
+              value={formData.expected_completion_date}
+              onChange={(e) => setFormData({ ...formData, expected_completion_date: e.target.value })}
+            />
+            
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Notes (Optional)
+              </label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Add any additional notes..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                rows={2}
+              />
+            </div>
+          </div>
+
+          {selectedLot?.warehouse_name && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+              <p className="font-semibold">⚠️ Inventory Note:</p>
+              <p className="mt-1">
+                {formData.initial_quantity_quintals} quintals will be deducted from warehouse <strong>{selectedLot.warehouse_name}</strong> when this batch is created.
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1" disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" isLoading={isLoading} className="flex-1">
+              Create Batch
+            </Button>
+          </div>
+        </form>
+      )}
     </Modal>
   );
 }
@@ -196,7 +325,7 @@ function ProcessorBatchesContent() {
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">Avg Yield</p>
             <p className="text-3xl font-bold text-gray-900 mt-1">
-              {batches?.length ? (batches.reduce((sum: number, b: any) => sum + (b.yield_percentage || 0), 0) / batches.length).toFixed(1) : '0.0'}%
+              {batches?.length ? ((batches.reduce((sum: number, b: any) => sum + (Number(b.yield_percentage) || 0), 0) / batches.length) || 0).toFixed(1) : '0.0'}%
             </p>
           </CardContent>
         </Card>
@@ -204,8 +333,9 @@ function ProcessorBatchesContent() {
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-gray-600">Total Output</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">
-              {formatNumber(batches?.reduce((sum: number, b: any) => sum + (b.output_quantity_kg || 0), 0) || 0)} kg
+              {formatNumber(batches?.reduce((sum: number, b: any) => sum + (b.oil_extracted_quintals || 0), 0) || 0)} Q
             </p>
+            <p className="text-xs text-gray-500 mt-1">Quintals</p>
           </CardContent>
         </Card>
       </div>
@@ -276,20 +406,20 @@ function ProcessorBatchesContent() {
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Input</p>
-                    <p className="font-semibold">{formatNumber(batch.input_quantity_kg)} kg</p>
+                    <p className="font-semibold">{formatNumber(batch.initial_quantity_quintals)} Q</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Output</p>
-                    <p className="font-semibold">{formatNumber(batch.output_quantity_kg)} kg</p>
+                    <p className="text-xs text-gray-600 mb-1">Oil Output</p>
+                    <p className="font-semibold">{formatNumber(batch.oil_extracted_quintals || 0)} Q</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Expected</p>
-                    <p className="font-semibold">{formatNumber(batch.expected_output_kg)} kg</p>
+                    <p className="text-xs text-gray-600 mb-1">Cake Output</p>
+                    <p className="font-semibold">{formatNumber(batch.cake_produced_quintals || 0)} Q</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Yield</p>
-                    <p className={`font-semibold ${batch.yield_percentage >= 40 ? 'text-green-600' : 'text-yellow-600'}`}>
-                      {batch.yield_percentage.toFixed(1)}%
+                    <p className={`font-semibold ${(Number(batch.yield_percentage) || 0) >= 40 ? 'text-green-600' : 'text-yellow-600'}`}>
+                      {(Number(batch.yield_percentage) || 0).toFixed(1)}%
                     </p>
                   </div>
                   <div>
@@ -302,14 +432,11 @@ function ProcessorBatchesContent() {
                 {batch.status === 'in_progress' && (
                   <div className="mb-4">
                     <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                      <span>Processing Progress</span>
-                      <span>{((batch.output_quantity_kg / batch.expected_output_kg) * 100).toFixed(0)}%</span>
+                      <span>Current Stage</span>
+                      <span>{batch.current_stage_display || 'N/A'}</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all"
-                        style={{ width: `${(batch.output_quantity_kg / batch.expected_output_kg) * 100}%` }}
-                      />
+                    <div className="text-xs text-gray-500">
+                      Processing: {formatNumber(batch.initial_quantity_quintals)} quintals
                     </div>
                   </div>
                 )}

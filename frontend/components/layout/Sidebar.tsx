@@ -16,6 +16,7 @@ import {
   FileText,
   CheckCircle,
   Activity,
+  Factory,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -97,6 +98,12 @@ const navItems: NavItem[] = [
     label: 'My Bids',
     href: '/processor/bids',
     icon: <TrendingUp className="h-5 w-5" />,
+    roles: [USER_ROLES.PROCESSOR],
+  },
+  {
+    label: 'Processing Plants',
+    href: '/processor/plants',
+    icon: <Factory className="h-5 w-5" />,
     roles: [USER_ROLES.PROCESSOR],
   },
   {

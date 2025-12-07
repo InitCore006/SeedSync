@@ -22,6 +22,16 @@ class ProcurementLotViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'quantity_quintals', 'expected_price_per_quintal']
     ordering = ['-created_at']
     
+    def retrieve(self, request, *args, **kwargs):
+        """Get single lot with status history and related data"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response({
+            'status': 'success',
+            'message': 'Lot details fetched successfully',
+            'data': serializer.data
+        })
+    
     def get_serializer_class(self):
         if self.action == 'create':
             return ProcurementLotCreateSerializer

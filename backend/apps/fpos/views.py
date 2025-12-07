@@ -675,12 +675,14 @@ class FPOAssignWarehouseAPIView(APIView):
                 )
                 
                 # Create stock movement IN
+                # Handle farmer name - could be None for FPO-aggregated lots
+                farmer_name = lot.farmer.user.get_full_name() if lot.farmer else 'FPO Aggregated Lot'
                 stock_movement = StockMovement.objects.create(
                     warehouse=warehouse,
                     lot=lot,
                     movement_type='in',
                     quantity=lot.quantity_quintals,
-                    remarks=f'Received from FPO member: {lot.farmer.user.get_full_name()} - Lot: {lot.lot_number}'
+                    remarks=f'Received from: {farmer_name} - Lot: {lot.lot_number}'
                 )
                 
                 # Update warehouse current stock

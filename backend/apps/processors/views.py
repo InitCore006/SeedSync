@@ -8,15 +8,25 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.db.models import Sum, Count, Avg, Q, F
+from django.db import transaction
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
+from decimal import Decimal
 
 from apps.core.utils import response_success, response_error
 from apps.core.permissions import IsProcessor
-from .models import ProcessorProfile, ProcessingPlant, ProcessingBatch
-from .serializers import ProcessorProfileSerializer, ProcessingPlantSerializer, ProcessingBatchSerializer
+from .models import ProcessorProfile, ProcessingPlant, ProcessingBatch, ProcessingStageLog, FinishedProduct
+from .serializers import (
+    ProcessorProfileSerializer, 
+    ProcessingPlantSerializer, 
+    ProcessingBatchSerializer,
+    ProcessingBatchCreateSerializer,
+    ProcessingStageLogSerializer,
+    FinishedProductSerializer
+)
 from apps.lots.models import ProcurementLot
 from apps.bids.models import Bid
+from apps.warehouses.models import Inventory, StockMovement
 
 
 class ProcessorProfileAPIView(APIView):
@@ -71,6 +81,141 @@ class ProcessorProfileAPIView(APIView):
             return Response(
                 response_error(message="Processor profile not found"),
                 status=404
+            )
+
+
+class ProcessingPlantViewSet(viewsets.ModelViewSet):
+    """
+    Processing Plant CRUD operations
+    GET: /api/processors/plants/ - List all plants
+    POST: /api/processors/plants/ - Create new plant
+    GET: /api/processors/plants/{id}/ - Get plant details
+    PATCH: /api/processors/plants/{id}/ - Update plant
+    DELETE: /api/processors/plants/{id}/ - Delete plant
+    """
+    serializer_class = ProcessingPlantSerializer
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def get_queryset(self):
+        """Return plants owned by the current processor"""
+        try:
+            processor = ProcessorProfile.objects.get(user=self.request.user)
+            return ProcessingPlant.objects.filter(processor=processor).order_by('-created_at')
+        except ProcessorProfile.DoesNotExist:
+            return ProcessingPlant.objects.none()
+    
+    def create(self, request):
+        """Create a new processing plant"""
+        try:
+            processor = ProcessorProfile.objects.get(user=request.user)
+        except ProcessorProfile.DoesNotExist:
+            return Response(
+                response_error(message="Processor profile not found"),
+                status=404
+            )
+        
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(processor=processor)
+            return Response(
+                response_success(
+                    message="Processing plant created successfully",
+                    data=serializer.data
+                ),
+                status=status.HTTP_201_CREATED
+            )
+        
+        return Response(
+            response_error(message="Validation failed", errors=serializer.errors),
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    def list(self, request):
+        """List all processing plants"""
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        
+        return Response(
+            response_success(
+                message="Processing plants fetched successfully",
+                data=serializer.data
+            )
+        )
+    
+    def retrieve(self, request, pk=None):
+        """Get a specific processing plant"""
+        try:
+            plant = self.get_queryset().get(pk=pk)
+            serializer = self.get_serializer(plant)
+            
+            return Response(
+                response_success(
+                    message="Processing plant details fetched successfully",
+                    data=serializer.data
+                )
+            )
+        except ProcessingPlant.DoesNotExist:
+            return Response(
+                response_error(message="Processing plant not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    def update(self, request, pk=None):
+        """Update a processing plant"""
+        try:
+            plant = self.get_queryset().get(pk=pk)
+        except ProcessingPlant.DoesNotExist:
+            return Response(
+                response_error(message="Processing plant not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = self.get_serializer(plant, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                response_success(
+                    message="Processing plant updated successfully",
+                    data=serializer.data
+                )
+            )
+        
+        return Response(
+            response_error(message="Validation failed", errors=serializer.errors),
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    def destroy(self, request, pk=None):
+        """Delete a processing plant"""
+        try:
+            plant = self.get_queryset().get(pk=pk)
+            
+            # Check if plant has active batches
+            active_batches = ProcessingBatch.objects.filter(
+                plant=plant,
+                status__in=['pending', 'in_progress']
+            ).count()
+            
+            if active_batches > 0:
+                return Response(
+                    response_error(
+                        message=f"Cannot delete plant with {active_batches} active batches. Please complete or cancel them first."
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            plant_name = plant.plant_name
+            plant.delete()
+            
+            return Response(
+                response_success(
+                    message=f"Processing plant '{plant_name}' deleted successfully"
+                )
+            )
+        except ProcessingPlant.DoesNotExist:
+            return Response(
+                response_error(message="Processing plant not found"),
+                status=status.HTTP_404_NOT_FOUND
             )
 
 
@@ -134,15 +279,15 @@ class ProcessorDashboardAPIView(APIView):
         
         total_processed_quantity = ProcessingBatch.objects.filter(
             plant__processor=processor
-        ).aggregate(total=Sum('processed_quantity'))['total'] or 0
+        ).aggregate(total=Sum('initial_quantity_quintals'))['total'] or 0
         
         total_oil_extracted = ProcessingBatch.objects.filter(
             plant__processor=processor
-        ).aggregate(total=Sum('oil_extracted'))['total'] or 0
+        ).aggregate(total=Sum('oil_extracted_quintals'))['total'] or 0
         
         total_cake_produced = ProcessingBatch.objects.filter(
             plant__processor=processor
-        ).aggregate(total=Sum('cake_produced'))['total'] or 0
+        ).aggregate(total=Sum('cake_produced_quintals'))['total'] or 0
         
         # Processing efficiency
         extraction_efficiency = (total_oil_extracted / total_processed_quantity * 100) if total_processed_quantity > 0 else 0
@@ -193,10 +338,10 @@ class ProcessorDashboardAPIView(APIView):
                 'id': str(batch.id),
                 'batch_number': batch.batch_number,
                 'crop_type': batch.lot.crop_type if batch.lot else 'N/A',
-                'processed_quantity': float(batch.processed_quantity) if batch.processed_quantity else 0,
-                'oil_extracted': float(batch.oil_extracted) if batch.oil_extracted else 0,
-                'cake_produced': float(batch.cake_produced) if batch.cake_produced else 0,
-                'processing_date': batch.processing_date.isoformat() if batch.processing_date else None,
+                'processed_quantity': float(batch.initial_quantity_quintals) if batch.initial_quantity_quintals else 0,
+                'oil_extracted': float(batch.oil_extracted_quintals) if batch.oil_extracted_quintals else 0,
+                'cake_produced': float(batch.cake_produced_quintals) if batch.cake_produced_quintals else 0,
+                'start_date': batch.start_date.isoformat() if batch.start_date else None,
                 'plant_name': batch.plant.plant_name,
             })
         
@@ -676,8 +821,8 @@ class ProcessorInventoryAPIView(APIView):
         processed_batches = ProcessingBatch.objects.filter(
             plant__processor=processor
         ).values('lot__crop_type').annotate(
-            total_oil=Sum('oil_extracted'),
-            total_cake=Sum('cake_produced')
+            total_oil=Sum('oil_extracted_quintals'),
+            total_cake=Sum('cake_produced_quintals')
         )
         
         for batch in processed_batches:
@@ -707,5 +852,533 @@ class ProcessorInventoryAPIView(APIView):
             response_success(
                 message="Inventory fetched successfully",
                 data=inventory_data
+            )
+        )
+
+
+class LotAvailabilityAPIView(APIView):
+    """
+    Check lot availability for batch creation
+    GET /api/processors/lots/{lot_id}/availability/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def get(self, request, lot_id):
+        """Get lot availability information"""
+        try:
+            processor = ProcessorProfile.objects.get(user=request.user)
+        except ProcessorProfile.DoesNotExist:
+            return Response(
+                response_error(message="Processor profile not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            lot = ProcurementLot.objects.select_related('warehouse').get(id=lot_id)
+        except ProcurementLot.DoesNotExist:
+            return Response(
+                response_error(message="Lot not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check ownership
+        has_ownership = Bid.objects.filter(
+            lot=lot,
+            bidder_id=processor.id,
+            bidder_type='processor',
+            status='accepted'
+        ).exists()
+        
+        # Get existing batches from this lot
+        existing_batches = ProcessingBatch.objects.filter(
+            lot=lot,
+            plant__processor=processor
+        ).aggregate(
+            total_used=Sum('initial_quantity_quintals')
+        )
+        
+        total_used = existing_batches['total_used'] or 0
+        
+        availability_data = {
+            'lot_id': str(lot.id),
+            'lot_number': lot.lot_number,
+            'crop_type': lot.crop_type,
+            'total_quantity': float(lot.quantity_quintals),
+            'available_quantity': float(lot.available_quantity_quintals),
+            'already_used_by_processor': float(total_used),
+            'has_ownership': has_ownership,
+            'is_in_warehouse': lot.warehouse is not None,
+            'warehouse_info': None
+        }
+        
+        if lot.warehouse:
+            try:
+                inventory = Inventory.objects.get(warehouse=lot.warehouse, lot=lot)
+                availability_data['warehouse_info'] = {
+                    'warehouse_id': str(lot.warehouse.id),
+                    'warehouse_name': lot.warehouse.warehouse_name,
+                    'warehouse_code': lot.warehouse.warehouse_code,
+                    'inventory_quantity': float(inventory.quantity),
+                    'warehouse_total_stock': float(lot.warehouse.current_stock_quintals)
+                }
+            except Inventory.DoesNotExist:
+                pass
+        
+        return Response(
+            response_success(
+                message="Lot availability retrieved successfully",
+                data=availability_data
+            )
+        )
+
+
+class ProcessingBatchViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for ProcessingBatch with stage advancement and inventory deduction
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    serializer_class = ProcessingBatchSerializer
+    
+    def get_queryset(self):
+        processor = ProcessorProfile.objects.get(user=self.request.user)
+        return ProcessingBatch.objects.filter(
+            plant__processor=processor
+        ).select_related('plant', 'lot').prefetch_related('stage_logs', 'finished_products')
+    
+    def create(self, request, *args, **kwargs):
+        """
+        Create new processing batch with automatic inventory deduction
+        Validates ownership, quantity, and deducts from warehouse if applicable
+        """
+        try:
+            processor = ProcessorProfile.objects.get(user=request.user)
+        except ProcessorProfile.DoesNotExist:
+            return Response(
+                response_error(message="Processor profile not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get lot and validate
+        lot_id = request.data.get('lot')
+        if not lot_id:
+            return Response(
+                response_error(message="Lot ID is required"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            lot = ProcurementLot.objects.select_related('warehouse').get(id=lot_id)
+        except ProcurementLot.DoesNotExist:
+            return Response(
+                response_error(message="Lot not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Validate ownership - processor must have accepted bid
+        has_ownership = Bid.objects.filter(
+            lot=lot,
+            bidder_id=processor.id,
+            bidder_type='processor',
+            status='accepted'
+        ).exists()
+        
+        if not has_ownership:
+            return Response(
+                response_error(message="You don't have rights to process this lot. Bid must be accepted first."),
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get and validate initial quantity
+        try:
+            initial_quantity = Decimal(str(request.data.get('initial_quantity_quintals', 0)))
+        except (ValueError, TypeError):
+            return Response(
+                response_error(message="Invalid initial quantity value"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if initial_quantity <= 0:
+            return Response(
+                response_error(message="Initial quantity must be greater than 0"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if sufficient quantity available
+        if initial_quantity > lot.available_quantity_quintals:
+            return Response(
+                response_error(
+                    message=f"Insufficient quantity. Available: {lot.available_quantity_quintals}Q, Requested: {initial_quantity}Q"
+                ),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create batch with inventory deduction
+        with transaction.atomic():
+            # Create the batch using create serializer
+            serializer = ProcessingBatchCreateSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            batch = serializer.save()
+            
+            inventory_changes = None
+            
+            # If lot is in warehouse, deduct inventory
+            if lot.warehouse:
+                try:
+                    # Get inventory record
+                    inventory = Inventory.objects.select_for_update().get(
+                        warehouse=lot.warehouse,
+                        lot=lot
+                    )
+                    
+                    # Validate inventory has sufficient quantity
+                    if inventory.quantity < initial_quantity:
+                        raise ValueError(
+                            f"Insufficient inventory. Warehouse has {inventory.quantity}Q, need {initial_quantity}Q"
+                        )
+                    
+                    # Deduct from inventory
+                    inventory.quantity -= initial_quantity
+                    inventory.save()
+                    
+                    # Create stock movement OUT
+                    stock_movement = StockMovement.objects.create(
+                        warehouse=lot.warehouse,
+                        lot=lot,
+                        movement_type='out',
+                        quantity=initial_quantity,
+                        remarks=f'Moved to processing - Batch {batch.batch_number}'
+                    )
+                    
+                    # Update warehouse stock
+                    lot.warehouse.current_stock_quintals -= initial_quantity
+                    lot.warehouse.save(update_fields=['current_stock_quintals'])
+                    
+                    inventory_changes = {
+                        'warehouse_id': str(lot.warehouse.id),
+                        'warehouse_name': lot.warehouse.warehouse_name,
+                        'warehouse_code': lot.warehouse.warehouse_code,
+                        'deducted_quantity': float(initial_quantity),
+                        'remaining_warehouse_stock': float(lot.warehouse.current_stock_quintals),
+                        'stock_movement_id': str(stock_movement.id)
+                    }
+                    
+                except Inventory.DoesNotExist:
+                    # Lot not in inventory system, just deduct from lot
+                    pass
+                except ValueError as e:
+                    return Response(
+                        response_error(message=str(e)),
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Update lot available quantity
+            lot.available_quantity_quintals -= initial_quantity
+            lot.save(update_fields=['available_quantity_quintals'])
+            
+            # Prepare response with full batch details
+            batch_serializer = ProcessingBatchSerializer(batch)
+            response_data = {
+                'batch': batch_serializer.data,
+                'lot_remaining_quantity': float(lot.available_quantity_quintals)
+            }
+            
+            if inventory_changes:
+                response_data['inventory_changes'] = inventory_changes
+                message = f"Batch created successfully. {initial_quantity}Q deducted from warehouse {lot.warehouse.warehouse_code}"
+            else:
+                message = f"Batch created successfully. {initial_quantity}Q allocated from lot"
+            
+            return Response(
+                response_success(
+                    message=message,
+                    data=response_data
+                ),
+                status=status.HTTP_201_CREATED
+            )
+    
+    @action(detail=True, methods=['post'])
+    def start_batch(self, request, pk=None):
+        """
+        Start processing a batch
+        Note: Inventory is already deducted during batch creation
+        """
+        batch = self.get_object()
+        
+        if batch.status != 'pending':
+            return Response(
+                response_error(message="Batch has already been started"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verify batch has initial quantity set
+        if not batch.initial_quantity_quintals or batch.initial_quantity_quintals <= 0:
+            return Response(
+                response_error(message="Batch must have valid initial quantity"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        batch.status = 'in_progress'
+        batch.start_date = timezone.now()
+        batch.current_stage = 'cleaning'
+        batch.save()
+        
+        # Create first stage log
+        ProcessingStageLog.objects.create(
+            batch=batch,
+            stage='cleaning',
+            input_quantity=batch.initial_quantity_quintals,
+            output_quantity=0,
+            start_time=timezone.now(),
+            operator=request.user
+        )
+        
+        serializer = self.get_serializer(batch)
+        return Response(
+            response_success(
+                message="Batch processing started",
+                data=serializer.data
+            )
+        )
+    
+    @action(detail=True, methods=['post'])
+    def advance_stage(self, request, pk=None):
+        """
+        Complete current stage and advance to next stage
+        POST /api/processors/batches/{id}/advance_stage/
+        Body: {
+            "output_quantity": 95.5,
+            "waste_quantity": 2.5,
+            "quality_metrics": {"moisture": 8.5, "purity": 99.2},
+            "equipment_used": "Cleaner Model XYZ",
+            "notes": "Good quality output"
+        }
+        """
+        batch = self.get_object()
+        
+        if batch.status != 'in_progress':
+            return Response(
+                response_error(message="Batch is not in progress"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get current stage log
+        try:
+            current_log = ProcessingStageLog.objects.get(
+                batch=batch,
+                stage=batch.current_stage,
+                end_time__isnull=True
+            )
+        except ProcessingStageLog.DoesNotExist:
+            return Response(
+                response_error(message="Current stage log not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Update current stage log
+        current_log.output_quantity = request.data.get('output_quantity')
+        current_log.waste_quantity = request.data.get('waste_quantity', 0)
+        current_log.quality_metrics = request.data.get('quality_metrics', {})
+        current_log.equipment_used = request.data.get('equipment_used', '')
+        current_log.notes = request.data.get('notes', '')
+        current_log.end_time = timezone.now()
+        current_log.save()
+        
+        # Update batch fields based on stage
+        stage_field_map = {
+            'cleaning': 'cleaned_quantity_quintals',
+            'dehulling': 'dehulled_quantity_quintals',
+            'crushing': 'crushed_quantity_quintals',
+            'conditioning': 'conditioned_quantity_quintals',
+        }
+        
+        if batch.current_stage in stage_field_map:
+            setattr(batch, stage_field_map[batch.current_stage], current_log.output_quantity)
+        
+        # Update total waste
+        batch.waste_quantity_quintals += current_log.waste_quantity
+        
+        # Determine next stage
+        stages = [stage[0] for stage in ProcessingBatch.PROCESSING_STAGES]
+        current_index = stages.index(batch.current_stage)
+        
+        if current_index < len(stages) - 1:
+            next_stage = stages[current_index + 1]
+            batch.current_stage = next_stage
+            batch.save()
+            
+            # Create next stage log
+            ProcessingStageLog.objects.create(
+                batch=batch,
+                stage=next_stage,
+                input_quantity=current_log.output_quantity,
+                output_quantity=0,
+                start_time=timezone.now(),
+                operator=request.user
+            )
+            
+            serializer = self.get_serializer(batch)
+            return Response(
+                response_success(
+                    message=f"Advanced to {next_stage} stage",
+                    data=serializer.data
+                )
+            )
+        else:
+            # Last stage completed
+            batch.status = 'completed'
+            batch.completion_date = timezone.now()
+            batch.save()
+            
+            serializer = self.get_serializer(batch)
+            return Response(
+                response_success(
+                    message="Batch processing completed",
+                    data=serializer.data
+                )
+            )
+    
+    @action(detail=True, methods=['post'])
+    def record_output(self, request, pk=None):
+        """
+        Record final oil and cake outputs after pressing/refining
+        POST /api/processors/batches/{id}/record_output/
+        Body: {
+            "oil_extracted_quintals": 35.5,
+            "refined_oil_quintals": 34.0,
+            "cake_produced_quintals": 58.5,
+            "hulls_produced_quintals": 3.0
+        }
+        """
+        batch = self.get_object()
+        
+        batch.oil_extracted_quintals = request.data.get('oil_extracted_quintals')
+        batch.refined_oil_quintals = request.data.get('refined_oil_quintals')
+        batch.cake_produced_quintals = request.data.get('cake_produced_quintals')
+        batch.hulls_produced_quintals = request.data.get('hulls_produced_quintals')
+        batch.save()
+        
+        serializer = self.get_serializer(batch)
+        return Response(
+            response_success(
+                message="Output quantities recorded",
+                data=serializer.data
+            )
+        )
+    
+    @action(detail=True, methods=['post'])
+    def create_finished_products(self, request, pk=None):
+        """
+        Create finished product inventory entries from completed batch
+        POST /api/processors/batches/{id}/create_finished_products/
+        Body: {
+            "products": [
+                {
+                    "product_type": "refined_oil",
+                    "quantity_quintals": 34.0,
+                    "storage_location": "Tank A1",
+                    "quality_grade": "Premium",
+                    "packaging_type": "5L bottles"
+                }
+            ]
+        }
+        """
+        batch = self.get_object()
+        
+        if batch.status != 'completed':
+            return Response(
+                response_error(message="Batch must be completed first"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        products_data = request.data.get('products', [])
+        created_products = []
+        
+        for product_data in products_data:
+            product = FinishedProduct.objects.create(
+                batch=batch,
+                product_type=product_data['product_type'],
+                quantity_quintals=product_data['quantity_quintals'],
+                available_quantity_quintals=product_data['quantity_quintals'],
+                storage_location=product_data.get('storage_location', ''),
+                quality_grade=product_data.get('quality_grade', ''),
+                packaging_type=product_data.get('packaging_type', ''),
+                production_date=timezone.now().date(),
+                storage_conditions=product_data.get('storage_conditions', 'cool_dry'),
+                selling_price_per_quintal=product_data.get('selling_price_per_quintal'),
+                notes=product_data.get('notes', '')
+            )
+            created_products.append(product)
+        
+        serializer = FinishedProductSerializer(created_products, many=True)
+        return Response(
+            response_success(
+                message="Finished products created successfully",
+                data=serializer.data
+            )
+        )
+
+
+class ProcessingStageLogAPIView(APIView):
+    """
+    Get stage logs for a batch
+    GET /api/processors/batches/{batch_id}/stage-logs/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def get(self, request, batch_id):
+        processor = ProcessorProfile.objects.get(user=request.user)
+        
+        try:
+            batch = ProcessingBatch.objects.get(
+                id=batch_id,
+                plant__processor=processor
+            )
+        except ProcessingBatch.DoesNotExist:
+            return Response(
+                response_error(message="Batch not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        stage_logs = ProcessingStageLog.objects.filter(batch=batch).select_related('operator')
+        serializer = ProcessingStageLogSerializer(stage_logs, many=True)
+        
+        return Response(
+            response_success(
+                message="Stage logs fetched successfully",
+                data=serializer.data
+            )
+        )
+
+
+class FinishedProductAPIView(APIView):
+    """
+    Get finished products inventory
+    GET /api/processors/finished-products/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def get(self, request):
+        processor = ProcessorProfile.objects.get(user=request.user)
+        
+        products = FinishedProduct.objects.filter(
+            batch__plant__processor=processor
+        ).select_related('batch').order_by('-production_date')
+        
+        # Filter by status if provided
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            products = products.filter(status=status_filter)
+        
+        # Filter by product type if provided
+        product_type = request.query_params.get('product_type')
+        if product_type:
+            products = products.filter(product_type=product_type)
+        
+        serializer = FinishedProductSerializer(products, many=True)
+        
+        return Response(
+            response_success(
+                message="Finished products fetched successfully",
+                data=serializer.data
             )
         )
