@@ -37,7 +37,7 @@ urlpatterns = [
     
     # Bids management
     path('bids/', FPOBidsAPIView.as_view(), name='fpo-bids'),
-    
+
     # Create farmer account
     path('create-farmer/', FPOCreateFarmerAPIView.as_view(), name='fpo-create-farmer'),
     
