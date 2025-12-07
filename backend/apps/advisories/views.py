@@ -9,7 +9,7 @@ from datetime import timedelta
 from apps.core.utils import response_success
 import random
 from .utils.demand_forecast import get_all_market_insights
-from .utils.market_insights_serializers import MarketInsightsResponseSerializer
+# from .utils.market_insights_serializers import MarketInsightsResponseSerializer
 from rest_framework.permissions import AllowAny
 
 
@@ -240,7 +240,7 @@ class MarketInsightsViewSet(APIView):
     
     permission_classes = [AllowAny]
     
-    def list(self, request):
+    def get(self, request):
         """
         Get comprehensive market insights for requested role
         
@@ -256,8 +256,8 @@ class MarketInsightsViewSet(APIView):
                 {
                     'error': f'Invalid role. Must be one of: {", ".join(valid_roles)}',
                     'received': role
-                },
-                status=status.HTTP_400_BAD_REQUEST
+                }
+                
             )
         
         try:
@@ -265,8 +265,7 @@ class MarketInsightsViewSet(APIView):
             insights = get_all_market_insights(role)
             
             return Response(
-                insights,
-                status=status.HTTP_200_OK
+                insights
             )
         
         except Exception as e:
@@ -274,6 +273,5 @@ class MarketInsightsViewSet(APIView):
                 {
                     'error': 'Failed to fetch market insights',
                     'details': str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                }
             )
