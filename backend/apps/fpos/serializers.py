@@ -25,6 +25,16 @@ class FPOWarehouseSerializer(serializers.ModelSerializer):
         model = FPOWarehouse
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at', 'current_stock_quintals']
+        extra_kwargs = {
+            'latitude': {'required': False, 'allow_null': True},
+            'longitude': {'required': False, 'allow_null': True},
+            'weighing_capacity_quintals': {'required': False, 'allow_null': True},
+            'village': {'required': False, 'allow_blank': True},
+            'incharge_name': {'required': False, 'allow_blank': True},
+            'incharge_phone': {'required': False, 'allow_blank': True},
+            'operational_since': {'required': False, 'allow_null': True},
+            'notes': {'required': False, 'allow_blank': True},
+        }
     
     def get_available_capacity(self, obj):
         return obj.get_available_capacity()
@@ -47,4 +57,12 @@ class FPOWarehouseSerializer(serializers.ModelSerializer):
             queryset = queryset.exclude(id=instance.id)
         if queryset.exists():
             raise serializers.ValidationError("This warehouse code is already in use")
+        return value
+    
+    def validate_pincode(self, value):
+        """Validate pincode is exactly 6 digits"""
+        if value and not value.isdigit():
+            raise serializers.ValidationError("Pincode must contain only digits")
+        if value and len(value) != 6:
+            raise serializers.ValidationError("Pincode must be exactly 6 digits")
         return value

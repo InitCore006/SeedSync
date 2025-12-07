@@ -283,26 +283,33 @@ class ProcessorBidsAPIView(APIView):
                     'quality_grade': bid.lot.quality_grade,
                     'expected_price_per_quintal': float(bid.lot.expected_price_per_quintal),
                 },
-                'bid_amount_per_quintal': float(bid.bid_amount_per_quintal),
+                'bid_amount_per_quintal': float(bid.offered_price_per_quintal),
                 'quantity_quintals': float(bid.quantity_quintals),
-                'total_amount': float(bid.bid_amount_per_quintal * bid.quantity_quintals),
+                'total_amount': float(bid.total_amount),
                 'status': bid.status,
-                'remarks': bid.remarks or '',
+                'remarks': bid.message or '',  # Return as 'remarks' for frontend compatibility
                 'created_at': bid.created_at.isoformat(),
                 'updated_at': bid.updated_at.isoformat()
             }
             
+            # Add farmer info if lot has a farmer (individual farmer lots)
             if bid.lot.farmer:
                 bid_data['lot']['farmer'] = {
                     'full_name': bid.lot.farmer.full_name,
                     'phone_number': bid.lot.farmer.user.phone_number,
                 }
+            else:
+                # FPO-aggregated lots have farmer=None
+                bid_data['lot']['farmer'] = None
             
+            # Add FPO info if lot is from FPO
             if bid.lot.fpo:
                 bid_data['lot']['fpo'] = {
                     'organization_name': bid.lot.fpo.organization_name,
                     'phone_number': bid.lot.fpo.user.phone_number,
                 }
+            else:
+                bid_data['lot']['fpo'] = None
             
             bids_data.append(bid_data)
         
@@ -340,7 +347,7 @@ class ProcessorBidsAPIView(APIView):
         lot_id = request.data.get('lot_id')
         bid_amount_per_quintal = request.data.get('bid_amount_per_quintal')
         quantity_quintals = request.data.get('quantity_quintals')
-        remarks = request.data.get('remarks', '')
+        message = request.data.get('remarks', '')  # Frontend sends 'remarks' but model uses 'message'
         
         # Validate inputs
         if not all([lot_id, bid_amount_per_quintal, quantity_quintals]):
@@ -379,14 +386,19 @@ class ProcessorBidsAPIView(APIView):
             )
         
         # Create bid
+        from datetime import date, timedelta
+        
         bid = Bid.objects.create(
             lot=lot,
             bidder_id=processor.id,
             bidder_type='processor',
-            bid_amount_per_quintal=bid_amount_per_quintal,
+            bidder_name=processor.company_name,
+            bidder_user=request.user,
+            offered_price_per_quintal=bid_amount_per_quintal,
             quantity_quintals=quantity_quintals,
+            expected_pickup_date=date.today() + timedelta(days=7),  # Default 7 days from now
             status='pending',
-            remarks=remarks
+            message=message
         )
         
         # Update lot status to bidding
@@ -400,7 +412,7 @@ class ProcessorBidsAPIView(APIView):
                 data={
                     'bid_id': str(bid.id),
                     'lot_number': lot.lot_number,
-                    'total_amount': float(bid.bid_amount_per_quintal * bid.quantity_quintals)
+                    'total_amount': float(bid.total_amount)
                 }
             ),
             status=201

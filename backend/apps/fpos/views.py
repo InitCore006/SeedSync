@@ -332,6 +332,7 @@ class FPOProcurementAPIView(APIView):
             )
         
         # Get query parameters
+        view_type = request.query_params.get('view', 'available')  # 'available' or 'all'
         crop_type = request.query_params.get('crop_type')
         quality_grade = request.query_params.get('quality_grade')
         max_price = request.query_params.get('max_price')
@@ -341,10 +342,16 @@ class FPOProcurementAPIView(APIView):
         lots = ProcurementLot.objects.filter(
             fpo=fpo,  # Only this FPO's lots
             managed_by_fpo=True,  # Auto-managed member lots
-            status='available',
             is_active=True,
-            available_quantity_quintals__gt=0
         ).select_related('farmer', 'farmer__user', 'warehouse').prefetch_related('source_warehouses')
+        
+        # Apply view filter
+        if view_type == 'available':
+            lots = lots.filter(
+                status='available',
+                available_quantity_quintals__gt=0
+            )
+        # For 'all' view, show all lots regardless of status
         
         # Apply filters
         if crop_type:
@@ -361,27 +368,34 @@ class FPOProcurementAPIView(APIView):
         
         lots_data = []
         for lot in lots:
-            lots_data.append({
-                'id': str(lot.id),
-                'lot_number': lot.lot_number,
-                'farmer': {
+            # Handle farmer data - None for FPO-aggregated lots
+            farmer_data = None
+            if lot.farmer:
+                farmer_data = {
                     'id': str(lot.farmer.id),
                     'full_name': lot.farmer.full_name,
                     'phone_number': lot.farmer.user.phone_number,
-                },
+                }
+            
+            lots_data.append({
+                'id': str(lot.id),
+                'lot_number': lot.lot_number,
+                'farmer': farmer_data,  # None for FPO-aggregated lots
+                'farmer_name': lot.fpo.organization_name if lot.listing_type == 'fpo_aggregated' and not lot.farmer else (lot.farmer.full_name if lot.farmer else 'Unknown'),
                 'crop_type': lot.crop_type,
                 'quantity_quintals': float(lot.available_quantity_quintals),
                 'quality_grade': lot.quality_grade,
                 'expected_price_per_quintal': float(lot.expected_price_per_quintal),
                 'harvest_date': lot.harvest_date.isoformat(),
                 'status': lot.status,
+                'listing_type': lot.listing_type,
                 'description': lot.description or '',
                 'qr_code_url': lot.qr_code_url or None,
                 'blockchain_tx_id': lot.blockchain_tx_id or None,
                 'created_at': lot.created_at.isoformat(),
                 # Warehouse information
                 'warehouse_id': str(lot.warehouse.id) if lot.warehouse else None,
-                'warehouse_name': lot.warehouse.name if lot.warehouse else None,
+                'warehouse_name': lot.warehouse.warehouse_name if lot.warehouse else None,
                 'warehouse_code': lot.warehouse.warehouse_code if lot.warehouse else None,
                 'warehouse_district': lot.warehouse.district if lot.warehouse else None,
             })
@@ -425,7 +439,7 @@ class FPOWarehousesAPIView(APIView):
                 status=404
             )
         
-        warehouses = FPOWarehouse.objects.filter(fpo=fpo, is_active=True)
+        warehouses = FPOWarehouse.objects.filter(fpo=fpo, is_operational=True)
         serializer = FPOWarehouseSerializer(warehouses, many=True)
         
         return Response(
@@ -571,6 +585,275 @@ class FPOWarehousesAPIView(APIView):
         )
 
 
+class FPOAssignWarehouseAPIView(APIView):
+    """
+    FPO assigns warehouse to member farmer lot
+    Creates inventory and stock movement records
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
+    
+    def post(self, request):
+        """Assign warehouse to lot"""
+        from django.utils import timezone
+        from apps.warehouses.models import Inventory, StockMovement, Warehouse
+        from django.db import transaction
+        
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        lot_id = request.data.get('lot_id')
+        warehouse_id = request.data.get('warehouse_id')
+        
+        if not lot_id or not warehouse_id:
+            return Response(
+                response_error(message="lot_id and warehouse_id are required"),
+                status=400
+            )
+        
+        # Get lot (must belong to this FPO and be managed by FPO)
+        try:
+            lot = ProcurementLot.objects.get(
+                id=lot_id,
+                fpo=fpo,
+                managed_by_fpo=True,
+                is_active=True
+            )
+        except ProcurementLot.DoesNotExist:
+            return Response(
+                response_error(message="Lot not found or not managed by this FPO"),
+                status=404
+            )
+        
+        # Check if lot already has warehouse assigned
+        if lot.warehouse:
+            return Response(
+                response_error(message=f"Lot already assigned to warehouse: {lot.warehouse.warehouse_name}"),
+                status=400
+            )
+        
+        # Get warehouse (must belong to this FPO)
+        try:
+            warehouse = FPOWarehouse.objects.get(
+                id=warehouse_id,
+                fpo=fpo,
+                is_active=True
+            )
+        except FPOWarehouse.DoesNotExist:
+            return Response(
+                response_error(message="Warehouse not found or does not belong to this FPO"),
+                status=404
+            )
+        
+        # Validate warehouse has sufficient capacity
+        available_capacity = warehouse.get_available_capacity()
+        if lot.quantity_quintals > available_capacity:
+            return Response(
+                response_error(
+                    message=f"Insufficient warehouse capacity. Available: {available_capacity} quintals, Required: {lot.quantity_quintals} quintals"
+                ),
+                status=400
+            )
+        
+        # Assign warehouse and create records in transaction
+        try:
+            with transaction.atomic():
+                # Update lot with warehouse
+                lot.warehouse = warehouse
+                lot.save(update_fields=['warehouse'])
+                
+                # Create inventory record
+                inventory = Inventory.objects.create(
+                    warehouse=warehouse,
+                    lot=lot,
+                    quantity=lot.quantity_quintals,
+                    entry_date=timezone.now().date()
+                )
+                
+                # Create stock movement IN
+                stock_movement = StockMovement.objects.create(
+                    warehouse=warehouse,
+                    lot=lot,
+                    movement_type='in',
+                    quantity=lot.quantity_quintals,
+                    remarks=f'Received from FPO member: {lot.farmer.user.get_full_name()} - Lot: {lot.lot_number}'
+                )
+                
+                # Update warehouse current stock
+                warehouse.current_stock_quintals += lot.quantity_quintals
+                warehouse.save(update_fields=['current_stock_quintals'])
+                
+                return Response(
+                    response_success(
+                        message="Warehouse assigned successfully",
+                        data={
+                            'lot_id': str(lot.id),
+                            'lot_number': lot.lot_number,
+                            'warehouse_id': str(warehouse.id),
+                            'warehouse_name': warehouse.warehouse_name,
+                            'inventory_id': str(inventory.id),
+                            'stock_movement_id': str(stock_movement.id),
+                            'new_warehouse_stock': float(warehouse.current_stock_quintals),
+                            'warehouse_utilization': warehouse.get_capacity_utilization_percentage(),
+                        }
+                    ),
+                    status=200
+                )
+                
+        except Exception as e:
+            return Response(
+                response_error(message=f"Failed to assign warehouse: {str(e)}"),
+                status=500
+            )
+
+
+class FPOWarehouseInventoryAPIView(APIView):
+    """
+    Get detailed warehouse inventory with stock breakdown by crop type
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
+    
+    def get(self, request):
+        """Get warehouse inventory breakdown"""
+        from django.db.models import Sum, Count
+        from apps.warehouses.models import StockMovement
+        
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        warehouse_id = request.query_params.get('warehouse_id')
+        
+        if warehouse_id:
+            # Get specific warehouse inventory
+            try:
+                warehouse = FPOWarehouse.objects.get(id=warehouse_id, fpo=fpo, is_active=True)
+            except FPOWarehouse.DoesNotExist:
+                return Response(
+                    response_error(message="Warehouse not found"),
+                    status=404
+                )
+            
+            # Get all lots stored in this warehouse
+            lots_in_warehouse = ProcurementLot.objects.filter(
+                warehouse=warehouse,
+                is_active=True,
+                status__in=['available', 'bidding']
+            ).select_related('farmer__user', 'fpo')
+            
+            # Group by crop type
+            crop_breakdown = {}
+            for lot in lots_in_warehouse:
+                crop = lot.crop_type
+                if crop not in crop_breakdown:
+                    crop_breakdown[crop] = {
+                        'crop_type': crop,
+                        'total_quantity': 0,
+                        'lot_count': 0,
+                        'lots': []
+                    }
+                
+                crop_breakdown[crop]['total_quantity'] += float(lot.available_quantity_quintals)
+                crop_breakdown[crop]['lot_count'] += 1
+                crop_breakdown[crop]['lots'].append({
+                    'id': str(lot.id),
+                    'lot_number': lot.lot_number,
+                    'quantity_quintals': float(lot.available_quantity_quintals),
+                    'quality_grade': lot.quality_grade,
+                    'listing_type': lot.listing_type,
+                    'farmer_name': lot.farmer.user.get_full_name() if lot.farmer else 'N/A',
+                    'harvest_date': lot.harvest_date.isoformat() if lot.harvest_date else None,
+                    'expected_price_per_quintal': float(lot.expected_price_per_quintal),
+                    'status': lot.status,
+                })
+            
+            # Get recent stock movements
+            recent_movements = StockMovement.objects.filter(
+                warehouse=warehouse
+            ).select_related('lot').order_by('-movement_date')[:20]
+            
+            movements_data = []
+            for movement in recent_movements:
+                movements_data.append({
+                    'id': str(movement.id),
+                    'movement_type': movement.movement_type,
+                    'quantity': float(movement.quantity),
+                    'lot_number': movement.lot.lot_number,
+                    'movement_date': movement.movement_date.isoformat(),
+                    'remarks': movement.remarks,
+                })
+            
+            return Response(
+                response_success(
+                    message="Warehouse inventory fetched successfully",
+                    data={
+                        'warehouse': {
+                            'id': str(warehouse.id),
+                            'warehouse_name': warehouse.warehouse_name,
+                            'warehouse_code': warehouse.warehouse_code,
+                            'capacity_quintals': float(warehouse.capacity_quintals),
+                            'current_stock_quintals': float(warehouse.current_stock_quintals),
+                            'available_capacity': float(warehouse.get_available_capacity()),
+                            'utilization_percentage': warehouse.get_capacity_utilization_percentage(),
+                        },
+                        'crop_breakdown': list(crop_breakdown.values()),
+                        'total_lots': lots_in_warehouse.count(),
+                        'recent_movements': movements_data,
+                    }
+                )
+            )
+        else:
+            # Get inventory summary for all warehouses
+            warehouses = FPOWarehouse.objects.filter(fpo=fpo, is_active=True)
+            
+            summary = []
+            for warehouse in warehouses:
+                lots_in_wh = ProcurementLot.objects.filter(
+                    warehouse=warehouse,
+                    is_active=True,
+                    status__in=['available', 'bidding']
+                )
+                
+                crop_summary = lots_in_wh.values('crop_type').annotate(
+                    total_quantity=Sum('available_quantity_quintals'),
+                    lot_count=Count('id')
+                )
+                
+                summary.append({
+                    'id': str(warehouse.id),
+                    'warehouse_name': warehouse.warehouse_name,
+                    'warehouse_code': warehouse.warehouse_code,
+                    'capacity_quintals': float(warehouse.capacity_quintals),
+                    'current_stock_quintals': float(warehouse.current_stock_quintals),
+                    'available_capacity': float(warehouse.get_available_capacity()),
+                    'utilization_percentage': warehouse.get_capacity_utilization_percentage(),
+                    'crop_breakdown': [
+                        {
+                            'crop_type': item['crop_type'],
+                            'total_quantity': float(item['total_quantity'] or 0),
+                            'lot_count': item['lot_count']
+                        }
+                        for item in crop_summary
+                    ],
+                    'total_lots': lots_in_wh.count(),
+                })
+            
+            return Response(
+                response_success(
+                    message="Warehouse inventory summary fetched successfully",
+                    data=summary
+                )
+            )
+
+
 class FPOBidsAPIView(APIView):
     """
     Manage FPO bids - view received bids on FPO lots and manage them
@@ -630,13 +913,13 @@ class FPOBidsAPIView(APIView):
                 'lot_number': bid.lot.lot_number,
                 'crop': bid.lot.crop_type,
                 'quantity': float(bid.quantity_quintals),
-                'bid_price': float(bid.bid_amount_per_quintal),
+                'bid_price': float(bid.offered_price_per_quintal),
                 'expected_price': float(bid.lot.expected_price_per_quintal),
                 'bidder': bidder_name,
                 'bidder_phone': bidder_phone,
                 'status': bid.status,
                 'created_at': bid.created_at.isoformat(),
-                'remarks': bid.remarks or '',
+                'remarks': bid.message or '',  # Return as 'remarks' for frontend compatibility
             })
         
         return Response(
@@ -674,17 +957,21 @@ class FPOBidsAPIView(APIView):
             )
         
         if action == 'accept':
-            bid.status = 'accepted'
-            bid.save()
+            # Use the model's accept() method which handles all related updates
+            bid.accept(farmer_response="Accepted by FPO")
             return Response(
                 response_success(
-                    message="Bid accepted successfully",
-                    data={'bid_id': str(bid.id), 'status': bid.status}
+                    message="Bid accepted successfully. Lot marked as sold and other bids rejected.",
+                    data={
+                        'bid_id': str(bid.id), 
+                        'status': bid.status,
+                        'lot_status': bid.lot.status
+                    }
                 )
             )
         elif action == 'reject':
-            bid.status = 'rejected'
-            bid.save()
+            # Use the model's reject() method
+            bid.reject(farmer_response="Rejected by FPO")
             return Response(
                 response_success(
                     message="Bid rejected successfully",
@@ -919,7 +1206,7 @@ class FPOCreateAggregatedLotAPIView(APIView):
     def post(self, request):
         """Create aggregated bulk lot from member lots with warehouse management"""
         from django.utils import timezone
-        from apps.warehouses.models import Inventory, StockMovement, Warehouse
+        from apps.warehouses.models import Inventory, StockMovement
         from django.db import transaction
         
         try:
@@ -936,7 +1223,7 @@ class FPOCreateAggregatedLotAPIView(APIView):
         quality_grade = request.data.get('quality_grade')
         expected_price_per_quintal = request.data.get('expected_price_per_quintal')
         description = request.data.get('description', '')
-        target_warehouse_id = request.data.get('warehouse_id')  # Target warehouse for aggregated lot
+        # Note: No target warehouse needed - aggregated lots are marketplace listings, not physical storage
         
         # Validation
         if not parent_lot_ids or len(parent_lot_ids) == 0:
@@ -973,8 +1260,31 @@ class FPOCreateAggregatedLotAPIView(APIView):
         ).select_related('warehouse').prefetch_related('source_warehouses')
         
         if parent_lots.count() != len(parent_lot_ids):
+            # Debug: Find which lots are missing/invalid
+            found_ids = list(parent_lots.values_list('id', flat=True))
+            missing_ids = [str(lot_id) for lot_id in parent_lot_ids if lot_id not in found_ids]
+            
+            # Check what's wrong with missing lots
+            all_lots = ProcurementLot.objects.filter(id__in=parent_lot_ids)
+            invalid_reasons = []
+            for lot in all_lots:
+                if lot.id not in found_ids:
+                    reasons = []
+                    if lot.fpo != fpo:
+                        reasons.append(f"belongs to different FPO")
+                    if not lot.managed_by_fpo:
+                        reasons.append(f"not managed by FPO (managed_by_fpo={lot.managed_by_fpo})")
+                    if not lot.is_active:
+                        reasons.append(f"not active")
+                    if lot.status != 'available':
+                        reasons.append(f"status is '{lot.status}' not 'available'")
+                    invalid_reasons.append(f"Lot {lot.lot_number}: {', '.join(reasons)}")
+            
+            error_detail = ". ".join(invalid_reasons) if invalid_reasons else "Unknown reason"
             return Response(
-                response_error(message="Some parent lots are invalid or not available"),
+                response_error(
+                    message=f"Some parent lots are invalid or not available. {error_detail}"
+                ),
                 status=400
             )
         
@@ -985,34 +1295,24 @@ class FPOCreateAggregatedLotAPIView(APIView):
                 status=400
             )
         
-        # Get target warehouse if specified
-        target_warehouse = None
-        if target_warehouse_id:
-            try:
-                target_warehouse = Warehouse.objects.get(
-                    id=target_warehouse_id,
-                    fpo=fpo,
-                    is_active=True
-                )
-            except Warehouse.DoesNotExist:
-                return Response(
-                    response_error(message="Invalid warehouse or warehouse does not belong to this FPO"),
-                    status=400
-                )
+        # VALIDATION: All parent lots MUST have warehouses assigned
+        lots_without_warehouse = [lot for lot in parent_lots if not lot.warehouse]
+        if lots_without_warehouse:
+            lot_numbers = ', '.join([lot.lot_number for lot in lots_without_warehouse])
+            return Response(
+                response_error(
+                    message=f"Aggregation requires all lots to be stored in warehouses first. "
+                            f"Please assign warehouses to these lots: {lot_numbers}"
+                ),
+                status=400
+            )
+        
+        # No need to get target warehouse - aggregated lots are marketplace listings, not stored
         
         # Calculate total quantity
         total_quantity = sum(lot.available_quantity_quintals for lot in parent_lots)
         
-        # Validate target warehouse capacity if specified
-        if target_warehouse:
-            available_capacity = target_warehouse.get_available_capacity()
-            if total_quantity > available_capacity:
-                return Response(
-                    response_error(
-                        message=f"Insufficient warehouse capacity. Available: {available_capacity} quintals, Required: {total_quantity} quintals"
-                    ),
-                    status=400
-                )
+        # No warehouse capacity check needed - aggregated lots are marketplace listings, not stored
         
         # Collect source warehouses (multi-warehouse aggregation)
         source_warehouses = set()
@@ -1020,15 +1320,14 @@ class FPOCreateAggregatedLotAPIView(APIView):
             if lot.warehouse:
                 source_warehouses.add(lot.warehouse)
         
-        # Get first farmer as reference
-        first_farmer = parent_lots.first().farmer
+        # No need for first_farmer reference - FPO owns the aggregated lot
         
         # Use database transaction for atomicity
         try:
             with transaction.atomic():
-                # Create aggregated lot
+                # Create aggregated lot (FPO-owned marketplace listing)
                 aggregated_lot = ProcurementLot.objects.create(
-                    farmer=first_farmer,
+                    farmer=None,  # FPO-owned lot, not individual farmer
                     fpo=fpo,
                     managed_by_fpo=True,
                     listing_type='fpo_aggregated',
@@ -1039,8 +1338,8 @@ class FPOCreateAggregatedLotAPIView(APIView):
                     expected_price_per_quintal=expected_price_per_quintal,
                     harvest_date=parent_lots.first().harvest_date,
                     description=description or f"FPO Aggregated Bulk Lot from {parent_lots.count()} member lots",
-                    status='available',
-                    warehouse=target_warehouse  # Assign target warehouse
+                    status='available',  # Available in marketplace
+                    warehouse=None  # Marketplace listing, not warehouse storage
                 )
                 
                 # Link parent lots
@@ -1067,36 +1366,16 @@ class FPOCreateAggregatedLotAPIView(APIView):
                         lot.warehouse.current_stock_quintals -= lot.available_quantity_quintals
                         lot.warehouse.save(update_fields=['current_stock_quintals'])
                 
-                # Create inventory and stock movement IN to target warehouse
-                if target_warehouse:
-                    # Create inventory record
-                    Inventory.objects.create(
-                        warehouse=target_warehouse,
-                        lot=aggregated_lot,
-                        quantity=total_quantity,
-                        entry_date=timezone.now().date()
-                    )
-                    
-                    # Create stock movement IN
-                    StockMovement.objects.create(
-                        warehouse=target_warehouse,
-                        lot=aggregated_lot,
-                        movement_type='in',
-                        quantity=total_quantity,
-                        movement_date=timezone.now().date(),
-                        remarks=f'Aggregated bulk lot from {parent_lots.count()} member lots'
-                    )
-                    
-                    # Update target warehouse stock
-                    target_warehouse.current_stock_quintals += total_quantity
-                    target_warehouse.save(update_fields=['current_stock_quintals'])
+                # Note: No stock IN to target warehouse - aggregated lot is a marketplace listing
+                # Stock has been deducted from source warehouses above and is now allocated to this listing
+                # When sold, stock will be shipped directly from available FPO stock
                 
                 # Update parent lots status to 'aggregated'
                 parent_lots.update(status='aggregated')
                 
                 return Response(
                     response_success(
-                        message="Aggregated bulk lot created successfully with warehouse tracking",
+                        message=f"Aggregated bulk lot created successfully. {total_quantity} quintals deducted from source warehouses and listed in marketplace.",
                         data={
                             'id': str(aggregated_lot.id),
                             'lot_number': aggregated_lot.lot_number,
@@ -1106,10 +1385,10 @@ class FPOCreateAggregatedLotAPIView(APIView):
                             'expected_price_per_quintal': float(aggregated_lot.expected_price_per_quintal),
                             'parent_lots_count': parent_lots.count(),
                             'listing_type': aggregated_lot.listing_type,
-                            'warehouse_id': str(target_warehouse.id) if target_warehouse else None,
-                            'warehouse_name': target_warehouse.name if target_warehouse else None,
+                            'warehouse_id': None,  # Marketplace listing, not stored
+                            'warehouse_name': None,  # Marketplace listing, not stored
                             'source_warehouses_count': len(source_warehouses),
-                            'source_warehouse_names': [wh.name for wh in source_warehouses]
+                            'source_warehouse_names': [wh.warehouse_name for wh in source_warehouses]
                         }
                     ),
                     status=201

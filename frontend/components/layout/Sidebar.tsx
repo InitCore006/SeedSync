@@ -15,6 +15,7 @@ import {
   Link as LinkIcon,
   FileText,
   CheckCircle,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -66,6 +67,12 @@ const navItems: NavItem[] = [
     roles: [USER_ROLES.FPO],
   },
   {
+    label: 'Lot Tracking',
+    href: '/fpo/tracking',
+    icon: <Activity className="h-5 w-5" />,
+    roles: [USER_ROLES.FPO],
+  },
+  {
     label: 'Marketplace',
     href: '/marketplace',
     icon: <ShoppingCart className="h-5 w-5" />,
@@ -87,6 +94,12 @@ const navItems: NavItem[] = [
     roles: [USER_ROLES.PROCESSOR],
   },
   {
+    label: 'My Bids',
+    href: '/processor/bids',
+    icon: <TrendingUp className="h-5 w-5" />,
+    roles: [USER_ROLES.PROCESSOR],
+  },
+  {
     label: 'Processing Batches',
     href: '/processor/batches',
     icon: <TrendingUp className="h-5 w-5" />,
@@ -96,6 +109,12 @@ const navItems: NavItem[] = [
     label: 'Inventory',
     href: '/processor/inventory',
     icon: <Warehouse className="h-5 w-5" />,
+    roles: [USER_ROLES.PROCESSOR],
+  },
+  {
+    label: 'Procurement Tracking',
+    href: '/processor/tracking',
+    icon: <Activity className="h-5 w-5" />,
     roles: [USER_ROLES.PROCESSOR],
   },
   {
@@ -154,6 +173,12 @@ const navItems: NavItem[] = [
     label: 'Approvals',
     href: '/government/approvals',
     icon: <CheckCircle className="h-5 w-5" />,
+    roles: [USER_ROLES.GOVERNMENT],
+  },
+  {
+    label: 'Supply Chain Tracking',
+    href: '/government/tracking',
+    icon: <Activity className="h-5 w-5" />,
     roles: [USER_ROLES.GOVERNMENT],
   },
   

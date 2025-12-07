@@ -72,23 +72,23 @@ export const lotsAPI = {
     quality_grade?: string;
     min_price?: number;
     max_price?: number;
-  }) => api.get<PaginatedResponse<ProcurementLot>>('/lots/', { params }),
+  }) => api.get<PaginatedResponse<ProcurementLot>>('/lots/procurement/', { params }),
 
   // Get lot by ID
   getLot: (id: string) =>
-    api.get<APIResponse<ProcurementLot>>(`/lots/${id}/`),
+    api.get<APIResponse<ProcurementLot>>(`/lots/procurement/${id}/`),
 
   // Create new lot
   createLot: (data: CreateLotRequest) =>
-    api.post<APIResponse<ProcurementLot>>('/lots/create/', data),
+    api.post<APIResponse<ProcurementLot>>('/lots/procurement/', data),
 
   // Update lot
   updateLot: (id: string, data: Partial<CreateLotRequest>) =>
-    api.patch<APIResponse<ProcurementLot>>(`/lots/${id}/`, data),
+    api.patch<APIResponse<ProcurementLot>>(`/lots/procurement/${id}/`, data),
 
   // Delete lot
   deleteLot: (id: string) =>
-    api.delete(`/lots/${id}/`),
+    api.delete(`/lots/procurement/${id}/`),
 
   // Upload lot image
   uploadImage: (lotId: string, file: File) => {
@@ -156,7 +156,13 @@ export const fpoAPI = {
     api.post<APIResponse>('/fpos/members/', { phone_number }),
 
   // Get procurement opportunities
-  getProcurement: (params?: { crop_type?: string; quality_grade?: string }) =>
+  getProcurement: (params?: { 
+    view?: 'available' | 'all';
+    crop_type?: string; 
+    quality_grade?: string;
+    max_price?: number;
+    page?: number;
+  }) =>
     api.get<PaginatedResponse<ProcurementLot>>('/fpos/procurement/', { params }),
 
   // Get warehouses
@@ -239,6 +245,19 @@ export const fpoAPI = {
     description?: string;
   }) =>
     api.post<APIResponse>('/fpos/create-aggregated-lot/', data),
+  
+  // Assign warehouse to lot (FPO only)
+  assignWarehouse: (data: {
+    lot_id: string;
+    warehouse_id: string;
+  }) =>
+    api.post<APIResponse>('/fpos/assign-warehouse/', data),
+  
+  // Get warehouse inventory details
+  getWarehouseInventory: (warehouse_id?: string) =>
+    api.get<APIResponse>('/fpos/warehouse-inventory/', { 
+      params: warehouse_id ? { warehouse_id } : undefined 
+    }),
 };
 
 // ============= Marketplace APIs =============
