@@ -13,6 +13,8 @@ export interface WeatherData {
   rainfall: number;
   icon: string;
   city: string;
+  district?: string;
+  state?: string;
   alert?: string;
 }
 

@@ -119,59 +119,8 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Quick Stats for Farmers */}
-      {isFarmer && user?.profile && (
-        <View style={styles.statsSection}>
-          <View style={styles.statCard}>
-            <Ionicons name="leaf" size={24} color={COLORS.primary} />
-            <Text style={styles.statValue}>
-              {user.profile.total_lots_created || 0}
-            </Text>
-            <Text style={styles.statLabel}>Lots Created</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="cash" size={24} color={COLORS.success} />
-            <Text style={styles.statValue}>
-              ₹{(user.profile.total_earnings || 0).toLocaleString()}
-            </Text>
-            <Text style={styles.statLabel}>Total Earnings</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="scale" size={24} color={COLORS.warning} />
-            <Text style={styles.statValue}>
-              {user.profile.total_quantity_sold_quintals || 0}Q
-            </Text>
-            <Text style={styles.statLabel}>Sold</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Quick Stats for Logistics */}
-      {isLogistics && user?.profile && (
-        <View style={styles.statsSection}>
-          <View style={styles.statCard}>
-            <Ionicons name="car" size={24} color={COLORS.primary} />
-            <Text style={styles.statValue}>
-              {user.profile.total_trips || 0}
-            </Text>
-            <Text style={styles.statLabel}>Total Trips</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="cash" size={24} color={COLORS.success} />
-            <Text style={styles.statValue}>
-              ₹{(user.profile.total_earnings || 0).toLocaleString()}
-            </Text>
-            <Text style={styles.statLabel}>Earnings</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="star" size={24} color={COLORS.warning} />
-            <Text style={styles.statValue}>
-              {user.profile.rating?.toFixed(1) || '0.0'}
-            </Text>
-            <Text style={styles.statLabel}>Rating</Text>
-          </View>
-        </View>
-      )}
+    
+  
 
       {/* Menu Items */}
       <View style={styles.menuSection}>
@@ -204,9 +153,7 @@ export default function ProfileScreen() {
           title="Logout"
           onPress={handleLogout}
           variant="outline"
-          leftIcon={
-            <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
-          }
+        
         />
       </View>
 

@@ -8,6 +8,9 @@ export default function AILayout() {
       }}
     >
       <Stack.Screen name="index" />
+      <Stack.Screen name="crop-recommendation" />
+      <Stack.Screen name="farming-assistant" />
+      <Stack.Screen name="weather-advisory" />
     </Stack>
   );
 }

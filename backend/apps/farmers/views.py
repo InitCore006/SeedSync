@@ -5,6 +5,7 @@ from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
 from .models import FarmerProfile, FarmLand, CropPlanning
@@ -262,25 +263,38 @@ class CropPlanningViewSet(viewsets.ModelViewSet):
         )
 
 
-class NearbyFPOAPIView(generics.ListAPIView):
+class NearbyFPOAPIView(generics.GenericAPIView):
     """
     Get nearby FPOs based on farmer's location
+    Also handles sending join requests to FPOs
     """
-    serializer_class = 'apps.fpos.serializers.FPOProfileSerializer'  # Will be imported later
     permission_classes = [IsAuthenticated, IsFarmer]
     
-    def get_queryset(self):
-        from apps.fpos.models import FPOProfile
+    def get(self, request):
+        """Get list of nearby FPOs"""
+        from apps.fpos.models import FPOProfile, FPOJoinRequest
+        from apps.fpos.serializers import FPOProfileSerializer
         
-        farmer = self.request.user.farmer_profile
+        try:
+            farmer = request.user.farmer_profile
+        except Exception:
+            return Response(
+                response_error(message="Farmer profile not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
         if not farmer.latitude or not farmer.longitude:
-            return FPOProfile.objects.none()
+            return Response(
+                response_error(message="Location not set. Please update your profile with location."),
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        # Get all FPOs with location
+        # Get all verified FPOs with location
         fpos = FPOProfile.objects.filter(
             latitude__isnull=False,
             longitude__isnull=False,
-            is_verified=True
+            is_verified=True,
+            is_active=True
         )
         
         # Calculate distance for each FPO
@@ -292,12 +306,102 @@ class NearbyFPOAPIView(generics.ListAPIView):
             )
             if distance <= 100:  # Within 100 km
                 fpo.distance = distance
+                
+                # Check if farmer already has a join request or membership
+                has_membership = farmer.fpo == fpo
+                pending_request = FPOJoinRequest.objects.filter(
+                    farmer=farmer,
+                    fpo=fpo,
+                    status='pending'
+                ).exists()
+                
+                fpo.has_membership = has_membership
+                fpo.has_pending_request = pending_request
                 fpo_list.append(fpo)
         
         # Sort by distance
         fpo_list.sort(key=lambda x: x.distance)
         
-        return fpo_list[:10]  # Return top 10 nearest
+        # Serialize and return
+        serializer = FPOProfileSerializer(fpo_list[:20], many=True)
+        data = serializer.data
+        
+        # Add extra fields to response
+        for i, fpo in enumerate(fpo_list[:20]):
+            data[i]['distance'] = round(fpo.distance, 2)
+            data[i]['has_membership'] = fpo.has_membership
+            data[i]['has_pending_request'] = fpo.has_pending_request
+        
+        return Response(response_success(
+            data=data,
+            message=f"Found {len(data)} FPOs within 100 km"
+        ))
+    
+    def post(self, request):
+        """Send join request to FPO"""
+        from apps.fpos.models import FPOProfile, FPOJoinRequest
+        from apps.fpos.serializers import FPOJoinRequestSerializer
+        
+        try:
+            farmer = request.user.farmer_profile
+        except Exception:
+            return Response(
+                response_error(message="Farmer profile not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if farmer already has FPO membership
+        if farmer.fpo:
+            return Response(
+                response_error(message="You are already a member of an FPO"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        fpo_id = request.data.get('fpo_id')
+        message = request.data.get('message', '')
+        
+        if not fpo_id:
+            return Response(
+                response_error(message="FPO ID is required"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            fpo = FPOProfile.objects.get(id=fpo_id, is_active=True)
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if request already exists
+        existing_request = FPOJoinRequest.objects.filter(
+            farmer=farmer,
+            fpo=fpo,
+            status='pending'
+        ).first()
+        
+        if existing_request:
+            return Response(
+                response_error(message="You already have a pending request to this FPO"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create join request
+        join_request = FPOJoinRequest.objects.create(
+            farmer=farmer,
+            fpo=fpo,
+            message=message
+        )
+        
+        serializer = FPOJoinRequestSerializer(join_request)
+        return Response(
+            response_success(
+                data=serializer.data,
+                message=f"Join request sent to {fpo.organization_name}"
+            ),
+            status=status.HTTP_201_CREATED
+        )
 
 
 class MarketPricesAPIView(generics.GenericAPIView):
@@ -539,3 +643,36 @@ class YieldPredictionAPIView(generics.GenericAPIView):
                 data=result
             )
         )
+
+
+class FarmerJoinRequestsAPIView(APIView):
+    """
+    Get farmer's FPO join requests
+    """
+    permission_classes = [IsAuthenticated, IsFarmer]
+    
+    def get(self, request):
+        """Get all join requests for the farmer"""
+        from apps.fpos.models import FPOJoinRequest
+        from apps.fpos.serializers import FPOJoinRequestSerializer
+        
+        try:
+            farmer = request.user.farmer_profile
+        except Exception:
+            return Response(
+                response_error(message="Farmer profile not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get all join requests
+        join_requests = FPOJoinRequest.objects.filter(
+            farmer=farmer,
+            is_active=True
+        ).select_related('fpo', 'reviewed_by').order_by('-requested_at')
+        
+        serializer = FPOJoinRequestSerializer(join_requests, many=True)
+        
+        return Response(response_success(
+            data=serializer.data,
+            message=f"Found {len(serializer.data)} join requests"
+        ))

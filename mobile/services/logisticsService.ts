@@ -61,7 +61,7 @@ export const logisticsAPI = {
   /**
    * Update logistics partner profile
    */
-  updateProfile: (data: Partial<LogisticsPartner>): Promise<AxiosResponse<LogisticsPartner>> => {
+  updateProfile: (p0: string, formDataToSubmit: FormData, data: Partial<LogisticsPartner>): Promise<AxiosResponse<LogisticsPartner>> => {
     return api.patch(ENDPOINTS.LOGISTICS.MY_PROFILE, data);
   },
 

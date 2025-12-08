@@ -153,14 +153,31 @@ export const farmersAPI = {
   // ============================================
 
   /**
-   * Find nearby FPOs
+   * Get nearby FPOs
    */
   getNearbyFPOs: (params: {
     latitude: number;
     longitude: number;
     radius_km?: number;
-  }): Promise<AxiosResponse<FPOProfile[]>> => {
+  }): Promise<AxiosResponse<any>> => {
     return api.get(ENDPOINTS.FARMERS.NEARBY_FPOS, { params });
+  },
+
+  /**
+   * Send join request to FPO
+   */
+  sendFPOJoinRequest: (data: {
+    fpo_id: string;
+    message?: string;
+  }): Promise<AxiosResponse<any>> => {
+    return api.post(ENDPOINTS.FARMERS.NEARBY_FPOS, data);
+  },
+
+  /**
+   * Get my FPO join requests
+   */
+  getMyJoinRequests: (): Promise<AxiosResponse<any>> => {
+    return api.get(ENDPOINTS.FARMERS.JOIN_REQUESTS);
   },
 
   // ============================================

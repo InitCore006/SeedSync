@@ -27,6 +27,15 @@ import { useLogisticsStore } from '@/store/logisticsStore';
 
 const { width, height } = Dimensions.get('window');
 
+interface LocationInfo {
+  district: string;
+  state: string;
+  coords?: {
+    latitude: number;
+    longitude: number;
+  };
+}
+
 export default function DashboardScreen() {
   const { user } = useAuthStore();
   const { stats: farmerStats, setStats: setFarmerStats } = useFarmerStore();
@@ -37,6 +46,8 @@ export default function DashboardScreen() {
   const [walletData, setWalletData] = useState<{balance: number; pending_payments: number; total_earned: number} | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [locationPermission, setLocationPermission] = useState(false);
+  const [userLocation, setUserLocation] = useState<LocationInfo | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   const isFarmer = user?.role === 'farmer';
   const isLogistics = user?.role === 'logistics';
@@ -79,9 +90,38 @@ export default function DashboardScreen() {
     }
   };
 
-  const fetchWeather = async () => {
+  const reverseGeocode = async (latitude: number, longitude: number): Promise<LocationInfo> => {
     try {
-      // Try to get GPS location first
+      const geocode = await Location.reverseGeocodeAsync({
+        latitude,
+        longitude,
+      });
+
+      if (geocode && geocode.length > 0) {
+        const location = geocode[0];
+        const district = location.district || location.subregion || location.city || 'Unknown District';
+        const state = location.region || 'Unknown State';
+        
+        return {
+          district,
+          state,
+          coords: { latitude, longitude },
+        };
+      }
+    } catch (error) {
+      console.error('Reverse geocoding error:', error);
+    }
+    
+    return {
+      district: 'Unknown District',
+      state: 'Unknown State',
+      coords: { latitude, longitude },
+    };
+  };
+
+  const fetchUserLocation = async () => {
+    setLocationLoading(true);
+    try {
       const hasPermission = locationPermission || await requestLocationPermission();
       
       if (hasPermission) {
@@ -89,23 +129,67 @@ export default function DashboardScreen() {
           accuracy: Location.Accuracy.Balanced,
         });
         
+        const locationInfo = await reverseGeocode(
+          location.coords.latitude,
+          location.coords.longitude
+        );
+        
+        setUserLocation(locationInfo);
+        return locationInfo;
+      } else {
+        // Fallback to profile data
+        const fallbackLocation: LocationInfo = {
+          district: user?.profile?.district || 'Unknown District',
+          state: user?.profile?.state || 'Unknown State',
+        };
+        setUserLocation(fallbackLocation);
+        return fallbackLocation;
+      }
+    } catch (error) {
+      console.error('Failed to fetch user location:', error);
+      // Fallback to profile data
+      const fallbackLocation: LocationInfo = {
+        district: user?.profile?.district || 'Unknown District',
+        state: user?.profile?.state || 'Unknown State',
+      };
+      setUserLocation(fallbackLocation);
+      return fallbackLocation;
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  const fetchWeather = async () => {
+    try {
+      // Get location first (either GPS or profile fallback)
+      const location = userLocation || await fetchUserLocation();
+      
+      if (location?.coords) {
+        // Use GPS coordinates for weather
         const weatherData = await weatherService.getWeatherByCoords(
           location.coords.latitude,
           location.coords.longitude
         );
+        // Override city with district and state from our location
+        weatherData.district = location.district;
+        weatherData.state = location.state;
         setWeather(weatherData);
       } else {
-        // Fallback to city-based weather
-        const city = user?.profile?.city || user?.profile?.state || 'Mumbai';
-        const weatherData = await weatherService.getWeatherByCity(city);
+        // Fallback to district-based weather
+        const searchLocation = location?.district || user?.profile?.district || user?.profile?.state || 'Mumbai';
+        const weatherData = await weatherService.getWeatherByCity(searchLocation);
+        weatherData.district = location?.district;
+        weatherData.state = location?.state;
         setWeather(weatherData);
       }
     } catch (error) {
       console.error('Failed to load weather:', error);
-      // Fallback to city if GPS fails
+      // Final fallback
       try {
-        const city = user?.profile?.city || user?.profile?.state || 'Mumbai';
-        const weatherData = await weatherService.getWeatherByCity(city);
+        const searchLocation = userLocation?.district || user?.profile?.district || user?.profile?.state || 'Mumbai';
+        const weatherData = await weatherService.getWeatherByCity(searchLocation);
+        weatherData.district = userLocation?.district;
+        weatherData.state = userLocation?.state;
         setWeather(weatherData);
       } catch (fallbackError) {
         console.error('Fallback weather fetch failed:', fallbackError);
@@ -145,10 +229,10 @@ export default function DashboardScreen() {
       onPress: () => router.push('/(tabs)/lots/create'),
     },
     {
-      title: 'Market Prices',
-      icon: 'trending-up',
-      color: COLORS.info,
-      onPress: () => router.push('/(tabs)/market/prices'),
+      title: 'Find FPO',
+      icon: 'business',
+      color: '#8b5cf6',
+      onPress: () => router.push('/fpo-finder'),
     },
     {
       title: 'Disease AI',
@@ -158,7 +242,7 @@ export default function DashboardScreen() {
     },
     {
       title: user?.profile?.fpo_membership ? 'My FPO' : 'Gov Schemes',
-      icon: user?.profile?.fpo_membership ? 'business' : 'shield-checkmark',
+      icon: user?.profile?.fpo_membership ? 'people' : 'shield-checkmark',
       color: COLORS.warning,
       onPress: () => router.push(user?.profile?.fpo_membership ? '/fpos/my-fpo' : '/(tabs)/schemes'),
     },
@@ -226,7 +310,8 @@ export default function DashboardScreen() {
                   <View style={styles.locationRow}>
                     <Ionicons name="location" size={13} color="#fff" />
                     <Text style={styles.weatherLocation}>
-                      {weather?.city || user?.profile?.city || user?.profile?.state || 'Your Location'}
+                      {userLocation?.district || weather?.district || 'Loading...'}
+                      {(userLocation?.state || weather?.state) && `, ${userLocation?.state || weather?.state}`}
                     </Text>
                   </View>
                 </View>
@@ -291,7 +376,7 @@ export default function DashboardScreen() {
                 {/* Crop Recommendations */}
                 <TouchableOpacity 
                   style={styles.cropRecommendationCard}
-                  onPress={() => router.push('/crop-recommendations')}
+                  onPress={() => router.push('/(tabs)/ai/crop-recommendation')}
                   activeOpacity={0.8}
                 >
                   <View style={styles.cropRecommendationHeader}>
@@ -336,7 +421,16 @@ export default function DashboardScreen() {
                     </View>
                     <View style={styles.tripInfoText}>
                       <Text style={styles.tripLabel}>Current Location</Text>
-                      <Text style={styles.tripValue}>Indore, MP</Text>
+                      <Text style={styles.tripValue}>
+                        {locationLoading 
+                          ? 'Locating...' 
+                          : userLocation?.district 
+                            ? `${userLocation.district}, ${userLocation.state}`
+                            : user?.profile?.district 
+                              ? `${user.profile.district}, ${user.profile.state || ''}`
+                              : 'Location not available'
+                        }
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.tripDivider} />

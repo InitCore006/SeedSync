@@ -1,4 +1,4 @@
-export const API_URL = 'https://77d560abcfe2.ngrok-free.app/api';
+export const API_URL = 'https://c254947fb50e.ngrok-free.app/api';
 
 export const ENDPOINTS = {
   // Auth endpoints
@@ -22,6 +22,7 @@ export const ENDPOINTS = {
     FARMLANDS: '/farmers/farmlands/',
     CROP_PLANS: '/farmers/crop-plans/',
     NEARBY_FPOS: '/farmers/nearby-fpos/',
+    JOIN_REQUESTS: '/farmers/join-requests/',
     MARKET_PRICES: '/farmers/market-prices/',
     WEATHER_ADVISORY: '/farmers/weather-advisory/',
     DISEASE_DETECTION: '/farmers/disease-detection/',

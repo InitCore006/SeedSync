@@ -16,43 +16,64 @@ export default function AIFeaturesScreen() {
 
   const features = [
     {
-      id: 'disease-detection',
-      title: 'Disease Detection',
-      description: 'Upload crop images to detect diseases using AI',
+      id: 'crop-recommendation',
+      title: 'Crop Recommendations',
+      description: 'Get AI-powered crop suggestions for your farm',
       icon: 'leaf',
       color: '#22c55e',
+      route: '/(tabs)/ai/crop-recommendation',
       available: true,
+    },
+    {
+      id: 'farming-assistant',
+      title: 'Farming Assistant',
+      description: 'Chat with AI for instant farming advice',
+      icon: 'chatbubbles',
+      color: '#8b5cf6',
+      route: '/(tabs)/ai/farming-assistant',
+      available: true,
+    },
+    {
+      id: 'weather-advisory',
+      title: 'Weather Advisory',
+      description: '7-day forecast with AI farming actions',
+      icon: 'rainy',
+      color: '#3b82f6',
+      route: '/(tabs)/ai/weather-advisory',
+      available: true,
+    },
+    {
+      id: 'disease-detection',
+      title: 'Disease Detection',
+      description: 'Upload crop images to detect diseases',
+      icon: 'camera',
+      color: '#ef4444',
+      available: false,
     },
     {
       id: 'yield-prediction',
       title: 'Yield Prediction',
-      description: 'Get AI-powered yield forecasts for your crops',
+      description: 'AI-powered yield forecasts for crops',
       icon: 'analytics',
-      color: '#3b82f6',
+      color: '#10b981',
       available: false,
     },
     {
       id: 'price-prediction',
       title: 'Price Prediction',
-      description: 'Predict market prices for better selling decisions',
+      description: 'Predict market prices for better selling',
       icon: 'trending-up',
       color: '#f59e0b',
       available: false,
     },
-    {
-      id: 'crop-advisor',
-      title: 'Crop Advisor',
-      description: 'Get personalized crop recommendations',
-      icon: 'bulb',
-      color: '#8b5cf6',
-      available: false,
-    },
   ];
 
-  const handleFeaturePress = (featureId: string) => {
-    if (featureId === 'disease-detection') {
-      // Navigate to disease detection screen when implemented
-      // router.push(`/(tabs)/ai/${featureId}`);
+  const handleFeaturePress = (feature: typeof features[0]) => {
+    if (!feature.available) {
+      return;
+    }
+    if (feature.route) {
+      router.push(feature.route as any);
     }
   };
 
@@ -77,7 +98,7 @@ export default function AIFeaturesScreen() {
                 styles.featureCard,
                 !feature.available && styles.disabledCard,
               ]}
-              onPress={() => feature.available && handleFeaturePress(feature.id)}
+              onPress={() => handleFeaturePress(feature)}
               disabled={!feature.available}
             >
               <View

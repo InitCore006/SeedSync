@@ -10,18 +10,18 @@ interface PickerOption {
 
 interface PickerProps {
   label?: string;
-  value: string;
+  selectedValue: string;
   onValueChange: (value: string) => void;
-  options: PickerOption[];
+  items: PickerOption[];
   placeholder?: string;
   error?: string;
 }
 
 export const Picker: React.FC<PickerProps> = ({
   label,
-  value,
+  selectedValue,
   onValueChange,
-  options,
+  items,
   placeholder,
   error,
 }) => {
@@ -30,11 +30,11 @@ export const Picker: React.FC<PickerProps> = ({
       {label && <Text style={styles.label}>{label}</Text>}
       <View style={[styles.pickerWrapper, error && styles.pickerError]}>
         <RNPicker
-          selectedValue={value}
+          selectedValue={selectedValue}
           onValueChange={onValueChange}
           style={styles.picker}
         >
-          {options.map((option, index) => (
+          {items.map((option, index) => (
             <RNPicker.Item
               key={index}
               label={option.label}

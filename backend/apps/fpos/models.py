@@ -245,6 +245,62 @@ class FPOMembership(TimeStampedModel):
         return f"{self.farmer.full_name} ← {self.fpo.organization_name}"
 
 
+class FPOJoinRequest(TimeStampedModel):
+    """
+    Join request from farmers to FPOs
+    Tracks pending requests for FPO membership
+    """
+    farmer = models.ForeignKey(
+        'farmers.FarmerProfile',
+        on_delete=models.CASCADE,
+        related_name='fpo_join_requests'
+    )
+    fpo = models.ForeignKey(
+        FPOProfile,
+        on_delete=models.CASCADE,
+        related_name='join_requests'
+    )
+    
+    # Request Details
+    message = models.TextField(
+        blank=True,
+        help_text="Message from farmer to FPO"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('approved', 'Approved'),
+            ('rejected', 'Rejected'),
+        ],
+        default='pending'
+    )
+    
+    # Response
+    reviewed_by = models.ForeignKey(
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_join_requests'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    response_message = models.TextField(blank=True)
+    
+    # Timestamps
+    requested_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'fpo_join_requests'
+        verbose_name = 'FPO Join Request'
+        verbose_name_plural = 'FPO Join Requests'
+        unique_together = [['farmer', 'fpo', 'status']]  # One pending request per farmer-fpo pair
+        ordering = ['-requested_at']
+    
+    def __str__(self):
+        return f"{self.farmer.full_name} → {self.fpo.organization_name} ({self.status})"
+
+
 class FPOWarehouse(TimeStampedModel):
     """
     Warehouse facilities owned/operated by FPO

@@ -9,11 +9,14 @@ import {
   Dimensions,
   StatusBar,
   Platform,
+  Pressable,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '@/store/authStore';
+import { useFarmerStore } from '@/store/farmerStore';
+import { useLogisticsStore } from '@/store/logisticsStore';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.75;
@@ -31,9 +34,14 @@ interface SidebarProps {
 
 export default function Sidebar({ visible, onClose }: SidebarProps) {
   const { user, logout } = useAuthStore();
+  const { profile: farmerProfile } = useFarmerStore();
+  const { profile: logisticsProfile } = useLogisticsStore();
   const isFarmer = user?.role === 'farmer';
   const isLogistics = user?.role === 'logistics';
   const slideAnim = React.useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
+
+  // Get the appropriate profile based on role
+  const activeProfile = isFarmer ? farmerProfile : isLogistics ? logisticsProfile : null;
 
   React.useEffect(() => {
     Animated.timing(slideAnim, {
@@ -42,6 +50,29 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
       useNativeDriver: true,
     }).start();
   }, [visible]);
+
+  // Fetch profile data when sidebar opens if not already loaded
+  React.useEffect(() => {
+    if (visible && !activeProfile) {
+      fetchProfileData();
+    }
+  }, [visible]);
+
+  const fetchProfileData = async () => {
+    try {
+      if (isFarmer) {
+        const { farmersAPI } = await import('@/services/farmersService');
+        const response = await farmersAPI.getMyProfile();
+        useFarmerStore.getState().setProfile(response.data);
+      } else if (isLogistics) {
+        const { logisticsAPI } = await import('@/services/logisticsService');
+        const response = await logisticsAPI.getMyProfile();
+        useLogisticsStore.getState().setProfile(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile:', error);
+    }
+  };
 
   const menuItems = [
     { 
@@ -66,6 +97,12 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
       icon: 'sparkles', 
       label: 'AI Features', 
       route: '/(tabs)/ai',
+      roles: ['farmer']
+    },
+    { 
+      icon: 'business', 
+      label: 'Find FPO', 
+      route: '/fpo-finder',
       roles: ['farmer']
     },
     { 
@@ -107,8 +144,16 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
   };
 
   const handleNavigation = (route: string) => {
+    // Close sidebar immediately
     onClose();
-    router.push(route as any);
+    // Navigate after sidebar closes
+    setTimeout(() => {
+      try {
+        router.push(route as any);
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
+    }, 200);
   };
 
   const filteredMenuItems = menuItems.filter(item => 
@@ -119,18 +164,22 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={styles.overlay}>
-        <Animated.View 
+      <Pressable 
+        style={styles.overlay}
+        onPress={onClose}
+      >
+        <Pressable
           style={[
             styles.sidebar,
             {
-              transform: [{ translateX: slideAnim }],
+              transform: [{ translateX: visible ? 0 : -SIDEBAR_WIDTH }],
             },
           ]}
+          onPress={(e) => e.stopPropagation()}
         >
           <LinearGradient
             colors={[BRAND_COLORS.dark, BRAND_COLORS.primary, BRAND_COLORS.secondary]}
@@ -141,16 +190,26 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
             <View style={styles.profileSection}>
               <View style={styles.avatarContainer}>
                 <Text style={styles.avatarText}>
-                  {user?.profile?.full_name?.charAt(0) || 'U'}
+                  {(activeProfile?.full_name?.charAt(0) || user?.phone_number?.charAt(0) || 'U').toUpperCase()}
                 </Text>
               </View>
               <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>
-                  {user?.profile?.full_name || 'User'}
+                <Text style={styles.profileName} numberOfLines={1}>
+                  {activeProfile?.full_name || 'User'}
                 </Text>
                 <Text style={styles.profileRole}>
-                  {user?.role_display || user?.role}
+                  {isFarmer ? 'Farmer' : isLogistics ? 'Logistics Partner' : user?.role || 'User'}
                 </Text>
+                {isFarmer && activeProfile && (
+                  <Text style={styles.profileDetail} numberOfLines={1}>
+                    {activeProfile.district}, {activeProfile.state}
+                  </Text>
+                )}
+                {isLogistics && activeProfile && (
+                  <Text style={styles.profileDetail} numberOfLines={1}>
+                    {activeProfile.city}, {activeProfile.state}
+                  </Text>
+                )}
                 <Text style={styles.profilePhone}>{user?.phone_number}</Text>
               </View>
             </View>
@@ -199,14 +258,8 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
               <Text style={[styles.menuLabel, styles.logoutText]}>Logout</Text>
             </TouchableOpacity>
           </View>
-        </Animated.View>
-        
-        <TouchableOpacity 
-          style={styles.backdrop} 
-          activeOpacity={1}
-          onPress={onClose}
-        />
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -214,8 +267,9 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    flexDirection: 'row',
     backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
   },
   sidebar: {
     width: SIDEBAR_WIDTH,
@@ -226,13 +280,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 16,
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
   header: {
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 50,
@@ -271,6 +318,11 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.9)',
     marginBottom: 2,
     textTransform: 'capitalize',
+  },
+  profileDetail: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginBottom: 2,
   },
   profilePhone: {
     fontSize: 12,

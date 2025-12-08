@@ -350,7 +350,7 @@ export default function EditProfileScreen() {
 
                 <Picker
                     label="Gender"
-                    options={GENDER_OPTIONS}
+                    items={GENDER_OPTIONS}
                     value={formData.gender}
                     onValueChange={value => setFormData(prev => ({ ...prev, gender: value }))}
                 />

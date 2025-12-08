@@ -1,8 +1,10 @@
 """FPO Serializers"""
 from rest_framework import serializers
-from .models import FPOProfile, FPOMembership, FPOWarehouse
+from .models import FPOProfile, FPOMembership, FPOWarehouse, FPOJoinRequest
 
 class FPOProfileSerializer(serializers.ModelSerializer):
+    distance = serializers.FloatField(read_only=True, required=False)
+    
     class Meta:
         model = FPOProfile
         fields = '__all__'
@@ -16,6 +18,18 @@ class FPOMembershipSerializer(serializers.ModelSerializer):
         model = FPOMembership
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+class FPOJoinRequestSerializer(serializers.ModelSerializer):
+    farmer_name = serializers.CharField(source='farmer.full_name', read_only=True)
+    farmer_phone = serializers.CharField(source='farmer.user.phone_number', read_only=True)
+    farmer_district = serializers.CharField(source='farmer.district', read_only=True)
+    fpo_name = serializers.CharField(source='fpo.organization_name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = FPOJoinRequest
+        fields = '__all__'
+        read_only_fields = ['id', 'farmer', 'requested_at', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at']
 
 class FPOWarehouseSerializer(serializers.ModelSerializer):
     available_capacity = serializers.SerializerMethodField()
