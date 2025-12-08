@@ -15,7 +15,8 @@ from .views import (
     FPOCreateAggregatedLotAPIView,
     FPOAssignWarehouseAPIView,
     FPOWarehouseInventoryAPIView,
-    FPOCreateFarmerLotAPIView
+    FPOCreateFarmerLotAPIView,
+    FPOPaymentAPIView
 )
 
 app_name = 'fpos'
@@ -56,4 +57,7 @@ urlpatterns = [
     
     # Warehouse inventory details
     path('warehouse-inventory/', FPOWarehouseInventoryAPIView.as_view(), name='fpo-warehouse-inventory'),
+    
+    # Payments to farmers
+    path('create-payment/', FPOPaymentAPIView.as_view(), name='fpo-create-payment'),
 ]

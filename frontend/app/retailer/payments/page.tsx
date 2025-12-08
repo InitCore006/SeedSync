@@ -1,13 +1,12 @@
 /**
- * Processor Payments Dashboard Page
- * Manage payments to farmers and FPOs using wallet
+ * Retailer Payments Dashboard Page
+ * Manage payments to processors using wallet
  */
 'use client';
 
 import { useState, useEffect } from 'react';
 import { API } from '@/lib/api';
 import { Payment } from '@/lib/api/payments';
-import { PaymentCard } from '@/components/ui/PaymentCard';
 import Loading from '@/components/ui/Loading';
 import Card, { CardContent } from '@/components/ui/Card';
 import { Wallet, AlertCircle, Filter, TrendingUp, X, CheckCircle } from 'lucide-react';
@@ -15,7 +14,7 @@ import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 
-function ProcessorPaymentsContent() {
+function RetailerPaymentsContent() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [walletData, setWalletData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -94,7 +93,7 @@ function ProcessorPaymentsContent() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Payment Management</h1>
-        <p className="text-gray-600 mt-1">Track and process payments to suppliers</p>
+        <p className="text-gray-600 mt-1">Track and process payments to processors</p>
       </div>
 
       {/* Stats Cards */}
@@ -225,7 +224,7 @@ function ProcessorPaymentsContent() {
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">Payment #{payment.id}</h3>
-                    <p className="text-sm text-gray-600 mt-1">{payment.payee_name}</p>
+                    <p className="text-sm text-gray-600 mt-1">To: {payment.payee_name}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -248,7 +247,7 @@ function ProcessorPaymentsContent() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600">Lot ID</p>
+                    <p className="text-xs text-gray-600">Order ID</p>
                     <p className="font-medium text-gray-900">{payment.lot || 'N/A'}</p>
                   </div>
                   <div>
@@ -256,27 +255,10 @@ function ProcessorPaymentsContent() {
                     <p className="font-medium text-gray-900">{payment.payment_method || 'Wallet'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600">Gross Amount</p>
+                    <p className="text-xs text-gray-600">Amount</p>
                     <p className="font-bold text-primary">₹{payment.gross_amount.toLocaleString('en-IN')}</p>
                   </div>
                 </div>
-
-                {/* Commission Breakdown */}
-                {payment.commission_amount > 0 && (
-                  <div className="bg-blue-50 rounded-lg p-3 mb-4">
-                    <p className="text-xs font-medium text-blue-900 mb-2">PAYMENT BREAKDOWN</p>
-                    <div className="text-sm text-blue-900 space-y-1">
-                      <div className="flex justify-between">
-                        <span>Farmer receives:</span>
-                        <span className="font-medium">₹{payment.net_amount.toLocaleString('en-IN')}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>FPO Commission:</span>
-                        <span className="font-medium">₹{payment.commission_amount.toLocaleString('en-IN')}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Actions */}
                 {payment.status === 'pending' && (
@@ -312,7 +294,7 @@ function ProcessorPaymentsContent() {
 
             <div className="space-y-4 mb-6">
               <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600 mb-1">Payee</p>
+                <p className="text-sm text-gray-600 mb-1">Processor</p>
                 <p className="font-semibold text-gray-900">{selectedPayment.payee_name}</p>
               </div>
 
@@ -322,19 +304,6 @@ function ProcessorPaymentsContent() {
                   ₹{selectedPayment.gross_amount.toLocaleString('en-IN')}
                 </p>
               </div>
-
-              {selectedPayment.commission_amount > 0 && (
-                <div className="text-sm text-gray-600 space-y-1">
-                  <div className="flex justify-between">
-                    <span>Farmer receives:</span>
-                    <span className="font-medium">₹{selectedPayment.net_amount.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>FPO Commission:</span>
-                    <span className="font-medium">₹{selectedPayment.commission_amount.toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
-              )}
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-start gap-3">
@@ -387,11 +356,11 @@ function ProcessorPaymentsContent() {
   );
 }
 
-export default function ProcessorPaymentsPage() {
+export default function RetailerPaymentsPage() {
   return (
-    <ProtectedRoute allowedRoles={['processor']}>
+    <ProtectedRoute allowedRoles={['retailer']}>
       <DashboardLayout>
-        <ProcessorPaymentsContent />
+        <RetailerPaymentsContent />
       </DashboardLayout>
     </ProtectedRoute>
   );

@@ -2069,6 +2069,39 @@ class ProcessorOrderStatusUpdateAPIView(APIView):
             from datetime import timedelta
             order.expected_delivery_date = (timezone.now() + timedelta(days=7)).date()
             
+            # Create payment record for the order
+            from apps.payments.models import Payment
+            from decimal import Decimal
+            
+            # Check if payment already exists for this order (using notes field to track)
+            existing_payment = Payment.objects.filter(
+                payer_id=order.retailer.id,
+                payee_id=order.processor.id,
+                notes__contains=order.order_number,
+                is_active=True
+            ).first()
+            
+            if not existing_payment:
+                # Create payment from retailer to processor
+                Payment.objects.create(
+                    lot=None,  # No lot for retailer orders
+                    bid=None,  # No bid for retailer orders
+                    payer_id=order.retailer.id,
+                    payer_name=order.retailer.business_name,
+                    payer_type='retailer',
+                    payee_id=order.processor.id,
+                    payee_name=order.processor.company_name,
+                    gross_amount=Decimal(str(order.total_amount)),
+                    commission_amount=Decimal('0.00'),
+                    commission_percentage=Decimal('0.00'),
+                    tax_amount=Decimal(str(order.tax_amount)),
+                    net_amount=Decimal(str(order.total_amount)),
+                    payment_method='bank_transfer',
+                    status='pending',
+                    notes=f"Payment for retailer order {order.order_number} (Order ID: {order.id})",
+                    initiated_at=timezone.now()
+                )
+            
         elif new_status == 'in_transit':
             # Record tracking number
             if notes:

@@ -279,6 +279,16 @@ export const fpoAPI = {
     api.get<APIResponse>('/fpos/warehouse-inventory/', { 
       params: warehouse_id ? { warehouse_id } : undefined 
     }),
+  
+  // Create payment to farmer
+  createPayment: (data: {
+    farmer_id: string;
+    amount: number;
+    lot_id?: string;
+    notes?: string;
+    payment_method?: string;
+  }) =>
+    api.post<APIResponse>('/fpos/create-payment/', data),
 };
 
 // ============= Marketplace APIs =============

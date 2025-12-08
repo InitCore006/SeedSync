@@ -198,9 +198,10 @@ class WalletViewSet(viewsets.ReadOnlyModelViewSet):
                     )
                 
                 # Deduct from payer wallet
+                lot_ref = f"lot {payment.lot.lot_number}" if payment.lot and hasattr(payment.lot, 'lot_number') else (payment.notes if payment.notes else "order")
                 payer_wallet.deduct_balance(
                     payment.gross_amount,
-                    reason=f"Payment for lot {payment.lot.lot_number}"
+                    reason=f"Payment for {lot_ref}"
                 )
                 
                 # Create transaction record
@@ -255,36 +256,68 @@ class WalletViewSet(viewsets.ReadOnlyModelViewSet):
             )
     
     def _distribute_payment(self, payment):
-        """Distribute payment to farmer and FPO (if commission exists)"""
+        """Distribute payment to payee (farmer or processor) and FPO commission if applicable"""
         from django.utils import timezone
         from apps.farmers.models import FarmerProfile
+        from apps.processors.models import ProcessorProfile
+        from apps.users.models import User
         
-        # Credit farmer (net amount)
+        # Determine payment reason text
+        if payment.lot and hasattr(payment.lot, 'lot_number'):
+            lot_reference = f"lot {payment.lot.lot_number}"
+        else:
+            # Extract order number from notes or use generic text
+            lot_reference = payment.notes if payment.notes else "order"
+        
+        # Credit payee (farmer or processor)
         try:
-            # Get farmer by profile ID (payee_id is farmer profile ID, not user ID)
-            farmer = FarmerProfile.objects.select_related('user').get(id=payment.payee_id)
-            payee_wallet, _ = Wallet.objects.get_or_create(
-                user=farmer.user,
-                defaults={'balance': Decimal('0')}
-            )
+            payee_user = None
             
-            payee_wallet.add_balance(
-                payment.net_amount,
-                reason=f"Payment received for lot {payment.lot.lot_number}"
-            )
+            # Try to get farmer first
+            try:
+                farmer = FarmerProfile.objects.select_related('user').get(id=payment.payee_id)
+                payee_user = farmer.user
+            except FarmerProfile.DoesNotExist:
+                # Try processor for retailer orders
+                try:
+                    processor = ProcessorProfile.objects.select_related('user').get(id=payment.payee_id)
+                    payee_user = processor.user
+                except ProcessorProfile.DoesNotExist:
+                    # Try FPO for aggregated lots
+                    try:
+                        from apps.fpos.models import FPOProfile
+                        fpo = FPOProfile.objects.select_related('user').get(id=payment.payee_id)
+                        payee_user = fpo.user
+                    except:
+                        pass
             
-            Transaction.objects.create(
-                payment=payment,
-                transaction_type='payment_completed',
-                amount=payment.net_amount,
-                status='completed',
-                status_message=f"Credited ₹{payment.net_amount} to farmer wallet"
-            )
-        except FarmerProfile.DoesNotExist:
-            # Log error if farmer not found
+            if payee_user:
+                payee_wallet, _ = Wallet.objects.get_or_create(
+                    user=payee_user,
+                    defaults={'balance': Decimal('0')}
+                )
+                
+                payee_wallet.add_balance(
+                    payment.net_amount,
+                    reason=f"Payment received for {lot_reference}"
+                )
+                
+                Transaction.objects.create(
+                    payment=payment,
+                    transaction_type='payment_completed',
+                    amount=payment.net_amount,
+                    status='completed',
+                    status_message=f"Credited ₹{payment.net_amount} to payee wallet"
+                )
+            else:
+                # Log error if payee not found
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Payee profile not found for payee_id: {payment.payee_id}")
+        except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Farmer profile not found for payee_id: {payment.payee_id}")
+            logger.error(f"Error distributing payment: {str(e)}")
         
         # Credit FPO commission if applicable
         if payment.commission_amount > 0 and 'FPO:' in payment.notes:
@@ -301,9 +334,10 @@ class WalletViewSet(viewsets.ReadOnlyModelViewSet):
                         defaults={'balance': Decimal('0')}
                     )
                     
+                    lot_ref = f"lot {payment.lot.lot_number}" if payment.lot and hasattr(payment.lot, 'lot_number') else (payment.notes if payment.notes else "order")
                     fpo_wallet.add_balance(
                         payment.commission_amount,
-                        reason=f"Commission from lot {payment.lot.lot_number}"
+                        reason=f"Commission from {lot_ref}"
                     )
                     
                     Transaction.objects.create(

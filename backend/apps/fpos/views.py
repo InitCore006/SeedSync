@@ -1555,3 +1555,111 @@ class FPOCreateAggregatedLotAPIView(APIView):
                 response_error(message=f"Failed to create aggregated lot: {str(e)}"),
                 status=500
             )
+
+
+class FPOPaymentAPIView(APIView):
+    """
+    FPO Payment Management
+    Create and manage payments from FPO to farmers
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
+    
+    def post(self, request):
+        """Create payment from FPO to farmer(s)"""
+        from apps.payments.models import Payment
+        from apps.farmers.models import FarmerProfile
+        from decimal import Decimal
+        
+        try:
+            fpo = FPOProfile.objects.get(user=request.user)
+            farmer_id = request.data.get('farmer_id')
+            amount = Decimal(str(request.data.get('amount', 0)))
+            lot_id = request.data.get('lot_id')  # Optional
+            notes = request.data.get('notes', '')
+            payment_method = request.data.get('payment_method', 'wallet')
+            
+            # Validate amount
+            if amount <= 0:
+                return Response(
+                    response_error(message="Amount must be greater than 0"),
+                    status=400
+                )
+            
+            # Get farmer
+            try:
+                farmer = FarmerProfile.objects.select_related('user').get(id=farmer_id)
+            except FarmerProfile.DoesNotExist:
+                return Response(
+                    response_error(message="Farmer not found"),
+                    status=404
+                )
+            
+            # Check if farmer is FPO member (optional but recommended)
+            membership = FPOMembership.objects.filter(
+                fpo=fpo,
+                farmer=farmer,
+                is_active=True
+            ).first()
+            
+            if not membership:
+                return Response(
+                    response_error(message="Farmer is not a member of this FPO"),
+                    status=400
+                )
+            
+            # Get lot reference if provided
+            lot = None
+            if lot_id:
+                from apps.lots.models import ProcurementLot
+                try:
+                    lot = ProcurementLot.objects.get(id=lot_id, fpo=fpo)
+                except ProcurementLot.DoesNotExist:
+                    return Response(
+                        response_error(message="Lot not found or not managed by this FPO"),
+                        status=404
+                    )
+            
+            # Create payment record
+            payment = Payment.objects.create(
+                lot=lot,
+                bid=None,  # Direct payment, not from bid
+                payer_id=fpo.id,
+                payer_name=fpo.organization_name,
+                payer_type='fpo',
+                payee_id=farmer.id,
+                payee_name=farmer.full_name,
+                payee_account_number=farmer.bank_account_number or '',
+                payee_ifsc_code=farmer.ifsc_code or '',
+                gross_amount=amount,
+                commission_amount=Decimal('0'),  # No commission on FPO-to-farmer payments
+                commission_percentage=Decimal('0'),
+                tax_amount=Decimal('0'),
+                payment_method=payment_method,
+                status='pending',
+                notes=notes or f'Direct payment from FPO {fpo.organization_name} to farmer {farmer.full_name}'
+            )
+            
+            return Response(
+                response_success(
+                    message="Payment created successfully",
+                    data={
+                        'payment_id': payment.payment_id,
+                        'id': str(payment.id),
+                        'amount': float(amount),
+                        'payee_name': farmer.full_name,
+                        'status': 'pending'
+                    }
+                ),
+                status=201
+            )
+            
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        except Exception as e:
+            return Response(
+                response_error(message=f"Failed to create payment: {str(e)}"),
+                status=500
+            )

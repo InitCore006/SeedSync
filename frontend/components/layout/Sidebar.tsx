@@ -75,6 +75,12 @@ const navItems: NavItem[] = [
     roles: [USER_ROLES.FPO],
   },
   {
+    label: 'Payments',
+    href: '/fpo/payments',
+    icon: <Wallet className="h-5 w-5" />,
+    roles: [USER_ROLES.FPO],
+  },
+  {
     label: 'Marketplace',
     href: '/marketplace',
     icon: <ShoppingCart className="h-5 w-5" />,
@@ -173,6 +179,12 @@ const navItems: NavItem[] = [
     label: 'Marketplace',
     href: '/retailer/marketplace',
     icon: <ShoppingCart className="h-5 w-5" />,
+    roles: [USER_ROLES.RETAILER],
+  },
+  {
+    label: 'Payments',
+    href: '/retailer/payments',
+    icon: <Wallet className="h-5 w-5" />,
     roles: [USER_ROLES.RETAILER],
   },
   
