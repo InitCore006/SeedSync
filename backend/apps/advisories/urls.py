@@ -1,19 +1,34 @@
 """Advisories URL Configuration"""
 from django.urls import path
 from .views import (
-    WeatherForecastAPIView,
-    CropAdvisoryAPIView,
-    PestDiseaseAlertAPIView,
-    MarketInsightsAPIView,
-    MarketInsightsViewSet,
+    DiseasePredictionAPIView,
+    MarketForecastAPIView,
+    QuickPriceForecastAPIView,
+    QuickDemandForecastAPIView,
+    TopCropsAPIView,
 )
+
+"""GET /api/advisories/market-forecast/?role=farmer
+GET /api/advisories/market-forecast/?role=fpo
+GET /api/advisories/market-forecast/?role=processor
+GET /api/advisories/market-forecast/?role=retailer
+GET /api/advisories/quick/price/
+GET /api/advisories/quick/demand/
+GET /api/advisories/quick/top-crops/
+"""
 
 app_name = 'advisories'
 
 urlpatterns = [
-    path('weather/', WeatherForecastAPIView.as_view(), name='weather-forecast'),
-    path('crop-advisory/', CropAdvisoryAPIView.as_view(), name='crop-advisory'),
-    path('pest-alerts/', PestDiseaseAlertAPIView.as_view(), name='pest-alerts'),
-    # path('market-insights/', MarketInsightsAPIView.as_view(), name='market-insights'),
-    path('market-insights/', MarketInsightsViewSet.as_view(), name='market-insights'),
+    # Disease Prediction
+    path('disease-predict/', DiseasePredictionAPIView.as_view(), name='disease-prediction'),
+    
+    # Main Market Forecast (Simple - Just Role Required)
+    path('market-forecast/', MarketForecastAPIView.as_view(), name='market-forecast'),
+    
+    # Quick Insights (Optional)
+    path('quick/price/', QuickPriceForecastAPIView.as_view(), name='quick-price'),
+    path('quick/demand/', QuickDemandForecastAPIView.as_view(), name='quick-demand'),
+    path('quick/top-crops/', TopCropsAPIView.as_view(), name='top-crops'),
 ]
+

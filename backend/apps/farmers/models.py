@@ -349,3 +349,303 @@ class CropPlanning(TimeStampedModel):
         if self.actual_yield_quintals and self.cultivation_area_acres:
             return round(self.actual_yield_quintals / self.cultivation_area_acres, 2)
         return 0
+
+
+class CropPlan(TimeStampedModel):
+    """
+    Simplified Crop Plan Model with Financial Data
+    Separate from CropPlanning - focused on financial planning and lot conversion
+    """
+    # Basic Information
+    farmer = models.ForeignKey(
+        FarmerProfile,
+        on_delete=models.CASCADE,
+        related_name='simplified_crop_plans'
+    )
+    farm_land = models.ForeignKey(
+        FarmLand,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='simplified_crop_plans',
+        help_text="Optional: Link to specific farm land parcel"
+    )
+    
+    # Crop Details
+    crop_type = models.CharField(
+        max_length=50,
+        choices=OILSEED_CHOICES,
+        help_text="Type of oilseed crop"
+    )
+    crop_name = models.CharField(
+        max_length=100,
+        help_text="Display name of crop (e.g., 'Soybean', 'Groundnut')"
+    )
+    land_acres = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        validators=[MinValueValidator(0.01)],
+        help_text="Land allocated in acres"
+    )
+    
+    # Cultivation Timeline
+    sowing_date = models.DateField(help_text="Date of sowing/planting")
+    maturity_days = models.IntegerField(
+        validators=[MinValueValidator(1)],
+        help_text="Number of days to maturity"
+    )
+    expected_harvest_date = models.DateField(
+        help_text="Auto-calculated harvest date"
+    )
+    season = models.CharField(
+        max_length=20,
+        choices=SEASON_CHOICES,
+        help_text="Cultivation season"
+    )
+    
+    # Financial - MSP & Yield
+    msp_price_per_quintal = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        help_text="MSP price per quintal in ₹"
+    )
+    estimated_yield_quintals = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        help_text="Total estimated yield in quintals"
+    )
+    estimated_yield_per_acre = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        help_text="Estimated yield per acre in quintals"
+    )
+    gross_revenue = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Gross revenue = estimated_yield × MSP"
+    )
+    
+    # Cost Breakdown
+    seed_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=0,
+        help_text="Cost of seeds in ₹"
+    )
+    fertilizer_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=0,
+        help_text="Cost of fertilizers in ₹"
+    )
+    pesticide_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=0,
+        help_text="Cost of pesticides in ₹"
+    )
+    labor_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=0,
+        help_text="Labor cost in ₹"
+    )
+    irrigation_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=0,
+        help_text="Irrigation cost in ₹"
+    )
+    total_input_costs = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Sum of all input costs"
+    )
+    
+    # Profit Calculations
+    net_profit = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Net profit = gross_revenue - total_input_costs"
+    )
+    profit_per_acre = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Net profit per acre"
+    )
+    roi_percentage = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+        help_text="ROI = (net_profit / total_input_costs) × 100"
+    )
+    
+    # Status & Tracking
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('planned', 'Planned'),
+            ('sowing', 'Sowing'),
+            ('growing', 'Growing'),
+            ('ready_to_harvest', 'Ready to Harvest'),
+            ('harvested', 'Harvested'),
+            ('converted_to_lot', 'Converted to Lot'),
+        ],
+        default='planned',
+        help_text="Current status of crop plan"
+    )
+    actual_yield_quintals = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Actual yield after harvest (filled post-harvest)"
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="Additional notes or observations"
+    )
+    
+    # Lot Conversion Tracking
+    converted_lot = models.ForeignKey(
+        'lots.ProcurementLot',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='source_crop_plan',
+        help_text="Procurement lot created from this plan"
+    )
+    conversion_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Date when plan was converted to lot"
+    )
+    
+    class Meta:
+        db_table = 'crop_plans'
+        verbose_name = 'Crop Plan'
+        verbose_name_plural = 'Crop Plans'
+        ordering = ['-created_at', '-sowing_date']
+        indexes = [
+            models.Index(fields=['farmer', 'status']),
+            models.Index(fields=['sowing_date']),
+            models.Index(fields=['crop_type', 'season']),
+        ]
+    
+    def __str__(self):
+        return f"{self.crop_name} - {self.land_acres} acres ({self.farmer.full_name})"
+    
+    def save(self, *args, **kwargs):
+        """Override save to auto-calculate dates and financial metrics"""
+        # Calculate expected harvest date
+        if self.sowing_date and self.maturity_days:
+            from datetime import timedelta
+            self.expected_harvest_date = self.sowing_date + timedelta(days=self.maturity_days)
+        
+        # Calculate financial metrics
+        self.calculate_financial_metrics()
+        
+        super().save(*args, **kwargs)
+    
+    def calculate_financial_metrics(self):
+        """Calculate all financial metrics automatically"""
+        # Gross Revenue = Yield × MSP
+        self.gross_revenue = self.estimated_yield_quintals * self.msp_price_per_quintal
+        
+        # Total Input Costs
+        self.total_input_costs = (
+            self.seed_cost + 
+            self.fertilizer_cost + 
+            self.pesticide_cost + 
+            self.labor_cost + 
+            self.irrigation_cost
+        )
+        
+        # Net Profit = Gross Revenue - Total Costs
+        self.net_profit = self.gross_revenue - self.total_input_costs
+        
+        # Profit per Acre
+        if self.land_acres > 0:
+            self.profit_per_acre = self.net_profit / self.land_acres
+        else:
+            self.profit_per_acre = 0
+        
+        # ROI Percentage
+        if self.total_input_costs > 0:
+            self.roi_percentage = (self.net_profit / self.total_input_costs) * 100
+        else:
+            self.roi_percentage = 0
+    
+    def create_lot_from_plan(self):
+        """Create a ProcurementLot from this crop plan"""
+        from apps.lots.models import ProcurementLot
+        from django.utils import timezone
+        
+        if self.status == 'converted_to_lot':
+            raise ValueError("This plan has already been converted to a lot")
+        
+        if self.status != 'harvested':
+            raise ValueError("Only harvested plans can be converted to lots")
+        
+        if not self.actual_yield_quintals:
+            raise ValueError("Actual yield must be recorded before creating a lot")
+        
+        # Create procurement lot
+        lot = ProcurementLot.objects.create(
+            farmer=self.farmer,
+            fpo=self.farmer.fpo if self.farmer.fpo else None,
+            crop_type=self.crop_type,
+            harvest_date=self.expected_harvest_date,
+            quantity_quintals=self.actual_yield_quintals,
+            available_quantity_quintals=self.actual_yield_quintals,
+            expected_price_per_quintal=self.msp_price_per_quintal,
+            quality_grade='A',
+            description=f"Created from crop plan: {self.crop_name} - {self.season}",
+            status='available',
+            managed_by_fpo=True if self.farmer.fpo else False,
+            listing_type='fpo_managed' if self.farmer.fpo else 'individual',
+        )
+        
+        # Update plan status
+        self.status = 'converted_to_lot'
+        self.converted_lot = lot
+        self.conversion_date = timezone.now()
+        self.save()
+        
+        return lot
+    
+    def get_days_until_harvest(self):
+        """Calculate days remaining until harvest"""
+        from datetime import date
+        if self.expected_harvest_date:
+            delta = self.expected_harvest_date - date.today()
+            return delta.days
+        return None
+    
+    def get_progress_percentage(self):
+        """Calculate cultivation progress percentage"""
+        from datetime import date
+        if self.sowing_date and self.expected_harvest_date:
+            total_days = (self.expected_harvest_date - self.sowing_date).days
+            elapsed_days = (date.today() - self.sowing_date).days
+            
+            if elapsed_days < 0:
+                return 0
+            elif elapsed_days > total_days:
+                return 100
+            else:
+                return int((elapsed_days / total_days) * 100)
+        return 0

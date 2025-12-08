@@ -18,6 +18,7 @@ from apps.processors.models import ProcessorProfile, ProcessingPlant
 from apps.retailers.models import RetailerProfile, Store
 from apps.lots.models import ProcurementLot
 from apps.crops.models import CropMaster, CropVariety, MandiPrice, MSPRecord
+from datetime import date
 
 User = get_user_model()
 
@@ -577,6 +578,118 @@ for i, profile in enumerate(retailer_profiles):
         print(f"  ✓ {store.store_name}")
 
 # -------------------------------------------------------------
+# MSP RECORDS
+# -------------------------------------------------------------
+print("\n💰 Creating MSP records...")
+
+msp_data = [
+    # Kharif Season 2024-25
+    {
+        'crop_type': 'groundnut',
+        'year': 2024,
+        'season': 'kharif',
+        'msp_per_quintal': 6377.00,
+        'bonus_per_quintal': 0.00,
+        'notification_number': 'MSP/2024-25/KHARIF/001',
+        'notification_date': date(2024, 6, 12),
+        'effective_from': date(2024, 6, 15),
+        'effective_to': date(2025, 6, 14),
+        'notes': 'MSP for Kharif Marketing Season 2024-25 - Groundnut (in shell)'
+    },
+    {
+        'crop_type': 'soybean',
+        'year': 2024,
+        'season': 'kharif',
+        'msp_per_quintal': 4892.00,
+        'bonus_per_quintal': 0.00,
+        'notification_number': 'MSP/2024-25/KHARIF/002',
+        'notification_date': date(2024, 6, 12),
+        'effective_from': date(2024, 6, 15),
+        'effective_to': date(2025, 6, 14),
+        'notes': 'MSP for Kharif Marketing Season 2024-25 - Soybean (yellow)'
+    },
+    {
+        'crop_type': 'sunflower',
+        'year': 2024,
+        'season': 'kharif',
+        'msp_per_quintal': 7050.00,
+        'bonus_per_quintal': 0.00,
+        'notification_number': 'MSP/2024-25/KHARIF/003',
+        'notification_date': date(2024, 6, 12),
+        'effective_from': date(2024, 6, 15),
+        'effective_to': date(2025, 6, 14),
+        'notes': 'MSP for Kharif Marketing Season 2024-25 - Sunflower Seed'
+    },
+    {
+        'crop_type': 'sesame',
+        'year': 2024,
+        'season': 'kharif',
+        'msp_per_quintal': 8635.00,
+        'bonus_per_quintal': 0.00,
+        'notification_number': 'MSP/2024-25/KHARIF/004',
+        'notification_date': date(2024, 6, 12),
+        'effective_from': date(2024, 6, 15),
+        'effective_to': date(2025, 6, 14),
+        'notes': 'MSP for Kharif Marketing Season 2024-25 - Sesamum'
+    },
+    # Rabi Season 2024-25
+    {
+        'crop_type': 'mustard',
+        'year': 2024,
+        'season': 'rabi',
+        'msp_per_quintal': 5650.00,
+        'bonus_per_quintal': 0.00,
+        'notification_number': 'MSP/2024-25/RABI/001',
+        'notification_date': date(2024, 9, 18),
+        'effective_from': date(2024, 10, 1),
+        'effective_to': date(2025, 9, 30),
+        'notes': 'MSP for Rabi Marketing Season 2024-25 - Rapeseed & Mustard'
+    },
+    {
+        'crop_type': 'groundnut',
+        'year': 2024,
+        'season': 'rabi',
+        'msp_per_quintal': 6377.00,
+        'bonus_per_quintal': 0.00,
+        'notification_number': 'MSP/2024-25/RABI/002',
+        'notification_date': date(2024, 9, 18),
+        'effective_from': date(2024, 10, 1),
+        'effective_to': date(2025, 9, 30),
+        'notes': 'MSP for Rabi Marketing Season 2024-25 - Groundnut (in shell)'
+    },
+    {
+        'crop_type': 'sunflower',
+        'year': 2024,
+        'season': 'rabi',
+        'msp_per_quintal': 7050.00,
+        'bonus_per_quintal': 0.00,
+        'notification_number': 'MSP/2024-25/RABI/003',
+        'notification_date': date(2024, 9, 18),
+        'effective_from': date(2024, 10, 1),
+        'effective_to': date(2025, 9, 30),
+        'notes': 'MSP for Rabi Marketing Season 2024-25 - Sunflower Seed'
+    },
+]
+
+for msp_info in msp_data:
+    record, created = MSPRecord.objects.update_or_create(
+        crop_type=msp_info['crop_type'],
+        year=msp_info['year'],
+        season=msp_info['season'],
+        defaults={
+            'msp_per_quintal': msp_info['msp_per_quintal'],
+            'bonus_per_quintal': msp_info['bonus_per_quintal'],
+            'notification_number': msp_info['notification_number'],
+            'notification_date': msp_info['notification_date'],
+            'effective_from': msp_info['effective_from'],
+            'effective_to': msp_info['effective_to'],
+            'notes': msp_info['notes']
+        }
+    )
+    status = "Created" if created else "Updated"
+    print(f"  ✓ {status}: {record.get_crop_type_display()} - {record.get_season_display()} {record.year} - ₹{record.msp_per_quintal}/quintal")
+
+# -------------------------------------------------------------
 # SUMMARY
 # -------------------------------------------------------------
 print("\n" + "=" * 50)
@@ -591,6 +704,7 @@ print(f"  - Processors: {ProcessorProfile.objects.count()}")
 print(f"  - Processing Plants: {ProcessingPlant.objects.count()}")
 print(f"  - Retailers: {RetailerProfile.objects.count()}")
 print(f"  - Stores: {Store.objects.count()}")
+print(f"  - MSP Records: {MSPRecord.objects.count()}")
 
 print("\n🔑 Test Credentials:")
 print("  Farmer: +919876543200 / farmer123")

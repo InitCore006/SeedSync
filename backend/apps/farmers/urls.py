@@ -3,7 +3,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    FarmerProfileViewSet, FarmLandViewSet, CropPlanningViewSet,
+    FarmerProfileViewSet, FarmLandViewSet, CropPlanningViewSet, CropPlanViewSet,
     NearbyFPOAPIView, MarketPricesAPIView, WeatherAdvisoryAPIView,
     CropDiseaseDetectionAPIView, YieldPredictionAPIView, FarmerJoinRequestsAPIView
 )
@@ -14,6 +14,7 @@ router = DefaultRouter()
 router.register('profiles', FarmerProfileViewSet, basename='farmer-profile')
 router.register('farmlands', FarmLandViewSet, basename='farmland')
 router.register('crop-plans', CropPlanningViewSet, basename='crop-plan')
+router.register('crop-plan', CropPlanViewSet, basename='cropplan')
 
 urlpatterns = [
     path('', include(router.urls)),

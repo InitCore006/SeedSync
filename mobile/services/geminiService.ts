@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const API_KEY = 'AIzaSyD1dm73kyRw1ZAbzQFlI4kVnRTR9PyS7G8';
+const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(API_KEY);
 
 /**
@@ -14,7 +14,7 @@ export const geminiService = {
   generateContent: async (prompt: string, useProModel: boolean = false): Promise<string> => {
     try {
       const model = genAI.getGenerativeModel({
-        model: useProModel ? 'gemini-1.5-pro-latest' : 'gemini-2.5-flash',
+        model: 'gemini-2.5-flash',
       });
 
       const result = await model.generateContent(prompt);
@@ -31,7 +31,7 @@ export const geminiService = {
   generateJSON: async <T = any>(prompt: string): Promise<T> => {
     try {
       const model = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash', // Best for structured JSON
+        model: 'gemini-2.5-flash',
       });
 
       const result = await model.generateContent(prompt);
