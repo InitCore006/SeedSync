@@ -11,11 +11,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-<<<<<<< Updated upstream
 import { AppHeader, Sidebar, Loading } from '@/components';
-=======
-import { Loading } from '@/components';
->>>>>>> Stashed changes
 import { COLORS } from '@/constants/colors';
 import { logisticsAPI } from '@/services/logisticsService';
 import { Shipment } from '@/types/api';
@@ -23,10 +19,7 @@ import { getCropIcon, getCropLabel, getStatusInfo } from '@/constants/crops';
 
 export default function TripDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-<<<<<<< Updated upstream
   const [sidebarVisible, setSidebarVisible] = useState(false);
-=======
->>>>>>> Stashed changes
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -95,7 +88,6 @@ export default function TripDetailsScreen() {
   };
 
   if (loading) {
-<<<<<<< Updated upstream
     return (
       <View style={{ flex: 1 }}>
         <AppHeader 
@@ -108,9 +100,6 @@ export default function TripDetailsScreen() {
         <Loading />
       </View>
     );
-=======
-    return <Loading />;
->>>>>>> Stashed changes
   }
 
   if (!shipment) {
@@ -120,7 +109,6 @@ export default function TripDetailsScreen() {
   const statusInfo = getStatusInfo('shipment', shipment.status);
 
   return (
-<<<<<<< Updated upstream
     <View style={{ flex: 1 }}>
       <AppHeader 
         title="Trip Details"
@@ -130,9 +118,6 @@ export default function TripDetailsScreen() {
       />
       <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       <ScrollView style={styles.container}>
-=======
-    <ScrollView style={styles.container}>
->>>>>>> Stashed changes
       {/* Map Section - Placeholder (react-native-maps not installed) */}
       {shipment.pickup_location && shipment.delivery_location && (
         <View style={styles.mapPlaceholder}>
@@ -329,11 +314,8 @@ export default function TripDetailsScreen() {
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
-<<<<<<< Updated upstream
   </View>
 
-=======
->>>>>>> Stashed changes
   );
 }
 
@@ -530,8 +512,4 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 40,
   },
-<<<<<<< Updated upstream
 });
-=======
-});
->>>>>>> Stashed changes

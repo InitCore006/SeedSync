@@ -5,10 +5,7 @@ export default function HistoryLayout() {
   return (
     <Stack
       screenOptions={{
-<<<<<<< Updated upstream
         headerShown: false,
-=======
->>>>>>> Stashed changes
         headerStyle: {
           backgroundColor: COLORS.primary,
         },

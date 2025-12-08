@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Modal,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
@@ -59,11 +61,78 @@ export default function FarmingAssistantScreen() {
   ]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null);
+  const [showRecordingUI, setShowRecordingUI] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
   const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
+
+  useEffect(() => {
+    if (isRecording) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isRecording]);
+
+  const startRecording = async () => {
+    try {
+      // In a real implementation, you would request microphone permissions
+      // and use expo-av or react-native-voice for actual recording
+      setIsRecording(true);
+      setShowRecordingUI(true);
+    } catch (err) {
+      console.error('Failed to start recording', err);
+      alert('Failed to start recording');
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      setIsRecording(false);
+      setShowRecordingUI(false);
+
+      // Show processing message
+      const processingMessage: Message = {
+        id: Date.now().toString(),
+        text: '🎤 Processing your voice message...',
+        isUser: true,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, processingMessage]);
+
+      // Simulate speech-to-text processing
+      // In production, integrate with Google Speech-to-Text or similar service
+      setTimeout(() => {
+        const sampleQuestion = 'How do I improve soil quality for my crops?';
+        handleSendMessage(sampleQuestion);
+      }, 1500);
+    } catch (error) {
+      console.error('Failed to stop recording', error);
+    }
+  };
+
+  const cancelRecording = async () => {
+    setIsRecording(false);
+    setShowRecordingUI(false);
+  };
 
   const handleSendMessage = async (questionText?: string) => {
     const messageText = questionText || inputText.trim();
@@ -203,6 +272,14 @@ export default function FarmingAssistantScreen() {
 
         {/* Input */}
         <View style={styles.inputContainer}>
+          <TouchableOpacity
+            style={styles.micButton}
+            onPress={startRecording}
+            disabled={loading}
+          >
+            <Ionicons name="mic" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
+          
           <TextInput
             style={styles.input}
             placeholder="Ask your farming question..."
@@ -212,6 +289,7 @@ export default function FarmingAssistantScreen() {
             multiline
             maxLength={500}
           />
+          
           <TouchableOpacity
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
             onPress={() => handleSendMessage()}
@@ -221,6 +299,57 @@ export default function FarmingAssistantScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Voice Recording Modal */}
+      <Modal
+        visible={showRecordingUI}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelRecording}
+      >
+        <View style={styles.recordingOverlay}>
+          <View style={styles.recordingCard}>
+            <Text style={styles.recordingTitle}>
+              {isRecording ? 'Listening...' : 'Processing...'}
+            </Text>
+            
+            <Animated.View
+              style={[
+                styles.recordingCircle,
+                {
+                  transform: [{ scale: pulseAnim }],
+                },
+              ]}
+            >
+              <Ionicons name="mic" size={48} color={COLORS.white} />
+            </Animated.View>
+
+            <Text style={styles.recordingHint}>
+              {isRecording ? 'Speak your farming question' : 'Converting speech to text...'}
+            </Text>
+
+            {isRecording && (
+              <View style={styles.recordingActions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={cancelRecording}
+                >
+                  <Ionicons name="close-circle" size={32} color={COLORS.error} />
+                  <Text style={styles.actionLabel}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.stopButton}
+                  onPress={stopRecording}
+                >
+                  <Ionicons name="stop-circle" size={56} color={COLORS.primary} />
+                  <Text style={styles.actionLabel}>Stop</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -346,6 +475,17 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     gap: 12,
+    alignItems: 'center',
+  },
+  micButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
   },
   input: {
     flex: 1,
@@ -367,5 +507,66 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.5,
+  },
+  // Recording UI Styles
+  recordingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recordingCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    width: '85%',
+    maxWidth: 400,
+  },
+  recordingTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginBottom: 32,
+  },
+  recordingCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  recordingHint: {
+    fontSize: 16,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  recordingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 48,
+    marginTop: 16,
+  },
+  cancelButton: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  stopButton: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.secondary,
   },
 });

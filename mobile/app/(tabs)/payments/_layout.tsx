@@ -3,15 +3,11 @@ import { COLORS } from '@/constants/colors';
 
 export default function PaymentsLayout() {
   return (
-<<<<<<< Updated upstream
     <Stack
       screenOptions={{
         headerShown: false,
       }}
     >
-=======
-    <Stack>
->>>>>>> Stashed changes
       <Stack.Screen
         name="index"
         options={{

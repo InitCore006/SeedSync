@@ -5,11 +5,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     FarmerProfileViewSet, FarmLandViewSet, CropPlanningViewSet,
     NearbyFPOAPIView, MarketPricesAPIView, WeatherAdvisoryAPIView,
-<<<<<<< Updated upstream
     CropDiseaseDetectionAPIView, YieldPredictionAPIView, FarmerJoinRequestsAPIView
-=======
-    CropDiseaseDetectionAPIView, YieldPredictionAPIView
->>>>>>> Stashed changes
 )
 
 app_name = 'farmers'

@@ -12,31 +12,20 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-<<<<<<< Updated upstream
 import * as Location from 'expo-location';
 import { COLORS } from '@/constants/colors';
 import { Loading, Sidebar, AppHeader } from '@/components';
-=======
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Location from 'expo-location';
-import { COLORS } from '@/constants/colors';
-import { Loading, Sidebar } from '@/components';
->>>>>>> Stashed changes
 import { StatsSection } from '@/components/StatsCard';
 import { useAuthStore } from '@/store/authStore';
 import { farmersAPI } from '@/services/farmersService';
 import { logisticsAPI } from '@/services/logisticsService';
-<<<<<<< Updated upstream
 import { paymentsAPI } from '@/services/paymentsService';
-=======
->>>>>>> Stashed changes
 import { weatherService, WeatherData } from '@/services/weatherService';
 import { statsService, FarmerStats, LogisticsStats } from '@/services/statsService';
 import { useFarmerStore } from '@/store/farmerStore';
 import { useLogisticsStore } from '@/store/logisticsStore';
 
 const { width, height } = Dimensions.get('window');
-<<<<<<< Updated upstream
 
 interface LocationInfo {
   district: string;
@@ -46,14 +35,58 @@ interface LocationInfo {
     longitude: number;
   };
 }
-=======
-const BRAND_COLORS = {
-  primary: '#4a7c0f',
-  secondary: '#65a30d',
-  dark: '#365314',
-  darker: '#1a2e05',
+
+// Helper function to generate farming planning advisory based on weather
+const getFarmingAdvisory = (weather: WeatherData | null, location: LocationInfo | null): string => {
+  if (!weather) {
+    return 'Loading weather data for personalized farming advice...';
+  }
+
+  const { temp, humidity, rainfall, condition, windSpeed } = weather;
+  const advisories: string[] = [];
+
+  // Temperature-based advisory
+  if (temp > 35) {
+    advisories.push('🌡️ High temperature detected. Ensure adequate irrigation and consider shade nets for sensitive crops.');
+  } else if (temp < 15) {
+    advisories.push('❄️ Cool weather ahead. Protect frost-sensitive crops and consider mulching.');
+  } else if (temp >= 25 && temp <= 30) {
+    advisories.push('🌤️ Optimal temperature for most crops. Good time for field activities.');
+  }
+
+  // Humidity-based advisory
+  if (humidity > 80) {
+    advisories.push('💧 High humidity levels. Monitor crops for fungal diseases and ensure proper ventilation.');
+  } else if (humidity < 40) {
+    advisories.push('🌵 Low humidity. Increase irrigation frequency to prevent crop stress.');
+  }
+
+  // Rainfall advisory
+  if (rainfall > 10) {
+    advisories.push('🌧️ Heavy rainfall expected. Ensure proper drainage and postpone spraying activities.');
+  } else if (rainfall > 0) {
+    advisories.push('☔ Light rain predicted. Good for soil moisture, delay irrigation if planned.');
+  }
+
+  // Wind advisory
+  if (windSpeed > 25) {
+    advisories.push('💨 Strong winds forecasted. Secure young plants and delay pesticide application.');
+  }
+
+  // Condition-based advisory
+  if (condition === 'Clear' && temp >= 20 && temp <= 32) {
+    advisories.push('☀️ Perfect weather for harvesting and field operations.');
+  } else if (condition === 'Thunderstorm') {
+    advisories.push('⚡ Thunderstorm alert. Avoid field work and secure equipment.');
+  }
+
+  // Return the most relevant advisory or a general message
+  if (advisories.length > 0) {
+    return advisories.slice(0, 2).join(' ');
+  }
+
+  return `Current conditions in ${location?.district || 'your area'}: ${temp}°C, ${humidity}% humidity. Maintain regular farming schedule with standard precautions.`;
 };
->>>>>>> Stashed changes
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
@@ -62,16 +95,11 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [weather, setWeather] = useState<WeatherData | null>(null);
-<<<<<<< Updated upstream
   const [walletData, setWalletData] = useState<{balance: number; pending_payments: number; total_earned: number} | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [locationPermission, setLocationPermission] = useState(false);
   const [userLocation, setUserLocation] = useState<LocationInfo | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
-=======
-  const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [locationPermission, setLocationPermission] = useState(false);
->>>>>>> Stashed changes
 
   const isFarmer = user?.role === 'farmer';
   const isLogistics = user?.role === 'logistics';
@@ -85,18 +113,17 @@ export default function DashboardScreen() {
     }
   };
 
-<<<<<<< Updated upstream
   const fetchWalletData = async () => {
     try {
       const response = await paymentsAPI.getMyWallet();
-      setWalletData(response.data.data);
+      if (response.data.data) {
+        setWalletData(response.data.data);
+      }
     } catch (error) {
       console.error('Failed to load wallet data:', error);
     }
   };
 
-=======
->>>>>>> Stashed changes
   const fetchLogisticsStats = async () => {
     try {
       const response = await logisticsAPI.getStats();
@@ -117,18 +144,31 @@ export default function DashboardScreen() {
     }
   };
 
-<<<<<<< Updated upstream
   const reverseGeocode = async (latitude: number, longitude: number): Promise<LocationInfo> => {
     try {
+      console.log('Reverse geocoding coordinates:', latitude, longitude);
+      
       const geocode = await Location.reverseGeocodeAsync({
         latitude,
         longitude,
       });
 
+      console.log('Geocode result:', JSON.stringify(geocode, null, 2));
+
       if (geocode && geocode.length > 0) {
         const location = geocode[0];
-        const district = location.district || location.subregion || location.city || 'Unknown District';
-        const state = location.region || 'Unknown State';
+        
+        // Priority order for district extraction
+        const district = location.district 
+          || location.subregion 
+          || location.city 
+          || location.name
+          || 'Unknown District';
+          
+        const state = location.region 
+          || 'Unknown State';
+        
+        console.log('Extracted - District:', district, 'State:', state);
         
         return {
           district,
@@ -136,6 +176,8 @@ export default function DashboardScreen() {
           coords: { latitude, longitude },
         };
       }
+      
+      console.warn('No geocode results found');
     } catch (error) {
       console.error('Reverse geocoding error:', error);
     }
@@ -150,30 +192,59 @@ export default function DashboardScreen() {
   const fetchUserLocation = async () => {
     setLocationLoading(true);
     try {
-=======
-  const fetchWeather = async () => {
-    try {
-      // Try to get GPS location first
->>>>>>> Stashed changes
       const hasPermission = locationPermission || await requestLocationPermission();
       
       if (hasPermission) {
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        
-<<<<<<< Updated upstream
-        const locationInfo = await reverseGeocode(
-          location.coords.latitude,
-          location.coords.longitude
-        );
-        
-        setUserLocation(locationInfo);
-        return locationInfo;
+        try {
+          // Try to get current position with lower accuracy for approximate location
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Low, // Changed to Low for better compatibility with approximate permission
+          });
+          
+          console.log('GPS Coordinates:', location.coords.latitude, location.coords.longitude);
+          
+          const locationInfo = await reverseGeocode(
+            location.coords.latitude,
+            location.coords.longitude
+          );
+          
+          console.log('Reverse geocoded location:', locationInfo);
+          
+          setUserLocation(locationInfo);
+          return locationInfo;
+        } catch (locationError) {
+          console.error('GPS location error:', locationError);
+          // If GPS fails, try to get last known location
+          try {
+            const lastLocation = await Location.getLastKnownPositionAsync({
+              maxAge: 300000, // 5 minutes
+            });
+            
+            if (lastLocation) {
+              console.log('Using last known location:', lastLocation.coords);
+              const locationInfo = await reverseGeocode(
+                lastLocation.coords.latitude,
+                lastLocation.coords.longitude
+              );
+              setUserLocation(locationInfo);
+              return locationInfo;
+            }
+          } catch (lastLocationError) {
+            console.error('Last known location error:', lastLocationError);
+          }
+          
+          // Final fallback to profile state
+          const fallbackLocation: LocationInfo = {
+            district: 'Location Required',
+            state: user?.profile?.state || 'Unknown State',
+          };
+          setUserLocation(fallbackLocation);
+          return fallbackLocation;
+        }
       } else {
-        // Fallback to profile data
+        // Permission denied - fallback to profile data
         const fallbackLocation: LocationInfo = {
-          district: user?.profile?.district || 'Unknown District',
+          district: 'Location Required',
           state: user?.profile?.state || 'Unknown State',
         };
         setUserLocation(fallbackLocation);
@@ -183,7 +254,7 @@ export default function DashboardScreen() {
       console.error('Failed to fetch user location:', error);
       // Fallback to profile data
       const fallbackLocation: LocationInfo = {
-        district: user?.profile?.district || 'Unknown District',
+        district: 'Location Required',
         state: user?.profile?.state || 'Unknown State',
       };
       setUserLocation(fallbackLocation);
@@ -200,47 +271,30 @@ export default function DashboardScreen() {
       
       if (location?.coords) {
         // Use GPS coordinates for weather
-=======
->>>>>>> Stashed changes
         const weatherData = await weatherService.getWeatherByCoords(
           location.coords.latitude,
           location.coords.longitude
         );
-<<<<<<< Updated upstream
         // Override city with district and state from our location
         weatherData.district = location.district;
         weatherData.state = location.state;
         setWeather(weatherData);
       } else {
         // Fallback to district-based weather
-        const searchLocation = location?.district || user?.profile?.district || user?.profile?.state || 'Mumbai';
+        const searchLocation = location?.district !== 'Location Required' ? location?.district : user?.profile?.state || 'India';
         const weatherData = await weatherService.getWeatherByCity(searchLocation);
         weatherData.district = location?.district;
         weatherData.state = location?.state;
-=======
-        setWeather(weatherData);
-      } else {
-        // Fallback to city-based weather
-        const city = user?.profile?.city || user?.profile?.state || 'Mumbai';
-        const weatherData = await weatherService.getWeatherByCity(city);
->>>>>>> Stashed changes
         setWeather(weatherData);
       }
     } catch (error) {
       console.error('Failed to load weather:', error);
-<<<<<<< Updated upstream
       // Final fallback
       try {
-        const searchLocation = userLocation?.district || user?.profile?.district || user?.profile?.state || 'Mumbai';
+        const searchLocation = (userLocation?.district !== 'Location Required' ? userLocation?.district : user?.profile?.state) || 'India';
         const weatherData = await weatherService.getWeatherByCity(searchLocation);
         weatherData.district = userLocation?.district;
         weatherData.state = userLocation?.state;
-=======
-      // Fallback to city if GPS fails
-      try {
-        const city = user?.profile?.city || user?.profile?.state || 'Mumbai';
-        const weatherData = await weatherService.getWeatherByCity(city);
->>>>>>> Stashed changes
         setWeather(weatherData);
       } catch (fallbackError) {
         console.error('Fallback weather fetch failed:', fallbackError);
@@ -251,11 +305,7 @@ export default function DashboardScreen() {
   const fetchStats = async () => {
     try {
       if (isFarmer) {
-<<<<<<< Updated upstream
         await Promise.all([fetchFarmerStats(), fetchWeather(), fetchWalletData()]);
-=======
-        await Promise.all([fetchFarmerStats(), fetchWeather()]);
->>>>>>> Stashed changes
       } else if (isLogistics) {
         await fetchLogisticsStats();
       }
@@ -280,11 +330,10 @@ export default function DashboardScreen() {
     {
       title: 'Create Lot',
       icon: 'add-circle',
-      color: BRAND_COLORS.primary,
+      color: COLORS.primary,
       onPress: () => router.push('/(tabs)/lots/create'),
     },
     {
-<<<<<<< Updated upstream
       title: 'Find FPO',
       icon: 'business',
       color: '#8b5cf6',
@@ -327,51 +376,6 @@ export default function DashboardScreen() {
       title: 'My Vehicles',
       icon: 'car-sport',
       color: COLORS.success,
-      onPress: () => router.push('/(tabs)/vehicles'),
-=======
-      title: 'Market Prices',
-      icon: 'trending-up',
-      color: BRAND_COLORS.secondary,
-      onPress: () => router.push('/(tabs)/market/prices'),
-    },
-    {
-      title: 'Disease AI',
-      icon: 'scan',
-      color: '#10b981',
-      onPress: () => router.push('/ai/disease-detection'),
-    },
-    {
-      title: 'Find FPO',
-      icon: 'location',
-      color: '#8b5cf6',
-      onPress: () => router.push('/fpos'),
->>>>>>> Stashed changes
-    },
-  ];
-
-  const logisticsQuickActions = [
-    {
-      title: 'New Bookings',
-      icon: 'notifications',
-      color: BRAND_COLORS.primary,
-      onPress: () => router.push('/(tabs)/trips'),
-    },
-    {
-      title: 'Active Trips',
-      icon: 'navigate-circle',
-      color: BRAND_COLORS.secondary,
-      onPress: () => router.push('/(tabs)/trips'),
-    },
-    {
-      title: 'Earnings',
-      icon: 'wallet',
-      color: '#f59e0b',
-      onPress: () => router.push('/(tabs)/history'),
-    },
-    {
-      title: 'My Vehicles',
-      icon: 'car-sport',
-      color: '#3b82f6',
       onPress: () => router.push('/vehicles'),
     },
   ];
@@ -382,14 +386,10 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.container}>
-<<<<<<< Updated upstream
       <AppHeader 
         onMenuPress={() => setSidebarVisible(true)}
         showNotifications={true}
       />
-=======
-      <StatusBar barStyle="light-content" />
->>>>>>> Stashed changes
       
       {/* Sidebar */}
       <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
@@ -402,33 +402,7 @@ export default function DashboardScreen() {
       >
         {/* Hero Card - Farmer Weather / Logistics Map */}
         <View style={styles.heroCardContainer}>
-<<<<<<< Updated upstream
           <View style={styles.heroCard}>
-=======
-          <LinearGradient
-            colors={[BRAND_COLORS.darker, BRAND_COLORS.dark, BRAND_COLORS.primary]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.heroCard}
-          >
-            {/* Top Header Inside Card */}
-            <View style={styles.cardHeader}>
-              <TouchableOpacity 
-                style={styles.menuButton}
-                onPress={() => setSidebarVisible(true)}
-              >
-                <Ionicons name="menu" size={24} color="#fff" />
-              </TouchableOpacity>
-              <Text style={styles.cardTitle}>SeedSync</Text>
-              <TouchableOpacity 
-                style={styles.notificationButton}
-                onPress={() => router.push('/notifications')}
-              >
-                <Ionicons name="notifications-outline" size={24} color="#fff" />
-                <View style={styles.notificationBadge} />
-              </TouchableOpacity>
-            </View>
->>>>>>> Stashed changes
 
             {isFarmer ? (
               // Farmer Weather Card
@@ -441,12 +415,8 @@ export default function DashboardScreen() {
                   <View style={styles.locationRow}>
                     <Ionicons name="location" size={13} color="#fff" />
                     <Text style={styles.weatherLocation}>
-<<<<<<< Updated upstream
                       {userLocation?.district || weather?.district || 'Loading...'}
                       {(userLocation?.state || weather?.state) && `, ${userLocation?.state || weather?.state}`}
-=======
-                      {weather?.city || user?.profile?.city || user?.profile?.state || 'Your Location'}
->>>>>>> Stashed changes
                     </Text>
                   </View>
                 </View>
@@ -508,33 +478,26 @@ export default function DashboardScreen() {
                   </View>
                 )}
 
-                {/* Crop Recommendations */}
-                <TouchableOpacity 
-                  style={styles.cropRecommendationCard}
-<<<<<<< Updated upstream
-                  onPress={() => router.push('/(tabs)/ai/crop-recommendation')}
-=======
-                  onPress={() => router.push('/crop-recommendations')}
->>>>>>> Stashed changes
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.cropRecommendationHeader}>
-                    <View style={styles.cropIconContainer}>
-<<<<<<< Updated upstream
-                      <Ionicons name="leaf" size={20} color={COLORS.primary} />
-=======
-                      <Ionicons name="leaf" size={20} color={BRAND_COLORS.primary} />
->>>>>>> Stashed changes
+                {/* Farming Planning Advisory */}
+                <View style={styles.farmingAdvisoryCard}>
+                  <View style={styles.advisoryHeader}>
+                    <View style={styles.advisoryIconContainer}>
+                      <Ionicons name="sunny" size={20} color="#f59e0b" />
                     </View>
-                    <View style={styles.cropRecommendationText}>
-                      <Text style={styles.cropRecommendationTitle}>Crop Recommendations</Text>
-                      <Text style={styles.cropRecommendationSubtitle}>
-                        Best crops for current weather
+                    <View style={styles.advisoryTitleContainer}>
+                      <Text style={styles.advisoryTitle}>Farming Advisory</Text>
+                      <Text style={styles.advisorySubtitle}>
+                        {userLocation?.district || weather?.district || 'Your location'}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={20} color="#64748b" />
                   </View>
-                </TouchableOpacity>
+                  
+                  <View style={styles.advisoryContent}>
+                    <Text style={styles.advisoryRecommendation}>
+                      {getFarmingAdvisory(weather, userLocation)}
+                    </Text>
+                  </View>
+                </View>
               </View>
             ) : (
               // Logistics Map Card
@@ -564,20 +527,16 @@ export default function DashboardScreen() {
                     </View>
                     <View style={styles.tripInfoText}>
                       <Text style={styles.tripLabel}>Current Location</Text>
-<<<<<<< Updated upstream
                       <Text style={styles.tripValue}>
                         {locationLoading 
                           ? 'Locating...' 
-                          : userLocation?.district 
+                          : userLocation?.district && userLocation.district !== 'Location Required'
                             ? `${userLocation.district}, ${userLocation.state}`
-                            : user?.profile?.district 
-                              ? `${user.profile.district}, ${user.profile.state || ''}`
-                              : 'Location not available'
+                            : user?.profile?.state
+                              ? user.profile.state
+                              : 'Enable location for accurate tracking'
                         }
                       </Text>
-=======
-                      <Text style={styles.tripValue}>Indore, MP</Text>
->>>>>>> Stashed changes
                     </View>
                   </View>
                   <View style={styles.tripDivider} />
@@ -593,7 +552,6 @@ export default function DashboardScreen() {
                 </View>
               </View>
             )}
-<<<<<<< Updated upstream
           </View>
         </View>
 
@@ -624,11 +582,6 @@ export default function DashboardScreen() {
           </View>
         )}
 
-=======
-          </LinearGradient>
-        </View>
-
->>>>>>> Stashed changes
         {/* Stats Section */}
         {isFarmer && farmerStats && (
           <View style={styles.statsContainer}>
@@ -737,11 +690,10 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.background,
   },
   scrollView: {
     flex: 1,
-<<<<<<< Updated upstream
   },
   heroCardContainer: {
     marginBottom: 20,
@@ -762,27 +714,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     marginBottom: 12,
   },
-=======
-  },
-  heroCardContainer: {
-    marginBottom: 28,
-  },
-  heroCard: {
-    borderRadius: 0,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    overflow: 'hidden',
-    paddingTop: StatusBar.currentHeight || 40,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 12,
-  },
->>>>>>> Stashed changes
   menuButton: {
     width: 42,
     height: 42,
@@ -933,7 +864,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '500',
   },
-  cropRecommendationCard: {
+  farmingAdvisoryCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
@@ -944,35 +875,41 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  cropRecommendationHeader: {
+  advisoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
+    marginBottom: 12,
   },
-  cropIconContainer: {
+  advisoryIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
-<<<<<<< Updated upstream
-    backgroundColor: COLORS.primary + '15',
-=======
-    backgroundColor: BRAND_COLORS.primary + '15',
->>>>>>> Stashed changes
+    backgroundColor: '#fef3c7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cropRecommendationText: {
+  advisoryTitleContainer: {
     flex: 1,
   },
-  cropRecommendationTitle: {
+  advisoryTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#1f2937',
-    marginBottom: 3,
+    marginBottom: 2,
   },
-  cropRecommendationSubtitle: {
+  advisorySubtitle: {
     fontSize: 12,
     color: '#64748b',
+  },
+  advisoryContent: {
+    paddingTop: 8,
+  },
+  advisoryRecommendation: {
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 20,
+    fontWeight: '500',
   },
   // Logistics Map Styles
   mapContent: {

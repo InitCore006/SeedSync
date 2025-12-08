@@ -13,11 +13,8 @@ export interface WeatherData {
   rainfall: number;
   icon: string;
   city: string;
-<<<<<<< Updated upstream
   district?: string;
   state?: string;
-=======
->>>>>>> Stashed changes
   alert?: string;
 }
 

@@ -10,11 +10,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-<<<<<<< Updated upstream
 import { AppHeader, Sidebar, Loading } from '@/components';
-=======
-import { Loading } from '@/components';
->>>>>>> Stashed changes
 import { COLORS } from '@/constants/colors';
 import { paymentsAPI } from '@/services/paymentsService';
 import { usePaymentsStore } from '@/store/paymentsStore';
@@ -23,17 +19,11 @@ import { getStatusInfo } from '@/constants/crops';
 
 export default function PaymentsScreen() {
   const { payments, setPayments } = usePaymentsStore();
-<<<<<<< Updated upstream
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'failed'>('all');
   const [walletData, setWalletData] = useState<any>(null);
-=======
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'failed'>('all');
->>>>>>> Stashed changes
 
   useEffect(() => {
     fetchPayments();
@@ -41,17 +31,12 @@ export default function PaymentsScreen() {
 
   const fetchPayments = async () => {
     try {
-<<<<<<< Updated upstream
       const [paymentsRes, walletRes] = await Promise.all([
         paymentsAPI.getMyPayments(),
         paymentsAPI.getMyWallet(),
       ]);
       setPayments(paymentsRes.data);
       setWalletData(walletRes.data);
-=======
-      const response = await paymentsAPI.getMyPayments();
-      setPayments(response.data);
->>>>>>> Stashed changes
     } catch (error) {
       console.error('Failed to fetch payments:', error);
       Alert.alert('Error', 'Failed to load payments');
@@ -155,7 +140,6 @@ export default function PaymentsScreen() {
   };
 
   if (loading) {
-<<<<<<< Updated upstream
     return (
       <View style={{ flex: 1 }}>
         <AppHeader 
@@ -202,13 +186,6 @@ export default function PaymentsScreen() {
         </View>
       )}
 
-=======
-    return <Loading />;
-  }
-
-  return (
-    <View style={styles.container}>
->>>>>>> Stashed changes
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
         <TouchableOpacity
@@ -291,24 +268,17 @@ export default function PaymentsScreen() {
         }
       />
     </View>
-<<<<<<< Updated upstream
     </View>
   );
 }
 
 
 
-=======
-  );
-}
-
->>>>>>> Stashed changes
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
-<<<<<<< Updated upstream
   walletCard: {
     backgroundColor: COLORS.primary,
     padding: 20,
@@ -360,8 +330,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white + '40',
     marginHorizontal: 16,
   },
-=======
->>>>>>> Stashed changes
   filterContainer: {
     flexDirection: 'row',
     padding: 16,
@@ -445,11 +413,7 @@ const styles = StyleSheet.create({
   paymentId: {
     fontSize: 16,
     fontWeight: '600',
-<<<<<<< Updated upstream
     color: COLORS.primary,
-=======
-    color: COLORS.text,
->>>>>>> Stashed changes
     fontFamily: 'monospace',
   },
   paymentDate: {
@@ -484,11 +448,7 @@ const styles = StyleSheet.create({
   amountValue: {
     fontSize: 16,
     fontWeight: '600',
-<<<<<<< Updated upstream
     color: COLORS.primary,
-=======
-    color: COLORS.text,
->>>>>>> Stashed changes
     marginTop: 2,
   },
   deductionSection: {
@@ -518,11 +478,7 @@ const styles = StyleSheet.create({
   taxValue: {
     fontSize: 14,
     fontWeight: '500',
-<<<<<<< Updated upstream
     color: COLORS.primary,
-=======
-    color: COLORS.text,
->>>>>>> Stashed changes
   },
   netRow: {
     flexDirection: 'row',
@@ -534,11 +490,7 @@ const styles = StyleSheet.create({
   netLabel: {
     fontSize: 14,
     fontWeight: '600',
-<<<<<<< Updated upstream
     color: COLORS.primary,
-=======
-    color: COLORS.text,
->>>>>>> Stashed changes
   },
   netValue: {
     fontSize: 18,
@@ -571,11 +523,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-<<<<<<< Updated upstream
     color: COLORS.primary,
-=======
-    color: COLORS.text,
->>>>>>> Stashed changes
     marginTop: 16,
   },
   emptySubtext: {
@@ -585,7 +533,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-<<<<<<< Updated upstream
     
-=======
->>>>>>> Stashed changes

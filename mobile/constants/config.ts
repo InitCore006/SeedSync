@@ -1,15 +1,4 @@
-<<<<<<< Updated upstream
 export const API_URL = 'https://c254947fb50e.ngrok-free.app/api';
-=======
-export const API_URL = 'https://d28f59076585.ngrok-free.app/api';
-
-// Log API configuration on app start
-console.log('\n========== API CONFIGURATION ==========');
-console.log('🌐 Base URL:', API_URL);
-console.log('⏱️  Request Timeout: 30 seconds');
-console.log('📱 App Version: 1.0.0');
-console.log('======================================\n');
->>>>>>> Stashed changes
 
 export const ENDPOINTS = {
   // Auth endpoints
@@ -33,10 +22,7 @@ export const ENDPOINTS = {
     FARMLANDS: '/farmers/farmlands/',
     CROP_PLANS: '/farmers/crop-plans/',
     NEARBY_FPOS: '/farmers/nearby-fpos/',
-<<<<<<< Updated upstream
     JOIN_REQUESTS: '/farmers/join-requests/',
-=======
->>>>>>> Stashed changes
     MARKET_PRICES: '/farmers/market-prices/',
     WEATHER_ADVISORY: '/farmers/weather-advisory/',
     DISEASE_DETECTION: '/farmers/disease-detection/',
@@ -58,7 +44,6 @@ export const ENDPOINTS = {
   
   // Bids endpoints
   BIDS: {
-<<<<<<< Updated upstream
     LIST: '/bids/bids/',
     CREATE: '/bids/bids/',
     MY_BIDS: '/bids/bids/my_bids/',
@@ -94,15 +79,6 @@ export const ENDPOINTS = {
     TRIP_HISTORY: '/logistics/trip-history/',
     EARNINGS: '/logistics/earnings/',
     PERFORMANCE: '/logistics/performance/',
-=======
-    LIST: '/bids/',
-    CREATE: '/bids/create/',
-    MY_BIDS: '/bids/my-bids/',
-    LOT_BIDS: (lotId: number) => `/bids/lot/${lotId}/`,
-    DETAIL: (id: number) => `/bids/${id}/`,
-    ACCEPT: (id: number) => `/bids/${id}/accept/`,
-    REJECT: (id: number) => `/bids/${id}/reject/`,
->>>>>>> Stashed changes
   },
   
   // Payments endpoints
@@ -159,7 +135,6 @@ export const ENDPOINTS = {
     GENERATE_QR: (lotId: number) => `/blockchain/lots/${lotId}/generate-qr/`,
     GET_TRACE: (lotId: number) => `/blockchain/trace/${lotId}/`,
     GET_CERTIFICATE: (lotId: number) => `/blockchain/certificate/${lotId}/`,
-<<<<<<< Updated upstream
   },
   
   // Processor endpoints
@@ -175,8 +150,6 @@ export const ENDPOINTS = {
     INVENTORY: '/processors/inventory/',
     BIDS: '/processors/bids/',
     PROCUREMENT: '/processors/procurement/',
-=======
->>>>>>> Stashed changes
   },
 };
 

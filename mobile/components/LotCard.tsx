@@ -20,13 +20,7 @@ interface LotCardProps {
 export const LotCard: React.FC<LotCardProps> = ({ lot, onPress, style }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
-<<<<<<< Updated upstream
       case 'available':
-=======
-      case 'draft':
-        return COLORS.secondary;
-      case 'open':
->>>>>>> Stashed changes
         return COLORS.success;
       case 'bidding':
         return COLORS.warning;
@@ -159,11 +153,7 @@ const styles = StyleSheet.create({
   },
   variety: {
     fontSize: 14,
-<<<<<<< Updated upstream
     color: COLORS.text.secondary,
-=======
-    color: COLORS.secondary,
->>>>>>> Stashed changes
     marginBottom: 12,
   },
   detailsRow: {
@@ -173,11 +163,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-<<<<<<< Updated upstream
     color: COLORS.text.secondary,
-=======
-    color: COLORS.secondary,
->>>>>>> Stashed changes
   },
   value: {
     fontSize: 14,
@@ -196,11 +182,7 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 12,
-<<<<<<< Updated upstream
     color: COLORS.text.secondary,
-=======
-    color: COLORS.secondary,
->>>>>>> Stashed changes
   },
   lotNumber: {
     fontSize: 12,

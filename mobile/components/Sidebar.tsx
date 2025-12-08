@@ -8,21 +8,15 @@ import {
   Animated,
   Dimensions,
   StatusBar,
-<<<<<<< Updated upstream
   Platform,
   Pressable,
-=======
->>>>>>> Stashed changes
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '@/store/authStore';
-<<<<<<< Updated upstream
 import { useFarmerStore } from '@/store/farmerStore';
 import { useLogisticsStore } from '@/store/logisticsStore';
-=======
->>>>>>> Stashed changes
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.75;
@@ -40,21 +34,15 @@ interface SidebarProps {
 
 export default function Sidebar({ visible, onClose }: SidebarProps) {
   const { user, logout } = useAuthStore();
-<<<<<<< Updated upstream
   const { profile: farmerProfile } = useFarmerStore();
   const { profile: logisticsProfile } = useLogisticsStore();
-=======
->>>>>>> Stashed changes
   const isFarmer = user?.role === 'farmer';
   const isLogistics = user?.role === 'logistics';
   const slideAnim = React.useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
 
-<<<<<<< Updated upstream
   // Get the appropriate profile based on role
   const activeProfile = isFarmer ? farmerProfile : isLogistics ? logisticsProfile : null;
 
-=======
->>>>>>> Stashed changes
   React.useEffect(() => {
     Animated.timing(slideAnim, {
       toValue: visible ? 0 : -SIDEBAR_WIDTH,
@@ -63,7 +51,6 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
     }).start();
   }, [visible]);
 
-<<<<<<< Updated upstream
   // Fetch profile data when sidebar opens if not already loaded
   React.useEffect(() => {
     if (visible && !activeProfile) {
@@ -87,47 +74,11 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
     }
   };
 
-=======
->>>>>>> Stashed changes
   const menuItems = [
-    { 
-      icon: 'home', 
-      label: 'Dashboard', 
-      route: '/(tabs)',
-      roles: ['farmer', 'logistics']
-    },
-    { 
-      icon: 'leaf', 
-      label: 'My Lots', 
-      route: '/(tabs)/lots',
-      roles: ['farmer']
-    },
-    { 
-      icon: 'pricetag', 
-<<<<<<< Updated upstream
-      label: 'My Bids', 
-=======
-      label: 'Bids', 
->>>>>>> Stashed changes
-      route: '/(tabs)/bids',
-      roles: ['farmer']
-    },
-    { 
-<<<<<<< Updated upstream
-      icon: 'sparkles', 
-      label: 'AI Features', 
-      route: '/(tabs)/ai',
-      roles: ['farmer']
-    },
     { 
       icon: 'business', 
       label: 'Find FPO', 
       route: '/fpo-finder',
-=======
-      icon: 'stats-chart', 
-      label: 'Market', 
-      route: '/(tabs)/market',
->>>>>>> Stashed changes
       roles: ['farmer']
     },
     { 
@@ -149,15 +100,12 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
       roles: ['farmer', 'logistics']
     },
     { 
-<<<<<<< Updated upstream
       icon: 'document-text', 
       label: 'Schemes', 
       route: '/(tabs)/schemes',
       roles: ['farmer']
     },
     { 
-=======
->>>>>>> Stashed changes
       icon: 'person', 
       label: 'Profile', 
       route: '/(tabs)/profile',
@@ -172,7 +120,6 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
   };
 
   const handleNavigation = (route: string) => {
-<<<<<<< Updated upstream
     // Close sidebar immediately
     onClose();
     // Navigate after sidebar closes
@@ -183,10 +130,6 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
         console.error('Navigation error:', error);
       }
     }, 200);
-=======
-    onClose();
-    router.push(route as any);
->>>>>>> Stashed changes
   };
 
   const filteredMenuItems = menuItems.filter(item => 
@@ -197,7 +140,6 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
     <Modal
       visible={visible}
       transparent
-<<<<<<< Updated upstream
       animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
@@ -214,20 +156,6 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
             },
           ]}
           onPress={(e) => e.stopPropagation()}
-=======
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <View style={styles.overlay}>
-        <Animated.View 
-          style={[
-            styles.sidebar,
-            {
-              transform: [{ translateX: slideAnim }],
-            },
-          ]}
->>>>>>> Stashed changes
         >
           <LinearGradient
             colors={[BRAND_COLORS.dark, BRAND_COLORS.primary, BRAND_COLORS.secondary]}
@@ -238,39 +166,26 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
             <View style={styles.profileSection}>
               <View style={styles.avatarContainer}>
                 <Text style={styles.avatarText}>
-<<<<<<< Updated upstream
-                  {(activeProfile?.full_name?.charAt(0) || user?.phone_number?.charAt(0) || 'U').toUpperCase()}
+                  {(activeProfile?.user.profile?.full_name?.charAt(0) || user?.phone_number?.charAt(0) || 'U').toUpperCase()}
                 </Text>
               </View>
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName} numberOfLines={1}>
-                  {activeProfile?.full_name || 'User'}
+                  {activeProfile?.user.profile?.full_name || 'User'}
                 </Text>
                 <Text style={styles.profileRole}>
                   {isFarmer ? 'Farmer' : isLogistics ? 'Logistics Partner' : user?.role || 'User'}
                 </Text>
-                {isFarmer && activeProfile && (
+                {isFarmer && activeProfile && 'district' in activeProfile && (
                   <Text style={styles.profileDetail} numberOfLines={1}>
                     {activeProfile.district}, {activeProfile.state}
                   </Text>
                 )}
-                {isLogistics && activeProfile && (
+                {isLogistics && activeProfile && 'company_name' in activeProfile && (
                   <Text style={styles.profileDetail} numberOfLines={1}>
-                    {activeProfile.city}, {activeProfile.state}
+                    {activeProfile.state || 'India'}
                   </Text>
                 )}
-=======
-                  {user?.profile?.full_name?.charAt(0) || 'U'}
-                </Text>
-              </View>
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>
-                  {user?.profile?.full_name || 'User'}
-                </Text>
-                <Text style={styles.profileRole}>
-                  {user?.role_display || user?.role}
-                </Text>
->>>>>>> Stashed changes
                 <Text style={styles.profilePhone}>{user?.phone_number}</Text>
               </View>
             </View>
@@ -319,19 +234,8 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
               <Text style={[styles.menuLabel, styles.logoutText]}>Logout</Text>
             </TouchableOpacity>
           </View>
-<<<<<<< Updated upstream
         </Pressable>
       </Pressable>
-=======
-        </Animated.View>
-        
-        <TouchableOpacity 
-          style={styles.backdrop} 
-          activeOpacity={1}
-          onPress={onClose}
-        />
-      </View>
->>>>>>> Stashed changes
     </Modal>
   );
 }
@@ -339,14 +243,9 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-<<<<<<< Updated upstream
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
-=======
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.6)',
->>>>>>> Stashed changes
   },
   sidebar: {
     width: SIDEBAR_WIDTH,
@@ -358,20 +257,8 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 16,
   },
-<<<<<<< Updated upstream
   header: {
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 50,
-=======
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  header: {
-    paddingTop: StatusBar.currentHeight || 40,
->>>>>>> Stashed changes
     paddingBottom: 20,
     paddingHorizontal: 20,
   },
@@ -408,14 +295,11 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     textTransform: 'capitalize',
   },
-<<<<<<< Updated upstream
   profileDetail: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.85)',
     marginBottom: 2,
   },
-=======
->>>>>>> Stashed changes
   profilePhone: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.8)',

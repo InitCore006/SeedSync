@@ -87,6 +87,14 @@ export default function AppHeader({
               )}
             </TouchableOpacity>
           )}
+          
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/profile' as any)}
+            style={styles.iconButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="person-circle-outline" size={24} color={COLORS.white} />
+          </TouchableOpacity>
         </View>
       </View>
     </>

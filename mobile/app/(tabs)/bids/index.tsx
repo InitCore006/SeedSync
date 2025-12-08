@@ -10,19 +10,12 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { COLORS } from '@/constants/colors';
-<<<<<<< Updated upstream
 import { BidCard, Loading, AppHeader, Sidebar } from '@/components';
 import { bidsAPI } from '@/services/bidsService';
 import { lotsAPI } from '@/services/lotsService';
 import { Bid } from '@/types/api';
 import { useBidsStore } from '@/store/bidsStore';
 import { useAuthStore } from '@/store/authStore';
-=======
-import { BidCard, Loading } from '@/components';
-import { bidsAPI } from '@/services/bidsService';
-import { Bid } from '@/types/api';
-import { useBidsStore } from '@/store/bidsStore';
->>>>>>> Stashed changes
 
 export default function BidsScreen() {
   const [activeTab, setActiveTab] = useState<'received' | 'sent'>('received');
@@ -30,16 +23,12 @@ export default function BidsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [receivedBids, setReceivedBids] = useState<Bid[]>([]);
   const [sentBids, setSentBids] = useState<Bid[]>([]);
-<<<<<<< Updated upstream
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const { user } = useAuthStore();
-=======
->>>>>>> Stashed changes
 
   const fetchBids = async () => {
     try {
       const response = await bidsAPI.getMyBids();
-<<<<<<< Updated upstream
       
       // For farmers who are not in FPO, filter received bids to only show bids for their own lots
       if (user?.role === 'farmer' && !user?.profile?.fpo_membership) {
@@ -56,9 +45,6 @@ export default function BidsScreen() {
         setReceivedBids(response.data.received);
       }
       
-=======
-      setReceivedBids(response.data.received);
->>>>>>> Stashed changes
       setSentBids(response.data.sent);
     } catch (error) {
       console.error('Failed to load bids:', error);
@@ -126,7 +112,6 @@ export default function BidsScreen() {
   const displayBids = activeTab === 'received' ? receivedBids : sentBids;
 
   if (loading) {
-<<<<<<< Updated upstream
     return (
       <View style={{ flex: 1 }}>
         <AppHeader title="My Bids" onMenuPress={() => setSidebarVisible(true)} />
@@ -134,18 +119,12 @@ export default function BidsScreen() {
         <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       </View>
     );
-=======
-    return <Loading fullScreen />;
->>>>>>> Stashed changes
   }
 
   return (
     <View style={styles.container}>
-<<<<<<< Updated upstream
       <AppHeader title="My Bids" onMenuPress={() => setSidebarVisible(true)} />
       <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-=======
->>>>>>> Stashed changes
       {/* Tabs */}
       <View style={styles.tabs}>
         <TouchableOpacity
