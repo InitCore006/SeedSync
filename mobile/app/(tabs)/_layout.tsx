@@ -71,7 +71,6 @@ export default function TabsLayout() {
         name="voice-assistant"
         options={{
           title: '',
-          href: null,
           tabBarIcon: VoiceAssistantButton,
           tabBarButton: (props) => (
             <TouchableOpacity

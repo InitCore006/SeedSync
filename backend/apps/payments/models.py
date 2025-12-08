@@ -214,3 +214,54 @@ class Wallet(TimeStampedModel):
     def get_available_balance(self):
         """Get available balance"""
         return self.balance - self.locked_amount
+    
+    def has_sufficient_balance(self, amount):
+        """Check if wallet has sufficient balance"""
+        from decimal import Decimal
+        return self.get_available_balance() >= Decimal(str(amount))
+    
+    def deduct_balance(self, amount, reason=""):
+        """Deduct amount from wallet balance"""
+        from decimal import Decimal
+        amount = Decimal(str(amount))
+        
+        if not self.has_sufficient_balance(amount):
+            raise ValueError(f"Insufficient balance. Available: ₹{self.get_available_balance()}, Required: ₹{amount}")
+        
+        self.balance -= amount
+        self.save(update_fields=['balance', 'updated_at'])
+        
+        return self.balance
+    
+    def add_balance(self, amount, reason=""):
+        """Add amount to wallet balance"""
+        from decimal import Decimal
+        amount = Decimal(str(amount))
+        
+        self.balance += amount
+        self.save(update_fields=['balance', 'updated_at'])
+        
+        return self.balance
+    
+    def lock_amount(self, amount):
+        """Lock amount for pending transaction"""
+        from decimal import Decimal
+        amount = Decimal(str(amount))
+        
+        if not self.has_sufficient_balance(amount):
+            raise ValueError(f"Insufficient balance to lock. Available: ₹{self.get_available_balance()}, Required: ₹{amount}")
+        
+        self.locked_amount += amount
+        self.save(update_fields=['locked_amount', 'updated_at'])
+        
+        return self.locked_amount
+    
+    def unlock_amount(self, amount):
+        """Unlock amount after transaction completion"""
+        from decimal import Decimal
+        amount = Decimal(str(amount))
+        
+        self.locked_amount = max(0, self.locked_amount - amount)
+        self.save(update_fields=['locked_amount', 'updated_at'])
+        
+        return self.locked_amount

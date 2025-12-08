@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -9,12 +9,35 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { useProcessorDashboard } from '@/lib/hooks/useAPI';
 import { formatCurrency, formatNumber } from '@/lib/utils';
-import { Package, TrendingUp, Factory, Boxes, ShoppingCart } from 'lucide-react';
+import { Package, TrendingUp, Factory, Boxes, ShoppingCart, Wallet, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { API } from '@/lib/api';
 
 function ProcessorDashboardContent() {
   const router = useRouter();
   const { dashboard, isError: error, isLoading } = useProcessorDashboard();
+  const [pendingPayments, setPendingPayments] = useState<any[]>([]);
+  const [walletData, setWalletData] = useState<any>(null);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPayments();
+  }, []);
+
+  const fetchPayments = async () => {
+    try {
+      const [paymentsRes, walletRes] = await Promise.all([
+        API.payments.getPendingPayments(),
+        API.payments.getMyWallet(),
+      ]);
+      setPendingPayments(paymentsRes.data || []);
+      setWalletData(walletRes);
+    } catch (error) {
+      console.error('Failed to fetch payments:', error);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  };
   
   if (isLoading) return <Loading fullScreen />;
   if (error) {
@@ -38,7 +61,34 @@ function ProcessorDashboardContent() {
       </div>
       
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Wallet Balance</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">
+                  ₹{formatNumber(walletData?.balance || 0)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {pendingPayments.length} pending payments
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <Wallet className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-4 text-green-600"
+              onClick={() => router.push('/processor/payments')}
+            >
+              View Payments →
+            </Button>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -78,14 +128,14 @@ function ProcessorDashboardContent() {
                   {formatNumber(stats?.processing?.total_processed_quintals || 0)} qtl processed
                 </p>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Factory className="w-6 h-6 text-green-600" />
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                <Factory className="w-6 h-6 text-orange-600" />
               </div>
             </div>
             <Button
               variant="ghost"
               size="sm"
-              className="mt-4 text-green-600"
+              className="mt-4 text-orange-600"
               onClick={() => router.push('/processor/batches')}
             >
               View Batches →
@@ -147,6 +197,68 @@ function ProcessorDashboardContent() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Pending Payments Section */}
+      {!paymentsLoading && pendingPayments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-orange-500" />
+                Pending Payments to Farmers
+              </CardTitle>
+              <Badge variant="status" status="warning">
+                {pendingPayments.length} Pending
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingPayments.slice(0, 3).map((payment: any) => (
+                <div key={payment.id} className="flex items-center justify-between p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{payment.payee_name}</p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Payment for lot #{payment.lot}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Initiated: {new Date(payment.initiated_at).toLocaleDateString('en-IN')}
+                    </p>
+                  </div>
+                  <div className="text-right ml-4">
+                    <p className="text-lg font-bold text-gray-900">
+                      ₹{payment.gross_amount.toLocaleString('en-IN')}
+                    </p>
+                    {payment.commission_amount > 0 && (
+                      <p className="text-xs text-gray-600 mt-1">
+                        Net: ₹{payment.net_amount.toLocaleString('en-IN')}
+                      </p>
+                    )}
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => router.push('/processor/payments')}
+                    >
+                      Pay Now
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {pendingPayments.length > 3 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => router.push('/processor/payments')}
+                >
+                  View All {pendingPayments.length} Pending Payments →
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
       
       {/* Production Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

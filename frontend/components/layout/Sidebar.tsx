@@ -17,6 +17,7 @@ import {
   CheckCircle,
   Activity,
   Factory,
+  Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -122,6 +123,12 @@ const navItems: NavItem[] = [
     label: 'Orders',
     href: '/processor/orders',
     icon: <CheckSquare className="h-5 w-5" />,
+    roles: [USER_ROLES.PROCESSOR],
+  },
+  {
+    label: 'Payments',
+    href: '/processor/payments',
+    icon: <Wallet className="h-5 w-5" />,
     roles: [USER_ROLES.PROCESSOR],
   },
   {

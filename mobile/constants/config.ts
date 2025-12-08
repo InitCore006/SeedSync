@@ -1,4 +1,4 @@
-export const API_URL = 'https://c254947fb50e.ngrok-free.app/api';
+export const API_URL = 'https://3f1c50686621.ngrok-free.app/api';
 
 export const ENDPOINTS = {
   // Auth endpoints
@@ -58,33 +58,6 @@ export const ENDPOINTS = {
     LIST: '/payments/',
     MY_PAYMENTS: '/payments/my-payments/',
     MY_WALLET: '/payments/my-wallet/',
-    DETAIL: (id: number) => `/payments/${id}/`,
-    CREATE: '/payments/create/',
-    VERIFY: (id: number) => `/payments/${id}/verify/`,
-  },
-  
-  // Logistics endpoints
-  LOGISTICS: {
-    PARTNERS: '/logistics/partners/',
-    MY_PROFILE: '/logistics/partners/my_profile/',
-    MY_STATS: '/logistics/partners/my_stats/',
-    STATS: '/logistics/partners/stats/',
-    VEHICLES: '/logistics/vehicles/',
-    SHIPMENTS: '/logistics/shipments/',
-    SHIPMENT_DETAIL: (id: number) => `/logistics/shipments/${id}/`,
-    ACCEPT_BOOKING: (id: number) => `/logistics/shipments/${id}/accept/`,
-    REJECT_BOOKING: (id: number) => `/logistics/shipments/${id}/reject/`,
-    UPDATE_STATUS: (id: number) => `/logistics/shipments/${id}/update_status/`,
-    UPDATE_LOCATION: (id: number) => `/logistics/shipments/${id}/update-location/`,
-    TRIP_HISTORY: '/logistics/trip-history/',
-    EARNINGS: '/logistics/earnings/',
-    PERFORMANCE: '/logistics/performance/',
-  },
-  
-  // Payments endpoints
-  PAYMENTS: {
-    LIST: '/payments/',
-    MY_PAYMENTS: '/payments/my-payments/',
     DETAIL: (id: number) => `/payments/${id}/`,
     CREATE: '/payments/create/',
     VERIFY: (id: number) => `/payments/${id}/verify/`,

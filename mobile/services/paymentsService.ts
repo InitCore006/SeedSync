@@ -64,4 +64,33 @@ export const paymentsAPI = {
   }): Promise<AxiosResponse<ApiSuccess<Payment>>> => {
     return api.post(ENDPOINTS.PAYMENTS.VERIFY(id), data);
   },
+
+  /**
+   * Process wallet payment
+   */
+  processWalletPayment: (paymentId: string): Promise<AxiosResponse<ApiSuccess<any>>> => {
+    return api.post('/wallets/process_payment/', { payment_id: paymentId });
+  },
+
+  /**
+   * Get pending payments (for payer)
+   */
+  getPendingPayments: (): Promise<AxiosResponse<ApiSuccess<Payment[]>>> => {
+    return api.get('/wallets/pending_payments/');
+  },
+
+  /**
+   * Get farmer earnings and payment history
+   */
+  getFarmerEarnings: (): Promise<AxiosResponse<ApiSuccess<{
+    payments: Payment[];
+    summary: {
+      total_earnings: number;
+      pending_payments: number;
+      total_payments: number;
+      completed_payments: number;
+    };
+  }>>> => {
+    return api.get('/wallets/farmer_earnings/');
+  },
 };

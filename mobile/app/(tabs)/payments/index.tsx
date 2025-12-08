@@ -31,12 +31,25 @@ export default function PaymentsScreen() {
 
   const fetchPayments = async () => {
     try {
-      const [paymentsRes, walletRes] = await Promise.all([
-        paymentsAPI.getMyPayments(),
-        paymentsAPI.getMyWallet(),
-      ]);
-      setPayments(paymentsRes.data);
-      setWalletData(walletRes.data);
+      // Try farmer earnings endpoint first, fall back to general payments
+      try {
+        const earningsRes = await paymentsAPI.getFarmerEarnings();
+        setPayments(earningsRes.data.payments);
+        setWalletData({
+          balance: earningsRes.data.summary.total_earnings,
+          pending_payments: earningsRes.data.summary.pending_payments,
+          total_earned: earningsRes.data.summary.total_earnings,
+          currency: 'INR'
+        });
+      } catch {
+        // Not a farmer or endpoint unavailable, use general endpoints
+        const [paymentsRes, walletRes] = await Promise.all([
+          paymentsAPI.getMyPayments(),
+          paymentsAPI.getMyWallet(),
+        ]);
+        setPayments(paymentsRes.data);
+        setWalletData(walletRes.data);
+      }
     } catch (error) {
       console.error('Failed to fetch payments:', error);
       Alert.alert('Error', 'Failed to load payments');

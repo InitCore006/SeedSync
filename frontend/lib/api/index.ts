@@ -595,6 +595,9 @@ export const retailerAPI = {
     api.get<APIResponse>('/retailers/suppliers/'),
 };
 
+// Import payments API
+import { paymentsAPI } from './payments';
+
 // Export all APIs
 export const API = {
   auth: authAPI,
@@ -608,6 +611,7 @@ export const API = {
   crops: cropsAPI,
   notifications: notificationsAPI,
   marketplace: marketplaceAPI,
+  payments: paymentsAPI,
 };
 
 export default API;

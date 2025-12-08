@@ -113,31 +113,142 @@ class Bid(TimeStampedModel):
         super().save(*args, **kwargs)
     
     def accept(self, farmer_response=""):
-        """Accept the bid"""
+        """Accept the bid and create payment record"""
         from django.utils import timezone
+        from django.db import transaction
+        from decimal import Decimal
         
-        self.status = 'accepted'
-        self.farmer_response = farmer_response
-        self.responded_at = timezone.now()
-        self.save()
+        with transaction.atomic():
+            self.status = 'accepted'
+            self.farmer_response = farmer_response
+            self.responded_at = timezone.now()
+            self.save()
+            
+            # Update lot status
+            self.lot.status = 'sold'
+            self.lot.final_price_per_quintal = self.offered_price_per_quintal
+            self.lot.sold_date = timezone.now()
+            self.lot.save()
+            
+            # Reject other pending bids
+            self.lot.bids.filter(status='pending').exclude(id=self.id).update(
+                status='rejected',
+                farmer_response="Another bid was accepted"
+            )
+            
+            # Create bid acceptance record
+            bid_acceptance = BidAcceptance.objects.create(
+                bid=self,
+                pickup_scheduled_date=self.expected_pickup_date
+            )
+            
+            # Create payment record automatically
+            payment = self._create_payment_for_bid(bid_acceptance)
+            
+            # Link payment to bid acceptance
+            bid_acceptance.payment = payment
+            bid_acceptance.save(update_fields=['payment'])
+            
+            return bid_acceptance
+    
+    def _create_payment_for_bid(self, bid_acceptance):
+        """Create payment record when bid is accepted"""
+        from apps.payments.models import Payment
+        from decimal import Decimal
         
-        # Update lot status
-        self.lot.status = 'sold'
-        self.lot.final_price_per_quintal = self.offered_price_per_quintal
-        self.lot.sold_date = timezone.now()
-        self.lot.save()
+        lot = self.lot
+        gross_amount = self.total_amount
         
-        # Reject other pending bids
-        self.lot.bids.filter(status='pending').exclude(id=self.id).update(
-            status='rejected',
-            farmer_response="Another bid was accepted"
-        )
+        # Determine payment recipient and commission
+        # Case 1: FPO-managed lot (FPO manages on behalf of farmer)
+        if lot.managed_by_fpo and lot.fpo and lot.farmer:
+            farmer = lot.farmer
+            fpo = lot.fpo
+            
+            # Get FPO membership to check commission rate
+            try:
+                from apps.fpos.models import FPOMembership
+                membership = FPOMembership.objects.get(farmer=farmer, fpo=fpo, is_active=True)
+                # Use 2.5% default commission if not specified
+                commission_percentage = Decimal('2.5')
+            except:
+                commission_percentage = Decimal('2.5')
+            
+            commission_amount = (gross_amount * commission_percentage) / Decimal('100')
+            
+            # Create payment to farmer (net of commission)
+            payment = Payment.objects.create(
+                lot=lot,
+                bid=self,
+                payer_id=self.bidder_id,
+                payer_name=self.bidder_name,
+                payer_type=self.bidder_type,
+                payee_id=farmer.id,
+                payee_name=farmer.full_name,
+                payee_account_number=farmer.bank_account_number or '',
+                payee_ifsc_code=farmer.ifsc_code or '',
+                gross_amount=gross_amount,
+                commission_amount=commission_amount,
+                commission_percentage=commission_percentage,
+                tax_amount=Decimal('0'),  # Can add tax calculation later
+                payment_method='wallet',
+                status='pending',
+                notes=f'Payment for lot {lot.lot_number} - FPO managed (Commission: ₹{commission_amount} to {fpo.organization_name})'
+            )
+            
+            # Store FPO info in notes for commission distribution
+            payment.notes += f'\nFPO: {fpo.organization_name} (ID: {fpo.id})'
+            payment.save()
+            
+        # Case 2: FPO-aggregated lot (no specific farmer, FPO is payee)
+        elif lot.listing_type == 'fpo_aggregated' and lot.fpo and not lot.farmer:
+            fpo = lot.fpo
+            
+            payment = Payment.objects.create(
+                lot=lot,
+                bid=self,
+                payer_id=self.bidder_id,
+                payer_name=self.bidder_name,
+                payer_type=self.bidder_type,
+                payee_id=fpo.id,
+                payee_name=fpo.organization_name,
+                payee_account_number=fpo.bank_account_number or '',
+                payee_ifsc_code=fpo.ifsc_code or '',
+                gross_amount=gross_amount,
+                commission_amount=Decimal('0'),
+                commission_percentage=Decimal('0'),
+                tax_amount=Decimal('0'),
+                payment_method='wallet',
+                status='pending',
+                notes=f'Payment for aggregated lot {lot.lot_number} - Direct to FPO'
+            )
+            
+        # Case 3: Individual farmer lot (direct payment to farmer)
+        elif lot.farmer:
+            farmer = lot.farmer
+            
+            payment = Payment.objects.create(
+                lot=lot,
+                bid=self,
+                payer_id=self.bidder_id,
+                payer_name=self.bidder_name,
+                payer_type=self.bidder_type,
+                payee_id=farmer.id,
+                payee_name=farmer.full_name,
+                payee_account_number=farmer.bank_account_number or '',
+                payee_ifsc_code=farmer.ifsc_code or '',
+                gross_amount=gross_amount,
+                commission_amount=Decimal('0'),
+                commission_percentage=Decimal('0'),
+                tax_amount=Decimal('0'),
+                payment_method='wallet',
+                status='pending',
+                notes=f'Payment for lot {lot.lot_number} - Direct to farmer'
+            )
+        else:
+            raise ValueError("Cannot determine payment recipient for this lot")
         
-        # Create bid acceptance record
-        BidAcceptance.objects.create(
-            bid=self,
-            pickup_scheduled_date=self.expected_pickup_date
-        )
+        return payment
     
     def reject(self, farmer_response=""):
         """Reject the bid"""

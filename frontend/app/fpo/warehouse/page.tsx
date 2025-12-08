@@ -402,12 +402,33 @@ function WarehouseContent() {
     wh.district?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalCapacity = warehouseList.reduce((sum: number, wh: any) => sum + (wh.capacity_quintals || 0), 0);
-  const totalStock = warehouseList.reduce((sum: number, wh: any) => sum + (wh.current_stock_quintals || 0), 0);
+  // Calculate actual stock from lots (only count available, bidding, and sold status lots)
+  const lotsArray = Array.isArray(allLots) ? allLots : [];
+  const warehouseStockMap = lotsArray.reduce((acc: Record<string, number>, lot: any) => {
+    if (lot.warehouse_id && ['available', 'bidding', 'sold'].includes(lot.status)) {
+      acc[lot.warehouse_id] = (acc[lot.warehouse_id] || 0) + (lot.quantity_quintals || 0);
+    }
+    return acc;
+  }, {});
+
+  // Enrich warehouse data with calculated stock
+  const enrichedWarehouses = warehouseList.map((wh: any) => ({
+    ...wh,
+    calculated_stock: warehouseStockMap[wh.id] || 0
+  }));
+
+  // Filter warehouses after enrichment
+  const filteredEnrichedWarehouses = enrichedWarehouses.filter((wh: any) =>
+    wh.warehouse_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    wh.district?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const totalCapacity = enrichedWarehouses.reduce((sum: number, wh: any) => sum + (wh.capacity_quintals || 0), 0);
+  const totalStock = enrichedWarehouses.reduce((sum: number, wh: any) => sum + (wh.calculated_stock || 0), 0);
   const avgUtilization = totalCapacity > 0 ? (totalStock / totalCapacity * 100) : 0;
-  const lowCapacityWarehouses = warehouseList.filter((wh: any) => 
-    wh.current_stock_quintals && wh.capacity_quintals && 
-    (wh.current_stock_quintals / wh.capacity_quintals) > 0.8
+  const lowCapacityWarehouses = enrichedWarehouses.filter((wh: any) => 
+    wh.calculated_stock && wh.capacity_quintals && 
+    (wh.calculated_stock / wh.capacity_quintals) > 0.8
   ).length;
 
   const handleViewInventory = (warehouse: any) => {
@@ -546,14 +567,14 @@ function WarehouseContent() {
       {/* Warehouses Grid */}
       <Card>
         <CardHeader>
-          <CardTitle>Warehouses ({filteredWarehouses.length})</CardTitle>
+          <CardTitle>Warehouses ({filteredEnrichedWarehouses.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredWarehouses.length > 0 ? (
+          {filteredEnrichedWarehouses.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredWarehouses.map((warehouse: any) => {
+              {filteredEnrichedWarehouses.map((warehouse: any) => {
                 const utilization = warehouse.capacity_quintals > 0 
-                  ? (warehouse.current_stock_quintals / warehouse.capacity_quintals * 100) 
+                  ? (warehouse.calculated_stock / warehouse.capacity_quintals * 100) 
                   : 0;
                 const isHighUtilization = utilization > 80;
                 
@@ -591,7 +612,7 @@ function WarehouseContent() {
                           <div>
                             <p className="text-xs text-gray-600">Current Stock</p>
                             <p className="text-lg font-bold text-gray-900">
-                              {formatNumber(warehouse.current_stock_quintals || 0)}
+                              {formatNumber(warehouse.calculated_stock || 0)}
                             </p>
                             <p className="text-xs text-gray-500">quintals</p>
                           </div>
@@ -671,7 +692,7 @@ function WarehouseContent() {
             <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
               <div>
                 <p className="text-sm text-gray-600">Current Stock</p>
-                <p className="text-2xl font-bold text-gray-900">{formatNumber(selectedWarehouse.current_stock_quintals || 0)} Q</p>
+                <p className="text-2xl font-bold text-gray-900">{formatNumber(selectedWarehouse.calculated_stock || 0)} Q</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Capacity</p>
@@ -680,7 +701,7 @@ function WarehouseContent() {
               <div>
                 <p className="text-sm text-gray-600">Available</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {formatNumber(selectedWarehouse.capacity_quintals - selectedWarehouse.current_stock_quintals)} Q
+                  {formatNumber(selectedWarehouse.capacity_quintals - selectedWarehouse.calculated_stock)} Q
                 </p>
               </div>
             </div>
@@ -702,7 +723,7 @@ function WarehouseContent() {
                       <div className="text-right">
                         <p className="font-bold text-gray-900">{formatNumber(data.quantity)} Q</p>
                         <p className="text-xs text-gray-500">
-                          {((data.quantity / selectedWarehouse.current_stock_quintals) * 100).toFixed(1)}% of stock
+                          {selectedWarehouse.calculated_stock > 0 ? ((data.quantity / selectedWarehouse.calculated_stock) * 100).toFixed(1) : '0.0'}% of stock
                         </p>
                       </div>
                     </div>
