@@ -347,16 +347,22 @@ function FPOPaymentsContent() {
                 )}
 
                 {/* Actions */}
-                {payment.status === 'pending' && payment.payer_type === 'fpo' && (
-                  <div className="flex gap-2">
+                <div className="flex gap-2 pt-2">
+                  {payment.status === 'pending' && payment.payer_type === 'fpo' && (
                     <button
                       onClick={() => handlePayNow(payment)}
-                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                      className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                     >
+                      <Wallet className="w-4 h-4" />
                       Pay Now
                     </button>
-                  </div>
-                )}
+                  )}
+                  {payment.status === 'pending' && payment.payer_type !== 'fpo' && (
+                    <div className="px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                      Awaiting payment from {payment.payer_name}
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}

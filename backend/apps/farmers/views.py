@@ -8,12 +8,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
-from .models import FarmerProfile, FarmLand, CropPlanning
+from .models import FarmerProfile, FarmLand, CropPlanning, CropPlan
 from .serializers import (
     FarmerProfileSerializer, FarmerProfileCreateSerializer,
     FarmerProfileUpdateSerializer, FarmLandSerializer,
     FarmLandCreateSerializer, CropPlanningSerializer,
-    CropPlanningCreateSerializer
+    CropPlanningCreateSerializer, CropPlanSerializer,
+    CropPlanCreateSerializer, CropPlanUpdateSerializer
 )
 from apps.core.permissions import IsFarmer, IsOwner
 from apps.core.utils import response_success, response_error, calculate_distance
@@ -676,3 +677,221 @@ class FarmerJoinRequestsAPIView(APIView):
             data=serializer.data,
             message=f"Found {len(serializer.data)} join requests"
         ))
+
+
+class CropPlanViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for simplified Crop Plans with financial data
+    """
+    permission_classes = [IsAuthenticated, IsFarmer]
+    
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return CropPlanCreateSerializer
+        elif self.action in ['update', 'partial_update']:
+            return CropPlanUpdateSerializer
+        return CropPlanSerializer
+    
+    def get_queryset(self):
+        """Filter to only show current farmer's plans"""
+        user = self.request.user
+        try:
+            farmer_profile = FarmerProfile.objects.get(user=user)
+            queryset = CropPlan.objects.filter(farmer=farmer_profile).select_related(
+                'farmer', 'farm_land', 'converted_lot'
+            )
+            
+            # Filter by status
+            status_filter = self.request.query_params.get('status')
+            if status_filter:
+                queryset = queryset.filter(status=status_filter)
+            
+            # Filter by season
+            season = self.request.query_params.get('season')
+            if season:
+                queryset = queryset.filter(season=season)
+            
+            # Filter by crop type
+            crop_type = self.request.query_params.get('crop_type')
+            if crop_type:
+                queryset = queryset.filter(crop_type=crop_type)
+            
+            return queryset
+        except FarmerProfile.DoesNotExist:
+            return CropPlan.objects.none()
+    
+    def create(self, request, *args, **kwargs):
+        """Create a new crop plan"""
+        try:
+            farmer_profile = FarmerProfile.objects.get(user=request.user)
+        except FarmerProfile.DoesNotExist:
+            return Response(
+                response_error(message="Farmer profile not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(farmer=farmer_profile)
+            return Response(
+                response_success(
+                    message="Crop plan created successfully",
+                    data=CropPlanSerializer(serializer.instance).data
+                ),
+                status=status.HTTP_201_CREATED
+            )
+        return Response(
+            response_error(message="Failed to create crop plan", errors=serializer.errors),
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    def update(self, request, *args, **kwargs):
+        """Update crop plan"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # Check if already converted
+        if instance.status == 'converted_to_lot':
+            return Response(
+                response_error(message="Cannot modify a plan that has been converted to a lot"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                response_success(
+                    message="Crop plan updated successfully",
+                    data=CropPlanSerializer(serializer.instance).data
+                )
+            )
+        return Response(
+            response_error(message="Failed to update crop plan", errors=serializer.errors),
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    @action(detail=True, methods=['post'])
+    def convert_to_lot(self, request, pk=None):
+        """
+        Convert a harvested crop plan to a procurement lot
+        POST /api/farmers/crop-plans/{id}/convert-to-lot/
+        """
+        plan = self.get_object()
+        
+        try:
+            lot = plan.create_lot_from_plan()
+            
+            return Response(
+                response_success(
+                    message="Crop plan successfully converted to procurement lot",
+                    data={
+                        'plan_id': plan.id,
+                        'lot_id': lot.id,
+                        'lot_number': lot.lot_number,
+                        'conversion_date': plan.conversion_date.isoformat()
+                    }
+                ),
+                status=status.HTTP_201_CREATED
+            )
+        except ValueError as e:
+            return Response(
+                response_error(message=str(e)),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                response_error(message=f"Failed to convert plan to lot: {str(e)}"),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        """
+        Update the status of a crop plan
+        POST /api/farmers/crop-plans/{id}/update-status/
+        Body: { "status": "growing", "actual_yield_quintals": 25.5 (optional) }
+        """
+        plan = self.get_object()
+        new_status = request.data.get('status')
+        actual_yield = request.data.get('actual_yield_quintals')
+        
+        if not new_status:
+            return Response(
+                response_error(message="Status is required"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate status
+        valid_statuses = ['planned', 'sowing', 'growing', 'ready_to_harvest', 'harvested']
+        if new_status not in valid_statuses:
+            return Response(
+                response_error(message=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update actual yield if provided and status is harvested
+        if actual_yield and new_status == 'harvested':
+            try:
+                plan.actual_yield_quintals = float(actual_yield)
+            except ValueError:
+                return Response(
+                    response_error(message="Invalid actual_yield_quintals value"),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        plan.status = new_status
+        plan.save()
+        
+        return Response(
+            response_success(
+                message=f"Status updated to {new_status}",
+                data=CropPlanSerializer(plan).data
+            )
+        )
+    
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """
+        Get crop plan statistics for the farmer
+        GET /api/farmers/crop-plans/statistics/
+        """
+        try:
+            farmer_profile = FarmerProfile.objects.get(user=request.user)
+            from django.db import models as django_models
+            plans = CropPlan.objects.filter(farmer=farmer_profile)
+            
+            stats = {
+                'total_plans': plans.count(),
+                'active_plans': plans.filter(status__in=['sowing', 'growing', 'ready_to_harvest']).count(),
+                'harvested_plans': plans.filter(status='harvested').count(),
+                'converted_to_lots': plans.filter(status='converted_to_lot').count(),
+                'total_land_planned': float(plans.aggregate(
+                    total=django_models.Sum('land_acres')
+                )['total'] or 0),
+                'total_estimated_revenue': float(plans.aggregate(
+                    total=django_models.Sum('gross_revenue')
+                )['total'] or 0),
+                'total_estimated_profit': float(plans.aggregate(
+                    total=django_models.Sum('net_profit')
+                )['total'] or 0),
+                'crops_by_status': {},
+            }
+            
+            # Group by status
+            from django.db.models import Count
+            status_counts = plans.values('status').annotate(count=Count('id'))
+            for item in status_counts:
+                stats['crops_by_status'][item['status']] = item['count']
+            
+            return Response(
+                response_success(
+                    message="Statistics retrieved successfully",
+                    data=stats
+                )
+            )
+        except FarmerProfile.DoesNotExist:
+            return Response(
+                response_error(message="Farmer profile not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )

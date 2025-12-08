@@ -2,7 +2,7 @@
 Admin configuration for Farmers App
 """
 from django.contrib import admin
-from .models import FarmerProfile, FarmLand, CropPlanning
+from .models import FarmerProfile, FarmLand, CropPlanning, CropPlan
 
 
 @admin.register(FarmerProfile)
@@ -41,3 +41,47 @@ class CropPlanningAdmin(admin.ModelAdmin):
     search_fields = ['farmer__full_name', 'farm_land__land_name']
     ordering = ['-sowing_date']
     readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(CropPlan)
+class CropPlanAdmin(admin.ModelAdmin):
+    list_display = ['id', 'farmer', 'crop_name', 'land_acres', 'sowing_date', 'status', 'net_profit', 'created_at']
+    list_filter = ['status', 'season', 'crop_type', 'sowing_date', 'created_at']
+    search_fields = ['farmer__full_name', 'crop_name', 'crop_type', 'notes']
+    ordering = ['-created_at', '-sowing_date']
+    readonly_fields = [
+        'expected_harvest_date', 'gross_revenue', 'total_input_costs', 
+        'net_profit', 'profit_per_acre', 'roi_percentage',
+        'converted_lot', 'conversion_date', 'created_at', 'updated_at'
+    ]
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('farmer', 'farm_land', 'crop_type', 'crop_name', 'land_acres', 'season')
+        }),
+        ('Timeline', {
+            'fields': ('sowing_date', 'maturity_days', 'expected_harvest_date', 'status')
+        }),
+        ('Yield & MSP', {
+            'fields': (
+                'msp_price_per_quintal', 'estimated_yield_quintals', 
+                'estimated_yield_per_acre', 'actual_yield_quintals', 'gross_revenue'
+            )
+        }),
+        ('Input Costs', {
+            'fields': (
+                'seed_cost', 'fertilizer_cost', 'pesticide_cost', 
+                'labor_cost', 'irrigation_cost', 'total_input_costs'
+            )
+        }),
+        ('Profitability', {
+            'fields': ('net_profit', 'profit_per_acre', 'roi_percentage')
+        }),
+        ('Lot Conversion', {
+            'fields': ('converted_lot', 'conversion_date'),
+            'classes': ('collapse',)
+        }),
+        ('Additional', {
+            'fields': ('notes', 'created_at', 'updated_at')
+        }),
+    )

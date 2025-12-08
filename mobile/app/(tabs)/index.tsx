@@ -334,10 +334,10 @@ export default function DashboardScreen() {
       onPress: () => router.push('/(tabs)/lots/create'),
     },
     {
-      title: 'Find FPO',
-      icon: 'business',
-      color: '#8b5cf6',
-      onPress: () => router.push('/fpo-finder'),
+      title: 'Crop Planner',
+      icon: 'calendar',
+      color: '#0284c7',
+      onPress: () => router.push('/crop-planner'),
     },
     {
       title: 'Disease AI',
@@ -346,10 +346,10 @@ export default function DashboardScreen() {
       onPress: () => router.push('/ai/disease-detection'),
     },
     {
-      title: user?.profile?.fpo_membership ? 'My FPO' : 'Gov Schemes',
-      icon: user?.profile?.fpo_membership ? 'people' : 'shield-checkmark',
-      color: COLORS.warning,
-      onPress: () => router.push(user?.profile?.fpo_membership ? '/fpos/my-fpo' : '/(tabs)/schemes'),
+      title: 'Find FPO',
+      icon: 'business',
+      color: '#8b5cf6',
+      onPress: () => router.push('/fpo-finder'),
     },
   ];
 
