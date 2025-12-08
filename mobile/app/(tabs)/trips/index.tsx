@@ -10,13 +10,20 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { COLORS } from '@/constants/colors';
+<<<<<<< Updated upstream
 import { AppHeader, Sidebar, ShipmentCard, Loading } from '@/components';
+=======
+import { ShipmentCard, Loading } from '@/components';
+>>>>>>> Stashed changes
 import { logisticsAPI } from '@/services/logisticsService';
 import { Shipment } from '@/types/api';
 import { useLogisticsStore } from '@/store/logisticsStore';
 
 export default function TripsScreen() {
+<<<<<<< Updated upstream
   const [sidebarVisible, setSidebarVisible] = useState(false);
+=======
+>>>>>>> Stashed changes
   const [activeTab, setActiveTab] = useState<'pending' | 'active' | 'completed'>('active');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -114,6 +121,7 @@ export default function TripsScreen() {
   const displayShipments = getFilteredShipments();
 
   if (loading) {
+<<<<<<< Updated upstream
     return (
       <View style={{ flex: 1 }}>
         <AppHeader 
@@ -124,15 +132,21 @@ export default function TripsScreen() {
         <Loading fullScreen />
       </View>
     );
+=======
+    return <Loading fullScreen />;
+>>>>>>> Stashed changes
   }
 
   return (
     <View style={styles.container}>
+<<<<<<< Updated upstream
       <AppHeader 
         title="My Trips"
         onMenuPress={() => setSidebarVisible(true)}
       />
       <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+=======
+>>>>>>> Stashed changes
       {/* Tabs */}
       <View style={styles.tabs}>
         <TouchableOpacity

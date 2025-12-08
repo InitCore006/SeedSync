@@ -64,10 +64,10 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="mt-8 space-y-6 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
           <div className="space-y-4">
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none mt-7">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Phone className="h-5 w-5 text-gray-400" />
               </div>
-              <div className="absolute inset-y-0 left-10 flex items-center pointer-events-none mt-7 text-gray-500 font-medium">
+              <div className="absolute inset-y-0 left-9 flex items-center pointer-events-none text-gray-500 font-medium text-sm">
                 +91
               </div>
               <Input

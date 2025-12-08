@@ -12,12 +12,19 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
+<<<<<<< Updated upstream
 import { AppHeader, Sidebar, ShipmentCard, Loading } from '@/components';
+=======
+import { ShipmentCard, Loading } from '@/components';
+>>>>>>> Stashed changes
 import { logisticsAPI } from '@/services/logisticsService';
 import { useLogisticsStore } from '@/store/logisticsStore';
 
 export default function HistoryScreen() {
+<<<<<<< Updated upstream
   const [sidebarVisible, setSidebarVisible] = useState(false);
+=======
+>>>>>>> Stashed changes
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { tripHistory, setTripHistory, earnings, setEarnings } = useLogisticsStore();
@@ -50,6 +57,7 @@ export default function HistoryScreen() {
   };
 
   if (loading) {
+<<<<<<< Updated upstream
     return (
       <View style={{ flex: 1 }}>
         <AppHeader 
@@ -75,6 +83,18 @@ export default function HistoryScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
+=======
+    return <Loading fullScreen />;
+  }
+
+  return (
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+>>>>>>> Stashed changes
       {/* Earnings Summary */}
       {earnings && (
         <View style={styles.earningsSection}>
@@ -141,10 +161,17 @@ export default function HistoryScreen() {
           </View>
         )}
       </View>
+<<<<<<< Updated upstream
     </ScrollView> 
     </View>
   );
 }
+=======
+    </ScrollView>
+  );
+}
+
+>>>>>>> Stashed changes
 const styles = StyleSheet.create({
   container: {
     flex: 1,

@@ -15,14 +15,17 @@ from decimal import Decimal
 
 from apps.core.utils import response_success, response_error
 from apps.core.permissions import IsProcessor
-from .models import ProcessorProfile, ProcessingPlant, ProcessingBatch, ProcessingStageLog, FinishedProduct
+from .models import ProcessorProfile, ProcessingPlant, ProcessingBatch, ProcessingStageLog, FinishedProduct, ProcessedProduct
 from .serializers import (
     ProcessorProfileSerializer, 
     ProcessingPlantSerializer, 
     ProcessingBatchSerializer,
     ProcessingBatchCreateSerializer,
     ProcessingStageLogSerializer,
-    FinishedProductSerializer
+    FinishedProductSerializer,
+    ProcessedProductSerializer,
+    ProcessedProductCreateSerializer,
+    ProcessedProductListSerializer
 )
 from apps.lots.models import ProcurementLot
 from apps.bids.models import Bid
@@ -714,6 +717,9 @@ class ProcessingBatchesAPIView(APIView):
             batches_data.append({
                 'id': str(batch.id),
                 'batch_number': batch.batch_number,
+                'status': batch.status,
+                'input_crop': batch.lot.crop_type if batch.lot else 'Unknown',
+                'output_product': f"{batch.lot.crop_type} Oil" if batch.lot else 'Oil',
                 'lot': {
                     'id': str(batch.lot.id) if batch.lot else None,
                     'lot_number': batch.lot.lot_number if batch.lot else None,
@@ -723,10 +729,20 @@ class ProcessingBatchesAPIView(APIView):
                     'id': str(batch.plant.id),
                     'name': batch.plant.plant_name,
                 },
-                'processed_quantity': float(batch.processed_quantity) if batch.processed_quantity else 0,
-                'oil_extracted': float(batch.oil_extracted) if batch.oil_extracted else 0,
-                'cake_produced': float(batch.cake_produced) if batch.cake_produced else 0,
-                'processing_date': batch.processing_date.isoformat() if batch.processing_date else None,
+                'initial_quantity_quintals': float(batch.initial_quantity_quintals),
+                'oil_extracted_quintals': float(batch.oil_extracted_quintals) if batch.oil_extracted_quintals else 0,
+                'oil_extracted_liters': float(batch.oil_extracted_quintals * 110) if batch.oil_extracted_quintals else 0,
+                'cake_produced_quintals': float(batch.cake_produced_quintals) if batch.cake_produced_quintals else 0,
+                'waste_quantity_quintals': float(batch.waste_quantity_quintals) if batch.waste_quantity_quintals else 0,
+                'yield_percentage': float(batch.yield_percentage) if batch.yield_percentage else 0,
+                'quality_grade': batch.quality_grade or 'N/A',
+                'processing_method': batch.processing_method,
+                'current_stage': batch.current_stage,
+                'current_stage_display': batch.get_current_stage_display(),
+                'start_date': batch.start_date.isoformat() if batch.start_date else None,
+                'completion_date': batch.completion_date.isoformat() if batch.completion_date else None,
+                'started_at': batch.processing_start_date.isoformat() if batch.processing_start_date else batch.created_at.isoformat(),
+                'completed_at': batch.processing_end_date.isoformat() if batch.processing_end_date else None,
                 'created_at': batch.created_at.isoformat(),
             })
         
@@ -819,30 +835,35 @@ class ProcessorInventoryAPIView(APIView):
                     'status': 'optimal'
                 })
         
-        # Get processed batches
-        processed_batches = ProcessingBatch.objects.filter(
-            plant__processor=processor
-        ).values('lot__crop_type').annotate(
-            total_oil=Sum('oil_extracted_quintals'),
-            total_cake=Sum('cake_produced_quintals')
-        )
+        # Get finished products from FinishedProduct model
+        finished_products_qs = FinishedProduct.objects.filter(
+            processor=processor,
+            status='in_stock'
+        ).select_related('batch', 'batch__lot')
         
-        for batch in processed_batches:
-            if batch['total_oil']:
+        # Group by product type and crop
+        for product in finished_products_qs:
+            if product.product_type == 'refined_oil' and product.quantity_liters:
+                # Oil in LITERS
                 finished_products.append({
-                    'name': f"{batch['lot__crop_type']} Oil",
-                    'quantity': float(batch['total_oil']),
-                    'unit': 'quintals',
+                    'name': f"{product.oil_type} Oil",
+                    'quantity': float(product.quantity_liters),
+                    'unit': 'liters',
                     'category': 'finished',
-                    'status': 'optimal'
+                    'status': 'optimal',
+                    'storage_location': product.storage_location,
+                    'quality_grade': product.quality_grade
                 })
-            if batch['total_cake']:
+            elif product.product_type == 'oil_cake' and product.quantity_quintals:
+                # Cake in QUINTALS
                 finished_products.append({
-                    'name': f"{batch['lot__crop_type']} Cake",
-                    'quantity': float(batch['total_cake']),
+                    'name': f"{product.oil_type} Cake",
+                    'quantity': float(product.quantity_quintals),
                     'unit': 'quintals',
                     'category': 'finished',
-                    'status': 'optimal'
+                    'status': 'optimal',
+                    'storage_location': product.storage_location,
+                    'quality_grade': product.quality_grade
                 })
         
         inventory_data = {
@@ -1410,3 +1431,490 @@ class FinishedProductAPIView(APIView):
                 data=serializer.data
             )
         )
+
+
+class ProcessedProductListCreateAPIView(APIView):
+    """
+    List and create processed products (oils in liters)
+    GET /api/processors/products/ - List all products
+    POST /api/processors/products/ - Create new product
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def get(self, request):
+        """List processor's products"""
+        processor = ProcessorProfile.objects.get(user=request.user)
+        
+        products = ProcessedProduct.objects.filter(
+            processor=processor
+        ).select_related('batch').order_by('-created_at')
+        
+        # Filters
+        product_type = request.query_params.get('product_type')
+        if product_type:
+            products = products.filter(product_type=product_type)
+        
+        is_available = request.query_params.get('is_available')
+        if is_available:
+            products = products.filter(is_available_for_sale=is_available.lower() == 'true')
+        
+        serializer = ProcessedProductListSerializer(products, many=True)
+        
+        return Response(
+            response_success(
+                message="Products fetched successfully",
+                data=serializer.data
+            )
+        )
+    
+    def post(self, request):
+        """Create new processed product"""
+        serializer = ProcessedProductCreateSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            product = serializer.save()
+            response_serializer = ProcessedProductSerializer(product)
+            return Response(
+                response_success(
+                    message="Product created successfully",
+                    data=response_serializer.data
+                ),
+                status=status.HTTP_201_CREATED
+            )
+        
+        return Response(
+            response_error(
+                message="Failed to create product",
+                errors=serializer.errors
+            ),
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class ProcessedProductDetailAPIView(APIView):
+    """
+    Get, update, delete specific processed product
+    GET /api/processors/products/<id>/
+    PATCH /api/processors/products/<id>/
+    DELETE /api/processors/products/<id>/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def get_object(self, pk, processor):
+        """Get product object"""
+        try:
+            return ProcessedProduct.objects.get(pk=pk, processor=processor)
+        except ProcessedProduct.DoesNotExist:
+            return None
+    
+    def get(self, request, pk):
+        """Get product details"""
+        processor = ProcessorProfile.objects.get(user=request.user)
+        product = self.get_object(pk, processor)
+        
+        if not product:
+            return Response(
+                response_error(message="Product not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = ProcessedProductSerializer(product)
+        return Response(
+            response_success(
+                message="Product fetched successfully",
+                data=serializer.data
+            )
+        )
+    
+    def patch(self, request, pk):
+        """Update product"""
+        processor = ProcessorProfile.objects.get(user=request.user)
+        product = self.get_object(pk, processor)
+        
+        if not product:
+            return Response(
+                response_error(message="Product not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = ProcessedProductSerializer(
+            product,
+            data=request.data,
+            partial=True
+        )
+        
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                response_success(
+                    message="Product updated successfully",
+                    data=serializer.data
+                )
+            )
+        
+        return Response(
+            response_error(
+                message="Failed to update product",
+                errors=serializer.errors
+            ),
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    def delete(self, request, pk):
+        """Delete product"""
+        processor = ProcessorProfile.objects.get(user=request.user)
+        product = self.get_object(pk, processor)
+        
+        if not product:
+            return Response(
+                response_error(message="Product not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if product has reserved quantity
+        if product.reserved_quantity_liters > 0:
+            return Response(
+                response_error(
+                    message="Cannot delete product with reserved quantity"
+                ),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        product.delete()
+        return Response(
+            response_success(message="Product deleted successfully"),
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+
+class ProcessorStartProcessingAPIView(APIView):
+    """
+    Start processing a batch - converts raw materials to finished goods
+    POST: /api/processors/batches/start-processing/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def post(self, request):
+        processor = request.user.processor_profile
+        batch_id = request.data.get('batch_id')
+        
+        try:
+            batch = ProcessingBatch.objects.get(
+                id=batch_id,
+                plant__processor=processor
+            )
+            
+            if batch.status != 'pending':
+                return Response(
+                    response_error(message='Batch is not in pending status'),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update batch status
+            batch.status = 'in_progress'
+            batch.processing_start_date = timezone.now().date()
+            batch.start_date = timezone.now()
+            batch.save()
+            
+            return Response(
+                response_success(
+                    message='Processing started successfully',
+                    data={'batch': ProcessingBatchSerializer(batch).data}
+                ),
+                status=status.HTTP_200_OK
+            )
+            
+        except ProcessingBatch.DoesNotExist:
+            return Response(
+                response_error(message='Batch not found'),
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class ProcessorCompleteProcessingAPIView(APIView):
+    """
+    Complete processing a batch - creates finished goods (oil & cake)
+    POST: /api/processors/batches/complete-processing/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    @transaction.atomic
+    def post(self, request):
+        processor = request.user.processor_profile
+        batch_id = request.data.get('batch_id')
+        
+        # Processing outputs
+        oil_extracted = Decimal(str(request.data.get('oil_extracted_quintals', 0)))
+        cake_produced = Decimal(str(request.data.get('cake_produced_quintals', 0)))
+        waste_quantity = Decimal(str(request.data.get('waste_quantity_quintals', 0)))
+        quality_grade = request.data.get('quality_grade', 'A')
+        
+        try:
+            batch = ProcessingBatch.objects.get(
+                id=batch_id,
+                plant__processor=processor
+            )
+            
+            if batch.status != 'in_progress':
+                return Response(
+                    response_error(message='Batch is not in progress'),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate quantities
+            total_output = oil_extracted + cake_produced + waste_quantity
+            if total_output > batch.initial_quantity_quintals:
+                return Response(
+                    response_error(message='Total output cannot exceed input quantity'),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update batch with processing results
+            batch.status = 'completed'
+            batch.processing_end_date = timezone.now().date()
+            batch.completion_date = timezone.now()
+            batch.oil_extracted_quintals = oil_extracted
+            batch.cake_produced_quintals = cake_produced
+            batch.waste_quantity_quintals = waste_quantity
+            batch.yield_percentage = (oil_extracted / batch.initial_quantity_quintals) * 100 if batch.initial_quantity_quintals else 0
+            batch.quality_grade = quality_grade
+            batch.save()
+            
+            # Create FinishedProduct for Oil (in LITERS)
+            # Conversion: 1 quintal oil ≈ 110 liters (density ~0.91 kg/L)
+            oil_liters = oil_extracted * 110  # Convert quintals to liters
+            
+            oil_product = FinishedProduct.objects.create(
+                processor=processor,
+                batch=batch,
+                product_type='refined_oil',
+                oil_type=batch.lot.crop_type,
+                quantity_liters=oil_liters,
+                quality_grade=quality_grade,
+                production_date=timezone.now().date(),
+                expiry_date=timezone.now().date() + timedelta(days=365),  # 1 year shelf life
+                status='in_stock',
+                storage_location=batch.plant.plant_name,
+                storage_conditions='cool_dry'
+            )
+            
+            # Create FinishedProduct for Oil Cake (in QUINTALS)
+            cake_product = None
+            if cake_produced > 0:
+                cake_product = FinishedProduct.objects.create(
+                    processor=processor,
+                    batch=batch,
+                    product_type='oil_cake',
+                    oil_type=batch.lot.crop_type,
+                    quantity_quintals=cake_produced,
+                    available_quantity_quintals=cake_produced,
+                    quality_grade=quality_grade,
+                    production_date=timezone.now().date(),
+                    expiry_date=timezone.now().date() + timedelta(days=180),  # 6 months shelf life
+                    status='in_stock',
+                    storage_location=batch.plant.plant_name,
+                    storage_conditions='cool_dry'
+                )
+            
+            # NOTE: ProcessedProduct (marketplace listing) is NOT auto-created
+            # Processors manually list finished goods from inventory to marketplace
+            # This allows them to set pricing, packaging, and descriptions
+            
+            # Update lot status
+            lot = batch.lot
+            lot.status = 'processed'
+            lot.save()
+            
+            return Response(
+                response_success(
+                    message=f'Processing completed. Created {oil_liters:.2f} liters of oil and {cake_produced:.2f} quintals of cake',
+                    data={
+                        'batch': ProcessingBatchSerializer(batch).data,
+                        'oil_produced_liters': float(oil_liters),
+                        'cake_produced_quintals': float(cake_produced),
+                        'yield_percentage': float(batch.yield_percentage)
+                    }
+                ),
+                status=status.HTTP_200_OK
+            )
+            
+        except ProcessingBatch.DoesNotExist:
+            return Response(
+                response_error(message='Batch not found'),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                response_error(message=f'Error completing processing: {str(e)}'),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ProcessorFinishedGoodsAPIView(APIView):
+    """
+    List all finished goods (oil and cake products)
+    GET: /api/processors/finished-goods/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def get(self, request):
+        processor = request.user.processor_profile
+        
+        # Get all finished products
+        finished_goods = FinishedProduct.objects.filter(
+            processor=processor
+        ).select_related('batch', 'batch__lot').order_by('-created_at')
+        
+        goods_data = []
+        for product in finished_goods:
+            goods_data.append({
+                'id': str(product.id),
+                'product_type': product.product_type,
+                'oil_type': product.oil_type,
+                'quantity_liters': float(product.quantity_liters) if product.quantity_liters else 0,
+                'quantity_quintals': float(product.quantity_quintals) if product.quantity_quintals else 0,
+                'available_quantity_quintals': float(product.available_quantity_quintals) if product.available_quantity_quintals else 0,
+                'quality_grade': product.quality_grade,
+                'batch_number': product.batch.batch_number if product.batch else None,
+                'storage_location': product.storage_location,
+                'production_date': product.production_date.isoformat() if product.production_date else None,
+                'expiry_date': product.expiry_date.isoformat() if product.expiry_date else None,
+                'status': product.status,
+                'created_at': product.created_at.isoformat()
+            })
+        
+        # Calculate totals
+        total_oil_liters = FinishedProduct.objects.filter(
+            processor=processor,
+            product_type='refined_oil',
+            status='in_stock'
+        ).aggregate(total=Sum('quantity_liters'))['total'] or 0
+        
+        total_cake_quintals = FinishedProduct.objects.filter(
+            processor=processor,
+            product_type='oil_cake',
+            status='in_stock'
+        ).aggregate(total=Sum('quantity_quintals'))['total'] or 0
+        
+        return Response(
+            response_success(
+                message='Finished goods retrieved successfully',
+                data={
+                    'finished_goods': goods_data,
+                    'summary': {
+                        'total_oil_liters': float(total_oil_liters),
+                        'total_cake_quintals': float(total_cake_quintals),
+                        'total_products': len(goods_data)
+                    }
+                }
+            ),
+            status=status.HTTP_200_OK
+        )
+
+
+class ListFinishedGoodToMarketplaceAPIView(APIView):
+    """
+    List a finished good (oil) to marketplace as ProcessedProduct
+    POST: /api/processors/finished-goods/list-to-marketplace/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    @transaction.atomic
+    def post(self, request):
+        processor = request.user.processor_profile
+        finished_good_id = request.data.get('finished_good_id')
+        
+        # Marketplace listing details
+        selling_price_per_liter = request.data.get('selling_price_per_liter')
+        packaging_type = request.data.get('packaging_type', 'bulk_tanker')
+        processing_type = request.data.get('processing_type', 'cold_pressed')
+        description = request.data.get('description', '')
+        
+        if not all([finished_good_id, selling_price_per_liter]):
+            return Response(
+                response_error(message='finished_good_id and selling_price_per_liter are required'),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            finished_good = FinishedProduct.objects.get(
+                id=finished_good_id,
+                processor=processor,
+                product_type='refined_oil',  # Only oils can be listed
+                status='in_stock'
+            )
+        except FinishedProduct.DoesNotExist:
+            return Response(
+                response_error(message='Finished good not found or not eligible for listing'),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if not finished_good.quantity_liters or finished_good.quantity_liters <= 0:
+            return Response(
+                response_error(message='No stock available to list'),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Generate unique SKU
+        import random
+        sku = f"OIL-{finished_good.batch.batch_number if finished_good.batch else 'DIRECT'}-{random.randint(1000, 9999)}"
+        
+        # Map quality grade
+        quality_map = {'A': 'premium', 'B': 'standard', 'C': 'economy'}
+        quality_grade = quality_map.get(finished_good.quality_grade, 'standard')
+        
+        # Map oil type to product_type - ensure it matches ProcessedProduct choices
+        oil_type_normalized = finished_good.oil_type.lower().replace(' ', '')
+        product_type = f'{oil_type_normalized}_oil'
+        
+        # Set expiry date (1 year from production date if not set)
+        from datetime import timedelta
+        expiry_date = finished_good.expiry_date
+        if not expiry_date or expiry_date <= timezone.now().date():
+            expiry_date = (finished_good.production_date or timezone.now().date()) + timedelta(days=365)
+        
+        # Create ProcessedProduct
+        processed_product = ProcessedProduct.objects.create(
+            processor=processor,
+            batch=finished_good.batch,
+            product_type=product_type,
+            processing_type=processing_type,
+            batch_number=finished_good.batch.batch_number if finished_good.batch else 'N/A',
+            sku=sku,
+            quantity_liters=finished_good.quantity_liters,
+            available_quantity_liters=finished_good.quantity_liters,
+            reserved_quantity_liters=0,
+            quality_grade=quality_grade,
+            packaging_type=packaging_type,
+            packaging_date=timezone.now().date(),
+            manufacturing_date=finished_good.production_date or timezone.now().date(),
+            expiry_date=expiry_date,
+            cost_price_per_liter=0,
+            selling_price_per_liter=selling_price_per_liter,
+            is_available_for_sale=True,
+            storage_location=finished_good.storage_location or 'Main Warehouse',
+            description=description or f"{finished_good.oil_type} oil - {quality_grade} grade"
+        )
+        
+        # Mark finished good as listed (change status to reflect it's now in marketplace)
+        finished_good.status = 'sold'  # Repurposed to mean 'listed to marketplace'
+        finished_good.notes = f"Listed to marketplace as {sku} on {timezone.now().date()}"
+        finished_good.save()
+        
+        return Response(
+            response_success(
+                message='Product listed to marketplace successfully',
+                data={
+                    'processed_product_id': str(processed_product.id),
+                    'sku': sku,
+                    'quantity_liters': float(processed_product.quantity_liters),
+                    'selling_price_per_liter': float(selling_price_per_liter),
+                    'product_type': processed_product.get_product_type_display()
+                }
+            ),
+            status=status.HTTP_201_CREATED
+        )
+

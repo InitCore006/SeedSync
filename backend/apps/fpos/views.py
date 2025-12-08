@@ -1198,6 +1198,160 @@ class FPORemoveMemberAPIView(APIView):
             )
 
 
+class FPOCreateFarmerLotAPIView(APIView):
+    """
+    FPO creates a lot on behalf of a farmer member
+    Allows FPO to list produce for farmers who are their members
+    """
+    permission_classes = [IsAuthenticated, IsFPO]
+    
+    def post(self, request):
+        try:
+            fpo = request.user.fpo_profile
+        except FPOProfile.DoesNotExist:
+            return Response(
+                response_error(message="FPO profile not found"),
+                status=404
+            )
+        
+        # Get farmer by phone number or membership ID
+        farmer_phone = request.data.get('farmer_phone_number')
+        farmer_id = request.data.get('farmer_id')
+        
+        if not farmer_phone and not farmer_id:
+            return Response(
+                response_error(message="Either farmer_phone_number or farmer_id is required"),
+                status=400
+            )
+        
+        # Find farmer
+        try:
+            if farmer_id:
+                farmer = FarmerProfile.objects.get(id=farmer_id)
+            else:
+                # Format phone number
+                if not farmer_phone.startswith('+91'):
+                    farmer_phone = f'+91{farmer_phone}'
+                user = User.objects.get(phone_number=farmer_phone, role='farmer')
+                farmer = user.farmer_profile
+        except (User.DoesNotExist, FarmerProfile.DoesNotExist):
+            return Response(
+                response_error(message="Farmer not found"),
+                status=404
+            )
+        
+        # Verify farmer is a member of this FPO
+        membership = FPOMembership.objects.filter(
+            fpo=fpo,
+            farmer=farmer,
+            is_active=True
+        ).first()
+        
+        if not membership:
+            return Response(
+                response_error(message="Farmer is not a member of your FPO"),
+                status=403
+            )
+        
+        # Create the lot
+        from apps.lots.models import ProcurementLot
+        from apps.core.utils import generate_unique_code
+        
+        lot_data = {
+            'farmer': farmer,
+            'fpo': fpo,
+            'managed_by_fpo': True,
+            'listing_type': 'fpo_managed',
+            'crop_type': request.data.get('crop_type'),
+            'crop_variety': request.data.get('crop_variety', ''),
+            'quantity_quintals': request.data.get('quantity_quintals'),
+            'available_quantity_quintals': request.data.get('quantity_quintals'),
+            'expected_price_per_quintal': request.data.get('expected_price_per_quintal'),
+            'harvest_date': request.data.get('harvest_date'),
+            'quality_grade': request.data.get('quality_grade'),
+            'moisture_content': request.data.get('moisture_content'),
+            'oil_content': request.data.get('oil_content'),
+            'description': request.data.get('description', ''),
+            'status': 'available',
+        }
+        
+        # Optional fields
+        if request.data.get('crop_master_code'):
+            lot_data['crop_master_code'] = request.data.get('crop_master_code')
+        if request.data.get('crop_variety_code'):
+            lot_data['crop_variety_code'] = request.data.get('crop_variety_code')
+        if request.data.get('location_latitude'):
+            lot_data['location_latitude'] = request.data.get('location_latitude')
+        if request.data.get('location_longitude'):
+            lot_data['location_longitude'] = request.data.get('location_longitude')
+        
+        # Assign warehouse if provided
+        warehouse_id = request.data.get('warehouse_id')
+        if warehouse_id:
+            try:
+                warehouse = FPOWarehouse.objects.get(id=warehouse_id, fpo=fpo)
+                lot_data['warehouse'] = warehouse
+            except FPOWarehouse.DoesNotExist:
+                return Response(
+                    response_error(message="Warehouse not found or not owned by your FPO"),
+                    status=404
+                )
+        
+        try:
+            lot = ProcurementLot.objects.create(**lot_data)
+            
+            # Create inventory and stock movement if warehouse is assigned
+            if warehouse_id:
+                from apps.warehouses.models import Inventory, StockMovement
+                
+                # Update or create inventory
+                inventory, created = Inventory.objects.get_or_create(
+                    warehouse=warehouse,
+                    crop_type=lot.crop_type,
+                    crop_variety=lot.crop_variety or 'General',
+                    quality_grade=lot.quality_grade or 'A',
+                    defaults={
+                        'quantity_quintals': lot.quantity_quintals,
+                        'last_updated': timezone.now()
+                    }
+                )
+                
+                if not created:
+                    inventory.quantity_quintals += lot.quantity_quintals
+                    inventory.last_updated = timezone.now()
+                    inventory.save()
+                
+                # Create stock movement record
+                StockMovement.objects.create(
+                    warehouse=warehouse,
+                    lot=lot,
+                    movement_type='inward',
+                    quantity_quintals=lot.quantity_quintals,
+                    reference_number=f'FPO-LOT-{lot.lot_number}',
+                    notes=f'FPO created lot on behalf of farmer {farmer.full_name}'
+                )
+                
+                # Update warehouse stock
+                warehouse.current_stock_quintals += lot.quantity_quintals
+                warehouse.save()
+            
+            from apps.lots.serializers import ProcurementLotSerializer
+            serializer = ProcurementLotSerializer(lot)
+            
+            return Response(
+                response_success(
+                    message="Lot created successfully on behalf of farmer",
+                    data=serializer.data
+                ),
+                status=201
+            )
+        except Exception as e:
+            return Response(
+                response_error(message=f"Failed to create lot: {str(e)}"),
+                status=400
+            )
+
+
 class FPOCreateAggregatedLotAPIView(APIView):
     """
     Create FPO aggregated bulk lot by merging member lots

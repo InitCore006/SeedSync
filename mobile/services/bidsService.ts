@@ -15,7 +15,11 @@ export const bidsAPI = {
   },
 
   // Get bids for a specific lot
+<<<<<<< Updated upstream
   getLotBids: (lotId: string): Promise<AxiosResponse<PaginatedResponse<Bid>>> => {
+=======
+  getLotBids: (lotId: number): Promise<AxiosResponse<Bid[]>> => {
+>>>>>>> Stashed changes
     return api.get(ENDPOINTS.BIDS.LOT_BIDS(lotId));
   },
 
@@ -35,7 +39,11 @@ export const bidsAPI = {
   },
 
   // Reject bid
+<<<<<<< Updated upstream
   rejectBid: (id: number, data?: { reason?: string }): Promise<AxiosResponse<ApiSuccess<Bid>>> => {
+=======
+  rejectBid: (id: number, data?: { farmer_response?: string }): Promise<AxiosResponse<ApiSuccess<Bid>>> => {
+>>>>>>> Stashed changes
     return api.post(ENDPOINTS.BIDS.REJECT(id), data || {});
   },
 };

@@ -231,6 +231,27 @@ export const fpoAPI = {
   }) =>
     api.post<APIResponse>('/fpos/create-farmer/', data),
   
+  // Create lot on behalf of farmer member
+  createFarmerLot: (data: {
+    farmer_phone_number?: string;
+    farmer_id?: string;
+    crop_type: string;
+    crop_variety?: string;
+    crop_master_code?: string;
+    crop_variety_code?: string;
+    quantity_quintals: number;
+    expected_price_per_quintal: number;
+    harvest_date: string;
+    quality_grade?: string;
+    moisture_content?: number;
+    oil_content?: number;
+    warehouse_id?: string;
+    description?: string;
+    location_latitude?: number;
+    location_longitude?: number;
+  }) =>
+    api.post<APIResponse>('/fpos/create-farmer-lot/', data),
+  
   // Remove member (deactivate membership)
   removeMember: (membership_id: string) =>
     api.delete<APIResponse>(`/fpos/members/${membership_id}/remove/`),
@@ -269,6 +290,18 @@ export const marketplaceAPI = {
     listing_type?: string;
   }) =>
     api.get<PaginatedResponse<ProcurementLot>>('/lots/procurement/marketplace/', { params }),
+
+  // Get processed products for B2B marketplace
+  getProducts: (params?: {
+    product_type?: string;
+    processing_type?: string;
+    quality_grade?: string;
+    processor_id?: string;
+    search?: string;
+    min_price?: number;
+    max_price?: number;
+  }) =>
+    api.get<APIResponse>('/marketplace/products/', { params }),
 };
 
 // ============= Processor APIs =============
@@ -307,6 +340,58 @@ export const processorAPI = {
 
   // Get processing batches
   getBatches: (params?: { page?: number }) =>
+    api.get<PaginatedResponse<any>>('/processors/batches/', { params }),
+
+  // Get inventory
+  getInventory: () =>
+    api.get<APIResponse>('/processors/inventory/'),
+
+  // Get processed products (oils in liters)
+  getProducts: (params?: { 
+    product_type?: string; 
+    is_available?: boolean;
+  }) =>
+    api.get<APIResponse>('/processors/products/', { params }),
+
+  // Create processed product
+  createProduct: (data: any) =>
+    api.post<APIResponse>('/processors/products/', data),
+
+  // Update processed product
+  updateProduct: (id: string, data: any) =>
+    api.patch<APIResponse>(`/processors/products/${id}/`, data),
+
+  // Delete processed product
+  deleteProduct: (id: string) =>
+    api.delete(`/processors/products/${id}/`),
+
+  // Processing workflow
+  startProcessing: (data: { batch_id: string }) =>
+    api.post<APIResponse>('/processors/batches/start-processing/', data),
+
+  completeProcessing: (data: {
+    batch_id: string;
+    oil_extracted_quintals: number;
+    cake_produced_quintals: number;
+    waste_quantity_quintals: number;
+    quality_grade: string;
+  }) =>
+    api.post<APIResponse>('/processors/batches/complete-processing/', data),
+
+  getFinishedGoods: () =>
+    api.get<APIResponse>('/processors/finished-goods/'),
+
+  listToMarketplace: (data: {
+    finished_good_id: string;
+    selling_price_per_liter: number;
+    packaging_type?: string;
+    processing_type?: string;
+    description?: string;
+  }) =>
+    api.post<APIResponse>('/processors/finished-goods/list-to-marketplace/', data),
+
+  // Get processing batches (legacy)
+  getBatchesManagement: (params?: { page?: number }) =>
     api.get<PaginatedResponse<any>>('/processors/batches-management/', { params }),
 
   // Create batch
@@ -366,10 +451,6 @@ export const processorAPI = {
     cake_produced_quintals: number;
   }) =>
     api.post<APIResponse>(`/processors/batches-management/${id}/record_output/`, data),
-
-  // Get inventory
-  getInventory: () =>
-    api.get<APIResponse>('/processors/inventory/'),
 };
 
 // ============= Blockchain APIs =============
@@ -456,6 +537,33 @@ export const notificationsAPI = {
     api.post('/notifications/mark-all-read/'),
 };
 
+// ============= Retailer APIs =============
+export const retailerAPI = {
+  // Get retailer dashboard
+  getDashboard: () =>
+    api.get<APIResponse>('/retailers/dashboard/'),
+
+  // Get orders
+  getOrders: (params?: { status?: string }) =>
+    api.get<APIResponse>('/retailers/orders/', { params }),
+
+  // Create order
+  createOrder: (data: any) =>
+    api.post<APIResponse>('/retailers/orders/', data),
+
+  // Get order details
+  getOrder: (id: string) =>
+    api.get<APIResponse>(`/retailers/orders/${id}/`),
+
+  // Get inventory
+  getInventory: (params?: { stock_status?: string }) =>
+    api.get<APIResponse>('/retailers/inventory/', { params }),
+
+  // Get suppliers
+  getSuppliers: () =>
+    api.get<APIResponse>('/retailers/suppliers/'),
+};
+
 // Export all APIs
 export const API = {
   auth: authAPI,
@@ -463,6 +571,7 @@ export const API = {
   bids: bidsAPI,
   fpo: fpoAPI,
   processor: processorAPI,
+  retailer: retailerAPI,
   blockchain: blockchainAPI,
   government: governmentAPI,
   crops: cropsAPI,

@@ -16,6 +16,7 @@ export const paymentsAPI = {
   },
 
   /**
+<<<<<<< Updated upstream
    * Get wallet balance and summary
    */
   getMyWallet: (): Promise<AxiosResponse<ApiSuccess<{
@@ -28,6 +29,8 @@ export const paymentsAPI = {
   },
 
   /**
+=======
+>>>>>>> Stashed changes
    * Get payment details by ID
    */
   getPaymentDetail: (id: number): Promise<AxiosResponse<Payment>> => {

@@ -1,4 +1,8 @@
+<<<<<<< Updated upstream
 import React, { useEffect, useState } from 'react';
+=======
+import React from 'react';
+>>>>>>> Stashed changes
 import {
   View,
   Text,

@@ -5,7 +5,10 @@ export default function TripsLayout() {
   return (
     <Stack
       screenOptions={{
+<<<<<<< Updated upstream
         headerShown: false,
+=======
+>>>>>>> Stashed changes
         headerStyle: {
           backgroundColor: COLORS.primary,
         },

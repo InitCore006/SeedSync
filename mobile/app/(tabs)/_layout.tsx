@@ -42,7 +42,11 @@ export default function TabsLayout() {
         }}
       />
 
+<<<<<<< Updated upstream
       {/* Farmer Tab 2: My Lots */}
+=======
+      {/* Farmer-only Tabs */}
+>>>>>>> Stashed changes
       <Tabs.Screen
         name="lots"
         options={{
@@ -51,6 +55,20 @@ export default function TabsLayout() {
           href: isFarmer ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="leaf" size={size} color={color} />
+<<<<<<< Updated upstream
+=======
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="bids"
+        options={{
+          title: 'Bids',
+          headerShown: false,
+          href: isFarmer ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="pricetag" size={size} color={color} />
+>>>>>>> Stashed changes
           ),
         }}
       />
@@ -87,6 +105,7 @@ export default function TabsLayout() {
         options={{
           title: 'Market',
           headerShown: false,
+<<<<<<< Updated upstream
           href: null,
         }}
       />
@@ -105,15 +124,47 @@ export default function TabsLayout() {
       />
       
       {/* Hidden from bottom tabs - Accessible via Sidebar */}
+=======
+          href: isFarmer ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="stats-chart" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* Logistics-only Tabs */}
+      <Tabs.Screen
+        name="trips"
+        options={{
+          title: 'Trips',
+          headerShown: false,
+          href: isLogistics ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="navigate" size={size} color={color} />
+          ),
+        }}
+      />
+>>>>>>> Stashed changes
       <Tabs.Screen
         name="history"
         options={{
           title: 'History',
           headerShown: false,
+<<<<<<< Updated upstream
           href: null,
         }}
       />
       
+=======
+          href: isLogistics ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="time" size={size} color={color} />
+          ),
+        }}
+      />
+      
+      {/* Payments - Common (hidden from tab bar but accessible via navigation) */}
+>>>>>>> Stashed changes
       <Tabs.Screen
         name="payments"
         options={{
@@ -123,6 +174,7 @@ export default function TabsLayout() {
         }}
       />
 
+<<<<<<< Updated upstream
       <Tabs.Screen
         name="schemes"
         options={{
@@ -133,6 +185,9 @@ export default function TabsLayout() {
       />
 
       {/* Tab 5: Profile - Common to all roles */}
+=======
+      {/* Profile - Common to all roles */}
+>>>>>>> Stashed changes
       <Tabs.Screen
         name="profile"
         options={{

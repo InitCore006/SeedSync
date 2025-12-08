@@ -145,6 +145,13 @@ export default function BidDetailScreen() {
               <Text style={styles.label}>Quantity:</Text>
               <Text style={styles.value}>{bid.lot_details.quantity_quintals} Quintals</Text>
             </View>
+<<<<<<< Updated upstream
+=======
+            <View style={styles.row}>
+              <Text style={styles.label}>Quality:</Text>
+              <Text style={styles.value}>Grade {bid.lot_details.quality_grade}</Text>
+            </View>
+>>>>>>> Stashed changes
           </View>
         </View>
       )}

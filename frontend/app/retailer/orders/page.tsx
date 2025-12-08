@@ -7,55 +7,10 @@ import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
+import Loading from '@/components/ui/Loading';
 import { Package, Search, Clock, CheckCircle, Truck, XCircle } from 'lucide-react';
 import { formatCurrency, formatNumber, formatDate } from '@/lib/utils';
-
-// Mock data - replace with API call
-const mockOrders = [
-  {
-    id: 1,
-    orderNumber: 'ORD-2025-001',
-    supplier: 'ABC Processors Ltd',
-    items: [{ name: 'Soybean Oil', quantity: 500, unit: 'liters', price: 180 }],
-    totalAmount: 90000,
-    status: 'delivered',
-    orderDate: '2025-12-01',
-    deliveryDate: '2025-12-04',
-  },
-  {
-    id: 2,
-    orderNumber: 'ORD-2025-002',
-    supplier: 'XYZ Oil Mills',
-    items: [
-      { name: 'Mustard Oil', quantity: 300, unit: 'liters', price: 200 },
-      { name: 'Groundnut Oil', quantity: 200, unit: 'liters', price: 220 },
-    ],
-    totalAmount: 104000,
-    status: 'in_transit',
-    orderDate: '2025-12-03',
-    expectedDelivery: '2025-12-06',
-  },
-  {
-    id: 3,
-    orderNumber: 'ORD-2025-003',
-    supplier: 'PQR Industries',
-    items: [{ name: 'Sunflower Oil', quantity: 400, unit: 'liters', price: 160 }],
-    totalAmount: 64000,
-    status: 'pending',
-    orderDate: '2025-12-05',
-    expectedDelivery: '2025-12-08',
-  },
-  {
-    id: 4,
-    orderNumber: 'ORD-2025-004',
-    supplier: 'LMN Processors',
-    items: [{ name: 'Sesame Oil', quantity: 150, unit: 'liters', price: 280 }],
-    totalAmount: 42000,
-    status: 'processing',
-    orderDate: '2025-12-05',
-    expectedDelivery: '2025-12-09',
-  },
-];
+import { useRetailerOrders } from '@/lib/hooks/useRetailer';
 
 const statusConfig = {
   pending: { icon: Clock, color: 'text-orange-600', bg: 'bg-orange-50', label: 'Pending' },
@@ -69,16 +24,29 @@ function OrdersContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const filteredOrders = mockOrders.filter(order =>
+  const { orders, isLoading, isError } = useRetailerOrders();
+
+  if (isLoading) return <Loading fullScreen />;
+  if (isError) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+          Failed to load orders
+        </div>
+      </div>
+    );
+  }
+
+  const filteredOrders = orders.filter((order: any) =>
     (statusFilter === 'all' || order.status === statusFilter) &&
-    (order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     order.supplier.toLowerCase().includes(searchQuery.toLowerCase()))
+    (order.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     order.processor_name?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const totalOrders = mockOrders.length;
-  const pendingOrders = mockOrders.filter(o => o.status === 'pending' || o.status === 'processing').length;
-  const completedOrders = mockOrders.filter(o => o.status === 'delivered').length;
-  const totalValue = mockOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+  const totalOrders = orders.length;
+  const pendingOrders = orders.filter((o: any) => o.status === 'pending' || o.status === 'processing').length;
+  const completedOrders = orders.filter((o: any) => o.status === 'delivered').length;
+  const totalValue = orders.reduce((sum: number, o: any) => sum + Number(o.total_amount), 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -171,17 +139,17 @@ function OrdersContent() {
       {/* Orders List */}
       {filteredOrders.length > 0 ? (
         <div className="space-y-4">
-          {filteredOrders.map((order) => {
-            const StatusIcon = statusConfig[order.status as keyof typeof statusConfig].icon;
-            const statusInfo = statusConfig[order.status as keyof typeof statusConfig];
+          {filteredOrders.map((order: any) => {
+            const StatusIcon = statusConfig[order.status as keyof typeof statusConfig]?.icon || Package;
+            const statusInfo = statusConfig[order.status as keyof typeof statusConfig] || statusConfig.pending;
 
             return (
               <Card key={order.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="pt-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900">{order.orderNumber}</h3>
-                      <p className="text-sm text-gray-600 mt-1">{order.supplier}</p>
+                      <h3 className="text-lg font-bold text-gray-900">{order.order_number}</h3>
+                      <p className="text-sm text-gray-600 mt-1">{order.processor_name}</p>
                     </div>
                     <Badge variant="status" status={order.status}>
                       <StatusIcon className="w-4 h-4 mr-1" />
@@ -190,41 +158,43 @@ function OrdersContent() {
                   </div>
 
                   {/* Order Items */}
-                  <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                    <p className="text-xs font-medium text-gray-600 mb-2">ORDER ITEMS</p>
-                    <div className="space-y-2">
-                      {order.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center">
-                          <span className="text-sm text-gray-900">{item.name}</span>
-                          <span className="text-sm font-medium text-gray-900">
-                            {item.quantity} {item.unit} × {formatCurrency(item.price)} = {formatCurrency(item.quantity * item.price)}
-                          </span>
-                        </div>
-                      ))}
+                  {order.items && order.items.length > 0 && (
+                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                      <p className="text-xs font-medium text-gray-600 mb-2">ORDER ITEMS</p>
+                      <div className="space-y-2">
+                        {order.items.map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between items-center">
+                            <span className="text-sm text-gray-900">{item.product_name}</span>
+                            <span className="text-sm font-medium text-gray-900">
+                              {formatNumber(item.quantity_liters)} L × {formatCurrency(item.unit_price)} = {formatCurrency(item.subtotal)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Order Details Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div>
                       <p className="text-xs text-gray-600">Order Date</p>
-                      <p className="font-medium text-gray-900">{formatDate(order.orderDate, 'P')}</p>
+                      <p className="font-medium text-gray-900">{formatDate(order.order_date, 'P')}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600">
                         {order.status === 'delivered' ? 'Delivered On' : 'Expected Delivery'}
                       </p>
                       <p className="font-medium text-gray-900">
-                        {formatDate(order.deliveryDate || order.expectedDelivery || '', 'P')}
+                        {formatDate(order.actual_delivery_date || order.expected_delivery_date || '', 'P')}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600">Items</p>
-                      <p className="font-medium text-gray-900">{order.items.length}</p>
+                      <p className="font-medium text-gray-900">{order.items?.length || 0}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600">Total Amount</p>
-                      <p className="font-bold text-primary">{formatCurrency(order.totalAmount)}</p>
+                      <p className="font-bold text-primary">{formatCurrency(order.total_amount)}</p>
                     </div>
                   </div>
 

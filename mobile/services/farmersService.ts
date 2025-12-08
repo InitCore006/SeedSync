@@ -37,12 +37,17 @@ export const farmersAPI = {
   /**
    * Update farmer profile
    */
+<<<<<<< Updated upstream
   updateProfile: (id: string, data: FormData | Partial<FarmerProfile>): Promise<AxiosResponse<FarmerProfile>> => {
     return api.put(`${ENDPOINTS.FARMERS.PROFILE}${id}/`, data, {
       headers: data instanceof FormData ? {
         'Content-Type': 'multipart/form-data',
       } : undefined,
     });
+=======
+  updateProfile: (data: Partial<FarmerProfile>): Promise<AxiosResponse<FarmerProfile>> => {
+    return api.patch(ENDPOINTS.FARMERS.MY_PROFILE, data);
+>>>>>>> Stashed changes
   },
 
   /**
@@ -153,12 +158,17 @@ export const farmersAPI = {
   // ============================================
 
   /**
+<<<<<<< Updated upstream
    * Get nearby FPOs
+=======
+   * Find nearby FPOs
+>>>>>>> Stashed changes
    */
   getNearbyFPOs: (params: {
     latitude: number;
     longitude: number;
     radius_km?: number;
+<<<<<<< Updated upstream
   }): Promise<AxiosResponse<any>> => {
     return api.get(ENDPOINTS.FARMERS.NEARBY_FPOS, { params });
   },
@@ -180,6 +190,12 @@ export const farmersAPI = {
     return api.get(ENDPOINTS.FARMERS.JOIN_REQUESTS);
   },
 
+=======
+  }): Promise<AxiosResponse<FPOProfile[]>> => {
+    return api.get(ENDPOINTS.FARMERS.NEARBY_FPOS, { params });
+  },
+
+>>>>>>> Stashed changes
   // ============================================
   // YIELD PREDICTION
   // ============================================

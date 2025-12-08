@@ -286,6 +286,8 @@ function CompleteBatchModal({ isOpen, onClose, batch, onComplete }: CompleteBatc
   const [formData, setFormData] = useState({
     oil_extracted_quintals: '',
     cake_produced_quintals: '',
+    waste_quantity_quintals: '',
+    quality_grade: 'A',
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -295,6 +297,8 @@ function CompleteBatchModal({ isOpen, onClose, batch, onComplete }: CompleteBatc
       setFormData({
         oil_extracted_quintals: '',
         cake_produced_quintals: '',
+        waste_quantity_quintals: '',
+        quality_grade: 'A',
       });
     }
   }, [isOpen]);
@@ -309,23 +313,36 @@ function CompleteBatchModal({ isOpen, onClose, batch, onComplete }: CompleteBatc
 
     setIsLoading(true);
     try {
-      await API.processor.completeBatch(batch.id, {
+      const response = await API.processor.completeProcessing({
+        batch_id: batch.id,
         oil_extracted_quintals: parseFloat(formData.oil_extracted_quintals),
         cake_produced_quintals: parseFloat(formData.cake_produced_quintals),
+        waste_quantity_quintals: parseFloat(formData.waste_quantity_quintals) || 0,
+        quality_grade: formData.quality_grade,
       });
-      toast.success('Batch completed successfully!');
+      
+      // Show success with details
+      if (response.data) {
+        toast.success(
+          `Batch completed! Created ${response.data.oil_produced_liters?.toFixed(0)} liters of oil`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.success('Batch completed successfully!');
+      }
+      
       onComplete();
       onClose();
     } catch (error: any) {
       console.error('Failed to complete batch:', error);
-      toast.error(error.response?.data?.error || 'Failed to complete batch');
+      toast.error(error.response?.data?.message || 'Failed to complete batch');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const totalOutput = (parseFloat(formData.oil_extracted_quintals) || 0) + (parseFloat(formData.cake_produced_quintals) || 0);
-  const yieldPercentage = batch?.initial_quantity_quintals ? ((totalOutput / batch.initial_quantity_quintals) * 100).toFixed(1) : '0.0';
+  const totalOutput = (parseFloat(formData.oil_extracted_quintals) || 0) + (parseFloat(formData.cake_produced_quintals) || 0) + (parseFloat(formData.waste_quantity_quintals) || 0);
+  const yieldPercentage = batch?.initial_quantity_quintals ? (((parseFloat(formData.oil_extracted_quintals) || 0) / batch.initial_quantity_quintals) * 100).toFixed(1) : '0.0';
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Complete Batch Processing">
@@ -366,6 +383,30 @@ function CompleteBatchModal({ isOpen, onClose, batch, onComplete }: CompleteBatc
               value={formData.cake_produced_quintals}
               onChange={(e) => setFormData({ ...formData, cake_produced_quintals: e.target.value })}
               helperText="Total cake/meal produced"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Waste Quantity (Quintals)"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="e.g., 2.5"
+              value={formData.waste_quantity_quintals}
+              onChange={(e) => setFormData({ ...formData, waste_quantity_quintals: e.target.value })}
+              helperText="Waste/loss during processing"
+            />
+
+            <Select
+              label="Quality Grade"
+              value={formData.quality_grade}
+              onChange={(e) => setFormData({ ...formData, quality_grade: e.target.value })}
+              options={[
+                { value: 'A', label: 'Grade A (Premium)' },
+                { value: 'B', label: 'Grade B (Standard)' },
+                { value: 'C', label: 'Grade C (Economy)' },
+              ]}
             />
           </div>
 
@@ -412,24 +453,18 @@ function ProcessorBatchesContent() {
 
   const handleStartBatch = async (batch: any) => {
     try {
-      await API.processor.startBatch(batch.id);
-      toast.success('Batch started successfully!');
+      await API.processor.startProcessing({ batch_id: batch.id });
+      toast.success('Batch processing started!');
       mutate(); // Refresh the list
     } catch (error: any) {
       console.error('Failed to start batch:', error);
-      toast.error(error.response?.data?.error || 'Failed to start batch');
+      toast.error(error.response?.data?.message || 'Failed to start batch');
     }
   };
 
   const handlePauseBatch = async (batch: any) => {
-    try {
-      await API.processor.pauseBatch(batch.id);
-      toast.success('Batch paused');
-      mutate(); // Refresh the list
-    } catch (error: any) {
-      console.error('Failed to pause batch:', error);
-      toast.error(error.response?.data?.error || 'Failed to pause batch');
-    }
+    toast.info('Pause functionality coming soon');
+    // TODO: Implement pause batch API endpoint
   };
 
   const handleCompleteBatchClick = (batch: any) => {
@@ -502,11 +537,11 @@ function ProcessorBatchesContent() {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-gray-600">Total Output</p>
+            <p className="text-sm font-medium text-gray-600">Total Oil Output</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">
-              {formatNumber(batches?.reduce((sum: number, b: any) => sum + (b.oil_extracted_quintals || 0), 0) || 0)} Q
+              {formatNumber(batches?.reduce((sum: number, b: any) => sum + (b.oil_extracted_liters || 0), 0) || 0)} L
             </p>
-            <p className="text-xs text-gray-500 mt-1">Quintals</p>
+            <p className="text-xs text-gray-500 mt-1">Liters</p>
           </CardContent>
         </Card>
       </div>
@@ -581,7 +616,7 @@ function ProcessorBatchesContent() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Oil Output</p>
-                    <p className="font-semibold">{formatNumber(batch.oil_extracted_quintals || 0)} Q</p>
+                    <p className="font-semibold">{formatNumber(batch.oil_extracted_liters || 0)} L</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Cake Output</p>

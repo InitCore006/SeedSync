@@ -33,6 +33,7 @@ export const logisticsAPI = {
   },
 
   /**
+<<<<<<< Updated upstream
    * Update logistics partner profile
    */
   updateProfile: (id: string, data: FormData | Partial<LogisticsPartner>): Promise<AxiosResponse<LogisticsPartner>> => {
@@ -44,6 +45,8 @@ export const logisticsAPI = {
   },
 
   /**
+=======
+>>>>>>> Stashed changes
    * Get partner statistics
    */
   getStats: (): Promise<
@@ -61,7 +64,11 @@ export const logisticsAPI = {
   /**
    * Update logistics partner profile
    */
+<<<<<<< Updated upstream
   updateProfile: (p0: string, formDataToSubmit: FormData, data: Partial<LogisticsPartner>): Promise<AxiosResponse<LogisticsPartner>> => {
+=======
+  updateProfile: (data: Partial<LogisticsPartner>): Promise<AxiosResponse<LogisticsPartner>> => {
+>>>>>>> Stashed changes
     return api.patch(ENDPOINTS.LOGISTICS.MY_PROFILE, data);
   },
 

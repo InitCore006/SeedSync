@@ -238,6 +238,7 @@ const styles = StyleSheet.create({
   },
   variety: {
     fontSize: 18,
+<<<<<<< Updated upstream
     color: COLORS.text.secondary,
     marginBottom: 8,
   },
@@ -245,6 +246,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.primary,
+=======
+    color: COLORS.secondary,
+>>>>>>> Stashed changes
     marginBottom: 20,
   },
   infoSection: {
@@ -262,7 +266,11 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 16,
+<<<<<<< Updated upstream
     color: COLORS.text.secondary,
+=======
+    color: COLORS.secondary,
+>>>>>>> Stashed changes
   },
   infoValue: {
     fontSize: 16,
@@ -282,7 +290,11 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 16,
+<<<<<<< Updated upstream
     color: COLORS.text.secondary,
+=======
+    color: COLORS.secondary,
+>>>>>>> Stashed changes
     lineHeight: 24,
     backgroundColor: COLORS.white,
     padding: 16,
@@ -297,6 +309,33 @@ const styles = StyleSheet.create({
   qualityRow: {
     flexDirection: 'row',
     alignItems: 'center',
+<<<<<<< Updated upstream
+=======
+    marginBottom: 8,
+  },
+  bidAmount: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  bidStatus: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  bidStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  bidDate: {
+    fontSize: 14,
+    color: COLORS.secondary,
+    marginBottom: 12,
+  },
+  bidActions: {
+    flexDirection: 'row',
+>>>>>>> Stashed changes
     gap: 8,
   },
   qualityLabel: {

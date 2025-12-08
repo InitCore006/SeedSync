@@ -14,12 +14,20 @@ import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+<<<<<<< Updated upstream
 import { Button, Input, CropSelector, VarietySelector, RequestVarietyModal } from '@/components';
 import { COLORS } from '@/constants/colors';
 import { lotsAPI } from '@/services/lotsService';
 import { useLotsStore } from '@/store/lotsStore';
 import { useAuthStore } from '@/store/authStore';
 import { CropMaster, CropVariety } from '@/services/cropsService';
+=======
+import { Button, Input } from '@/components';
+import { COLORS } from '@/constants/colors';
+import { lotsAPI } from '@/services/lotsService';
+import { useLotsStore } from '@/store/lotsStore';
+import { CROP_TYPES, QUALITY_GRADES } from '@/constants/crops';
+>>>>>>> Stashed changes
 
 export default function CreateLotScreen() {
   const { addLot } = useLotsStore();
@@ -34,11 +42,26 @@ export default function CreateLotScreen() {
   
   // Form States
   const [formData, setFormData] = useState({
+<<<<<<< Updated upstream
     harvest_date: new Date().toISOString().split('T')[0],
     quantity_quintals: '',
     expected_price_per_quintal: '',
+=======
+    crop_type: 'soybean',
+    crop_variety: '',
+    harvest_date: new Date().toISOString().split('T')[0],
+    quantity_quintals: '',
+    quality_grade: 'A',
+    expected_price_per_quintal: '',
+    moisture_content: '',
+    oil_content: '',
+>>>>>>> Stashed changes
     description: '',
+    storage_conditions: '',
+    organic_certified: false,
+    pickup_address: '',
   });
+<<<<<<< Updated upstream
   const [sendToFPO, setSendToFPO] = useState(false);
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,6 +75,11 @@ export default function CreateLotScreen() {
     setSelectedVariety(variety);
   };
 
+=======
+  const [images, setImages] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+>>>>>>> Stashed changes
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -78,6 +106,7 @@ export default function CreateLotScreen() {
   };
 
   const handleCreate = async () => {
+<<<<<<< Updated upstream
     // Validation
     if (!selectedCrop) {
       Alert.alert('Required Field', 'Please select a crop type');
@@ -98,11 +127,21 @@ export default function CreateLotScreen() {
 
     if (images.length < 2) {
       Alert.alert('Images Required', 'Please upload at least 2 images of your crop');
+=======
+    if (!formData.crop_type || !formData.quantity_quintals || !formData.expected_price_per_quintal) {
+      Alert.alert('Error', 'Please fill all required fields');
+>>>>>>> Stashed changes
+      return;
+    }
+
+    if (images.length < 2) {
+      Alert.alert('Error', 'Please upload at least 2 images');
       return;
     }
 
     setLoading(true);
     try {
+<<<<<<< Updated upstream
       // Prepare FormData for lot creation with images
       const formDataToSend = new FormData();
       
@@ -120,6 +159,29 @@ export default function CreateLotScreen() {
       // Add optional fields
       if (formData.description) {
         formDataToSend.append('description', formData.description);
+=======
+      const lotData = {
+        crop_type: formData.crop_type,
+        crop_variety: formData.crop_variety || undefined,
+        harvest_date: formData.harvest_date,
+        quantity_quintals: parseFloat(formData.quantity_quintals),
+        quality_grade: formData.quality_grade,
+        expected_price_per_quintal: parseFloat(formData.expected_price_per_quintal),
+        moisture_content: formData.moisture_content ? parseFloat(formData.moisture_content) : undefined,
+        oil_content: formData.oil_content ? parseFloat(formData.oil_content) : undefined,
+        description: formData.description || undefined,
+        storage_conditions: formData.storage_conditions || undefined,
+        organic_certified: formData.organic_certified,
+        pickup_address: formData.pickup_address || undefined,
+      };
+
+      const response = await lotsAPI.createLot(lotData);
+      const newLot = response.data;
+
+      // Upload images
+      for (const imageUri of images) {
+        await lotsAPI.uploadImage(newLot.id, imageUri);
+>>>>>>> Stashed changes
       }
       
       // Add images to FormData
@@ -150,6 +212,7 @@ export default function CreateLotScreen() {
 
       // Add lot to store
       addLot(newLot);
+<<<<<<< Updated upstream
       console.log('✅ Lot added to store');
 
       Alert.alert(
@@ -164,6 +227,14 @@ export default function CreateLotScreen() {
                           error.message ||
                           'Failed to create lot. Please try again.';
       Alert.alert('Error', errorMessage);
+=======
+      Alert.alert('Success', 'Lot created successfully! QR code will be generated.', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (error: any) {
+      console.error('Failed to create lot:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to create lot');
+>>>>>>> Stashed changes
     } finally {
       setLoading(false);
     }
@@ -175,6 +246,7 @@ export default function CreateLotScreen() {
       style={styles.container}
       keyboardVerticalOffset={100}
     >
+<<<<<<< Updated upstream
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -395,6 +467,12 @@ export default function CreateLotScreen() {
             </View>
           </View>
 
+=======
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Image Upload Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Lot Images * (2-3 required)</Text>
+>>>>>>> Stashed changes
           <View style={styles.imagesRow}>
             {images.map((uri, index) => (
               <View key={index} style={styles.imageWrapper}>
@@ -416,6 +494,7 @@ export default function CreateLotScreen() {
           </View>
         </View>
 
+<<<<<<< Updated upstream
         {/* Step 4: Additional Info */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -425,16 +504,148 @@ export default function CreateLotScreen() {
             <View style={styles.sectionTitleContainer}>
               <Text style={styles.sectionTitle}>Additional Details</Text>
               <Text style={styles.sectionHint}>Optional</Text>
+=======
+        {/* Crop Details Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Crop Details</Text>
+          
+          <View style={styles.pickerContainer}>
+            <Text style={styles.label}>Crop Type *</Text>
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={formData.crop_type}
+                onValueChange={(value) => setFormData({ ...formData, crop_type: value })}
+              >
+                {Object.entries(CROP_TYPES).map(([key, crop]) => (
+                  <Picker.Item key={key} label={`${crop.icon} ${crop.label}`} value={key} />
+                ))}
+              </Picker>
+>>>>>>> Stashed changes
             </View>
           </View>
 
           <Input
+<<<<<<< Updated upstream
             label="Description"
             value={formData.description}
             onChangeText={(text) =>
               setFormData({ ...formData, description: text })
             }
             placeholder="Any additional information about your crop lot..."
+=======
+            label="Crop Variety"
+            placeholder="e.g., Pusa Bold, JS-335"
+            value={formData.crop_variety}
+            onChangeText={(text) => setFormData({ ...formData, crop_variety: text })}
+          />
+
+          <Input
+            label="Harvest Date *"
+            placeholder="YYYY-MM-DD"
+            value={formData.harvest_date}
+            onChangeText={(text) => setFormData({ ...formData, harvest_date: text })}
+          />
+
+          <View style={styles.row}>
+            <View style={styles.halfWidth}>
+              <Input
+                label="Quantity (Quintals) *"
+                placeholder="e.g., 50"
+                value={formData.quantity_quintals}
+                onChangeText={(text) => setFormData({ ...formData, quantity_quintals: text })}
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.halfWidth}>
+              <View style={styles.pickerContainer}>
+                <Text style={styles.label}>Quality Grade *</Text>
+                <View style={styles.pickerWrapper}>
+                  <Picker
+                    selectedValue={formData.quality_grade}
+                    onValueChange={(value) => setFormData({ ...formData, quality_grade: value })}
+                  >
+                    {Object.entries(QUALITY_GRADES).map(([key, grade]) => (
+                      <Picker.Item key={key} label={`${key} - ${grade.label}`} value={key} />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <Input
+            label="Expected Price (₹/Quintal) *"
+            placeholder="e.g., 5500"
+            value={formData.expected_price_per_quintal}
+            onChangeText={(text) => setFormData({ ...formData, expected_price_per_quintal: text })}
+            keyboardType="decimal-pad"
+          />
+        </View>
+
+        {/* Quality Parameters Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quality Parameters (Optional)</Text>
+          
+          <View style={styles.row}>
+            <View style={styles.halfWidth}>
+              <Input
+                label="Moisture Content (%)"
+                placeholder="e.g., 8.5"
+                value={formData.moisture_content}
+                onChangeText={(text) => setFormData({ ...formData, moisture_content: text })}
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.halfWidth}>
+              <Input
+                label="Oil Content (%)"
+                placeholder="e.g., 38.5"
+                value={formData.oil_content}
+                onChangeText={(text) => setFormData({ ...formData, oil_content: text })}
+                keyboardType="decimal-pad"
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.checkboxRow}
+            onPress={() => setFormData({ ...formData, organic_certified: !formData.organic_certified })}
+          >
+            <Ionicons
+              name={formData.organic_certified ? 'checkbox' : 'square-outline'}
+              size={24}
+              color={formData.organic_certified ? COLORS.primary : COLORS.secondary}
+            />
+            <Text style={styles.checkboxLabel}>Organic Certified</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Storage & Pickup Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Storage & Pickup Details</Text>
+          
+          <Input
+            label="Storage Conditions"
+            placeholder="e.g., Cold storage, Warehouse"
+            value={formData.storage_conditions}
+            onChangeText={(text) => setFormData({ ...formData, storage_conditions: text })}
+          />
+
+          <Input
+            label="Pickup Address"
+            placeholder="Complete address for pickup"
+            value={formData.pickup_address}
+            onChangeText={(text) => setFormData({ ...formData, pickup_address: text })}
+            multiline
+            numberOfLines={3}
+          />
+
+          <Input
+            label="Description"
+            placeholder="Additional details about the lot"
+            value={formData.description}
+            onChangeText={(text) => setFormData({ ...formData, description: text })}
+>>>>>>> Stashed changes
             multiline
             numberOfLines={4}
           />
@@ -488,6 +699,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   scrollContent: {
+<<<<<<< Updated upstream
     padding: 16,
     paddingBottom: 120,
   },
@@ -601,6 +813,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#166534',
   },
+=======
+    padding: 20,
+    paddingBottom: 40,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+>>>>>>> Stashed changes
   imagesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -614,6 +840,7 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+<<<<<<< Updated upstream
     borderRadius: 12,
   },
   removeImageBtn: {
@@ -627,16 +854,35 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 12,
+=======
+    borderRadius: 8,
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+  },
+  addImageBtn: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+>>>>>>> Stashed changes
     borderWidth: 2,
     borderColor: COLORS.border,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
+<<<<<<< Updated upstream
     backgroundColor: '#fafafa',
+=======
+>>>>>>> Stashed changes
   },
   addImageText: {
     fontSize: 12,
     color: COLORS.secondary,
+<<<<<<< Updated upstream
     marginTop: 6,
   },
   row: {
@@ -646,24 +892,57 @@ const styles = StyleSheet.create({
   },
   halfWidth: {
     flex: 1,
+=======
+    marginTop: 4,
+>>>>>>> Stashed changes
   },
   pickerContainer: {
     marginBottom: 16,
   },
   label: {
+<<<<<<< Updated upstream
     fontSize: 15,
     fontWeight: '600',
     color: COLORS.text.primary,
+=======
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.text,
+>>>>>>> Stashed changes
     marginBottom: 8,
   },
   pickerWrapper: {
     borderWidth: 1,
     borderColor: COLORS.border,
+<<<<<<< Updated upstream
     borderRadius: 12,
     backgroundColor: '#fff',
     overflow: 'hidden',
   },
   submitButton: {
+=======
+    borderRadius: 8,
+    backgroundColor: COLORS.background,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfWidth: {
+    flex: 1,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: COLORS.text,
+    marginLeft: 8,
+  },
+  button: {
+>>>>>>> Stashed changes
     marginTop: 8,
     marginBottom: 40,
   },
@@ -752,3 +1031,4 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+ 

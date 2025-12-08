@@ -18,6 +18,7 @@ export interface User {
     address?: string;
     city?: string;
     state?: string;
+<<<<<<< Updated upstream
     fpo_membership?: {
       fpo_id: number;
       fpo_name: string;
@@ -25,6 +26,8 @@ export interface User {
       status: string;
       warehouse_name?: string;
     };
+=======
+>>>>>>> Stashed changes
   };
 }
 
@@ -49,6 +52,7 @@ export interface LoginCredentials {
 export interface RegisterData {
   phone_number: string;
   role: 'farmer' | 'fpo' | 'processor' | 'retailer' | 'logistics' | 'warehouse' | 'government';
+<<<<<<< Updated upstream
 }
 
 export interface UserProfileCreateData {
@@ -67,6 +71,93 @@ export interface UserProfileCreateData {
 // ============================================
 
 export interface FarmerProfile {
+=======
+}
+
+export interface UserProfileCreateData {
+  full_name: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  state?: string;
+  pincode?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+// ============================================
+// FARMER PROFILE TYPES
+// ============================================
+
+export interface FarmerProfile {
+  id: number;
+  user: User;
+  fpo?: number;
+  fpo_name?: string;
+  full_name: string;
+  father_name?: string;
+  date_of_birth?: string;
+  gender?: 'male' | 'female' | 'other';
+  profile_photo?: string;
+  total_land_acres: number;
+  farming_experience_years: number;
+  primary_crops: string[];
+  aadhaar_number?: string;
+  pan_number?: string;
+  kyc_status: 'pending' | 'verified' | 'rejected';
+  kyc_documents?: Record<string, string>;
+  bank_account_number?: string;
+  bank_account_holder_name?: string;
+  ifsc_code?: string;
+  bank_name?: string;
+  bank_branch?: string;
+  village?: string;
+  tehsil?: string;
+  district: string;
+  state: string;
+  state_display?: string;
+  pincode: string;
+  latitude?: number;
+  longitude?: number;
+  total_lots_created: number;
+  total_quantity_sold_quintals: number;
+  total_earnings: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FarmerProfileCreateData {
+  full_name: string;
+  father_name?: string;
+  date_of_birth?: string;
+  gender?: 'male' | 'female' | 'other';
+  total_land_acres: number;
+  farming_experience_years?: number;
+  primary_crops?: string[];
+  village?: string;
+  post_office?: string;
+  tehsil?: string;
+  district: string;
+  state: string;
+  pincode: string;
+  latitude?: number;
+  longitude?: number;
+  preferred_language?: 'en' | 'hi';
+}
+
+// ============================================
+// LOT TYPES
+// ============================================
+
+export interface LotImage {
+  id: number;
+  image: string;
+  caption?: string;
+  uploaded_at: string;
+}
+
+export interface ProcurementLot {
+>>>>>>> Stashed changes
   id: number;
   user: User;
   fpo?: number;
@@ -153,6 +244,7 @@ export interface LotImage {
 export interface ProcurementLot {
   id: string; // UUID from backend
   lot_number: string;
+<<<<<<< Updated upstream
   farmer: string;
   farmer_name?: string;
   fpo?: string;
@@ -172,6 +264,14 @@ export interface ProcurementLot {
   crop_variety_code?: string;
   quantity_quintals: number;
   available_quantity_quintals?: number;
+=======
+  farmer: number;
+  farmer_name?: string;
+  crop_type: 'soybean' | 'mustard' | 'groundnut' | 'sunflower' | 'safflower' | 'sesame' | 'linseed' | 'niger';
+  crop_type_display?: string;
+  crop_variety?: string;
+  quantity_quintals: number;
+>>>>>>> Stashed changes
   quality_grade: 'A+' | 'A' | 'B' | 'C';
   quality_grade_display?: string;
   expected_price_per_quintal: number;
@@ -187,6 +287,7 @@ export interface ProcurementLot {
   pickup_address?: string;
   status: 'available' | 'bidding' | 'sold' | 'delivered';
   status_display?: string;
+<<<<<<< Updated upstream
   bid_count?: number;
   view_count?: number;
   qr_code_url?: string;
@@ -194,15 +295,26 @@ export interface ProcurementLot {
   blockchain_hash?: string;
   images?: LotImage[];
   status_history?: any[];
+=======
+  bid_count: number;
+  view_count: number;
+  qr_code_url?: string;
+  blockchain_tx_id?: string;
+  images: LotImage[];
+>>>>>>> Stashed changes
   created_at: string;
   updated_at: string;
 }
 
 export interface LotCreateData {
   crop_type: string;
+<<<<<<< Updated upstream
   crop_master_code?: string;
   crop_variety?: string;
   crop_variety_code?: string;
+=======
+  crop_variety?: string;
+>>>>>>> Stashed changes
   harvest_date: string;
   quantity_quintals: number;
   quality_grade: string;
@@ -221,7 +333,11 @@ export interface LotCreateData {
 
 export interface Bid {
   id: number;
+<<<<<<< Updated upstream
   lot: string; // UUID
+=======
+  lot: number;
+>>>>>>> Stashed changes
   lot_number?: string;
   lot_details?: {
     crop_type: string;
@@ -250,10 +366,17 @@ export interface Bid {
 }
 
 export interface BidCreateData {
+<<<<<<< Updated upstream
   lot: string; // UUID
   offered_price_per_quintal: number;
   quantity_quintals: number;
   payment_terms?: string;
+=======
+  lot: number;
+  offered_price_per_quintal: number;
+  quantity_quintals: number;
+  payment_terms: string;
+>>>>>>> Stashed changes
   expected_pickup_date?: string;
   advance_payment_percentage?: number;
   message?: string;

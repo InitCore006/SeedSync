@@ -88,12 +88,12 @@ const navItems: NavItem[] = [
     icon: <Home className="h-5 w-5" />,
     roles: [USER_ROLES.PROCESSOR],
   },
-  {
-    label: 'Procurement',
-    href: '/processor/procurement',
-    icon: <Package className="h-5 w-5" />,
-    roles: [USER_ROLES.PROCESSOR],
-  },
+  // {
+  //   label: 'Procurement',
+  //   href: '/processor/procurement',
+  //   icon: <Package className="h-5 w-5" />,
+  //   roles: [USER_ROLES.PROCESSOR],
+  // },
   {
     label: 'My Bids',
     href: '/processor/bids',
