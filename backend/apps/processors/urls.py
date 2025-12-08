@@ -15,7 +15,13 @@ from .views import (
     ProcessingPlantViewSet,
     ProcessingStageLogAPIView,
     FinishedProductAPIView,
-    LotAvailabilityAPIView
+    LotAvailabilityAPIView,
+    ProcessedProductListCreateAPIView,
+    ProcessedProductDetailAPIView,
+    ProcessorStartProcessingAPIView,
+    ProcessorCompleteProcessingAPIView,
+    ProcessorFinishedGoodsAPIView,
+    ListFinishedGoodToMarketplaceAPIView
 )
 
 app_name = 'processors'
@@ -41,6 +47,12 @@ urlpatterns = [
     # Processing batches (legacy endpoint)
     path('batches/', ProcessingBatchesAPIView.as_view(), name='processor-batches'),
     
+    # Processing workflow
+    path('batches/start-processing/', ProcessorStartProcessingAPIView.as_view(), name='start-processing'),
+    path('batches/complete-processing/', ProcessorCompleteProcessingAPIView.as_view(), name='complete-processing'),
+    path('finished-goods/', ProcessorFinishedGoodsAPIView.as_view(), name='finished-goods'),
+    path('finished-goods/list-to-marketplace/', ListFinishedGoodToMarketplaceAPIView.as_view(), name='list-to-marketplace'),
+    
     # Inventory
     path('inventory/', ProcessorInventoryAPIView.as_view(), name='processor-inventory'),
     
@@ -50,6 +62,10 @@ urlpatterns = [
     # Multi-stage processing endpoints
     path('batches/<uuid:batch_id>/stage-logs/', ProcessingStageLogAPIView.as_view(), name='batch-stage-logs'),
     path('finished-products/', FinishedProductAPIView.as_view(), name='finished-products'),
+    
+    # Processed products (oils in liters) for B2B marketplace
+    path('products/', ProcessedProductListCreateAPIView.as_view(), name='processed-products'),
+    path('products/<uuid:pk>/', ProcessedProductDetailAPIView.as_view(), name='processed-product-detail'),
     
     # Include router URLs for batch management (CRUD + custom actions)
     path('', include(router.urls)),

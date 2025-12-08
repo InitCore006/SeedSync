@@ -1,4 +1,4 @@
-export const API_URL = 'https://77d560abcfe2.ngrok-free.app/api';
+export const API_URL = 'https://a9e7ed4a1ff6.ngrok-free.app/api';
 
 export const ENDPOINTS = {
   // Auth endpoints
@@ -107,6 +107,21 @@ export const ENDPOINTS = {
     GENERATE_QR: (lotId: number) => `/blockchain/lots/${lotId}/generate-qr/`,
     GET_TRACE: (lotId: number) => `/blockchain/trace/${lotId}/`,
     GET_CERTIFICATE: (lotId: number) => `/blockchain/certificate/${lotId}/`,
+  },
+  
+  // Processor endpoints
+  PROCESSOR: {
+    PROFILE: '/processors/profile/',
+    DASHBOARD: '/processors/dashboard/',
+    PLANTS: '/processors/plants/',
+    BATCHES: '/processors/batches/',
+    START_PROCESSING: '/processors/batches/start-processing/',
+    COMPLETE_PROCESSING: '/processors/batches/complete-processing/',
+    FINISHED_GOODS: '/processors/finished-goods/',
+    PRODUCTS: '/processors/products/',
+    INVENTORY: '/processors/inventory/',
+    BIDS: '/processors/bids/',
+    PROCUREMENT: '/processors/procurement/',
   },
 };
 

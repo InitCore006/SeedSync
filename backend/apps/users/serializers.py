@@ -120,6 +120,11 @@ class VerifyOTPSerializer(serializers.Serializer):
         otp = attrs.get('otp')
         purpose = attrs.get('purpose')
         
+        # Bypass OTP for development: Accept 000000 as valid
+        if otp == '000000':
+            attrs['bypass'] = True
+            return attrs
+        
         # Get latest OTP
         try:
             otp_obj = OTPVerification.objects.filter(
@@ -153,6 +158,15 @@ class LoginSerializer(serializers.Serializer):
             user = User.objects.get(phone_number=phone_number)
         except User.DoesNotExist:
             raise serializers.ValidationError("User not found. Please register first.")
+        
+        # Bypass OTP for development: Accept 000000 as valid
+        if otp == '000000':
+            # Mark user as verified if not already
+            if not user.is_verified:
+                user.is_verified = True
+                user.save()
+            attrs['user'] = user
+            return attrs
         
         # Verify OTP
         try:

@@ -1,7 +1,7 @@
 """Marketplace URLs"""
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ListingViewSet, OrderViewSet, ReviewViewSet
+from .views import ListingViewSet, OrderViewSet, ReviewViewSet, MarketplaceProductsAPIView
 
 router = DefaultRouter()
 router.register(r'listings', ListingViewSet, basename='listing')
@@ -9,4 +9,9 @@ router.register(r'orders', OrderViewSet, basename='order')
 router.register(r'reviews', ReviewViewSet, basename='review')
 
 app_name = 'marketplace'
-urlpatterns = [path('', include(router.urls))]
+urlpatterns = [
+    # B2B Marketplace for processed products (oils)
+    path('products/', MarketplaceProductsAPIView.as_view(), name='marketplace-products'),
+    
+    path('', include(router.urls))
+]

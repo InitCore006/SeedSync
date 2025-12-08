@@ -7,108 +7,53 @@ import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
+import Loading from '@/components/ui/Loading';
 import { Package, Search, AlertTriangle, TrendingDown, Plus } from 'lucide-react';
 import { formatCurrency, formatNumber, formatDate } from '@/lib/utils';
-
-// Mock data - replace with API call
-const mockInventory = [
-  {
-    id: 1,
-    name: 'Soybean Oil',
-    sku: 'SOY-OIL-1L',
-    category: 'Oil',
-    quantity: 450,
-    unit: 'liters',
-    minStock: 200,
-    maxStock: 1000,
-    price: 180,
-    supplier: 'ABC Processors Ltd',
-    lastRestocked: '2025-12-01',
-    expiryDate: '2026-06-01',
-  },
-  {
-    id: 2,
-    name: 'Mustard Oil',
-    sku: 'MUS-OIL-1L',
-    category: 'Oil',
-    quantity: 120,
-    unit: 'liters',
-    minStock: 150,
-    maxStock: 800,
-    price: 200,
-    supplier: 'XYZ Oil Mills',
-    lastRestocked: '2025-11-28',
-    expiryDate: '2026-05-28',
-  },
-  {
-    id: 3,
-    name: 'Groundnut Oil',
-    sku: 'GND-OIL-1L',
-    category: 'Oil',
-    quantity: 680,
-    unit: 'liters',
-    minStock: 300,
-    maxStock: 1200,
-    price: 220,
-    supplier: 'XYZ Oil Mills',
-    lastRestocked: '2025-12-03',
-    expiryDate: '2026-06-03',
-  },
-  {
-    id: 4,
-    name: 'Sunflower Oil',
-    sku: 'SUN-OIL-1L',
-    category: 'Oil',
-    quantity: 85,
-    unit: 'liters',
-    minStock: 100,
-    maxStock: 600,
-    price: 160,
-    supplier: 'PQR Industries',
-    lastRestocked: '2025-11-25',
-    expiryDate: '2026-05-25',
-  },
-  {
-    id: 5,
-    name: 'Sesame Oil',
-    sku: 'SES-OIL-500ML',
-    category: 'Oil',
-    quantity: 220,
-    unit: 'liters',
-    minStock: 100,
-    maxStock: 400,
-    price: 280,
-    supplier: 'LMN Processors',
-    lastRestocked: '2025-12-02',
-    expiryDate: '2026-06-02',
-  },
-];
+import { useRetailerInventory } from '@/lib/hooks/useRetailer';
 
 function InventoryContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
 
-  const filteredInventory = mockInventory.filter(item =>
-    (categoryFilter === 'all' || item.category === categoryFilter) &&
-    (item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     item.supplier.toLowerCase().includes(searchQuery.toLowerCase()))
+  const { inventory, isLoading, isError } = useRetailerInventory();
+
+  if (isLoading) return <Loading fullScreen />;
+  if (isError) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+          Failed to load inventory
+        </div>
+      </div>
+    );
+  }
+
+  const filteredInventory = inventory.filter((item: any) =>
+    item.product_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.processor_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalItems = mockInventory.length;
-  const totalValue = mockInventory.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-  const lowStockItems = mockInventory.filter(item => item.quantity < item.minStock).length;
-  const outOfStockItems = mockInventory.filter(item => item.quantity === 0).length;
+  const totalItems = inventory.length;
+  const totalValue = inventory.reduce((sum: number, item: any) => 
+    sum + (Number(item.current_stock_liters) * Number(item.selling_price_per_liter)), 0
+  );
+  const lowStockItems = inventory.filter((item: any) => item.stock_status === 'low_stock' || item.stock_status === 'reorder').length;
+  const outOfStockItems = inventory.filter((item: any) => item.stock_status === 'out_of_stock').length;
 
-  const getStockStatus = (quantity: number, minStock: number, maxStock: number) => {
-    if (quantity === 0) return { label: 'Out of Stock', color: 'red' };
-    if (quantity < minStock) return { label: 'Low Stock', color: 'orange' };
-    if (quantity >= maxStock * 0.8) return { label: 'Well Stocked', color: 'green' };
-    return { label: 'In Stock', color: 'blue' };
-  };
-
-  const getStockPercentage = (quantity: number, maxStock: number) => {
-    return Math.min((quantity / maxStock) * 100, 100);
+  const getStockStatus = (stockStatus: string) => {
+    switch (stockStatus) {
+      case 'out_of_stock':
+        return { label: 'Out of Stock', color: 'red' };
+      case 'low_stock':
+      case 'reorder':
+        return { label: 'Low Stock', color: 'orange' };
+      case 'in_stock':
+        return { label: 'In Stock', color: 'green' };
+      default:
+        return { label: 'Unknown', color: 'gray' };
+    }
   };
 
   return (
@@ -233,9 +178,9 @@ function InventoryContent() {
       {/* Inventory List */}
       {filteredInventory.length > 0 ? (
         <div className="grid grid-cols-1 gap-4">
-          {filteredInventory.map((item) => {
-            const stockStatus = getStockStatus(item.quantity, item.minStock, item.maxStock);
-            const stockPercentage = getStockPercentage(item.quantity, item.maxStock);
+          {filteredInventory.map((item: any) => {
+            const stockStatus = getStockStatus(item.stock_status);
+            const stockPercentage = item.stock_percentage || 0;
 
             return (
               <Card key={item.id} className="hover:shadow-md transition-shadow">
@@ -243,19 +188,19 @@ function InventoryContent() {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
-                        <Badge variant="status" status={stockStatus.label.toLowerCase().replace(' ', '_')}>
+                        <h3 className="text-lg font-bold text-gray-900">{item.product_name}</h3>
+                        <Badge variant="status" status={item.stock_status}>
                           {stockStatus.label}
                         </Badge>
-                        {item.quantity < item.minStock && (
+                        {(item.stock_status === 'low_stock' || item.stock_status === 'reorder') && (
                           <AlertTriangle className="w-4 h-4 text-orange-600" />
                         )}
                       </div>
-                      <p className="text-sm text-gray-600">SKU: {item.sku} | Supplier: {item.supplier}</p>
+                      <p className="text-sm text-gray-600">SKU: {item.sku} | Supplier: {item.processor_name}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-primary">{formatCurrency(item.price)}</p>
-                      <p className="text-xs text-gray-600">per {item.unit}</p>
+                      <p className="text-2xl font-bold text-primary">{formatCurrency(item.selling_price_per_liter)}</p>
+                      <p className="text-xs text-gray-600">per liter</p>
                     </div>
                   </div>
 
@@ -264,7 +209,7 @@ function InventoryContent() {
                     <div className="flex justify-between text-sm text-gray-600 mb-2">
                       <span>Stock Level</span>
                       <span>
-                        {item.quantity} / {item.maxStock} {item.unit}
+                        {formatNumber(item.current_stock_liters)} / {formatNumber(item.max_stock_level)} liters
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
@@ -288,22 +233,24 @@ function InventoryContent() {
                     <div>
                       <p className="text-xs text-gray-600">Current Stock</p>
                       <p className="font-bold text-gray-900">
-                        {item.quantity} {item.unit}
+                        {formatNumber(item.current_stock_liters)} L
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600">Min Stock</p>
                       <p className="font-medium text-gray-900">
-                        {item.minStock} {item.unit}
+                        {formatNumber(item.min_stock_level)} L
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-600">Last Restocked</p>
-                      <p className="font-medium text-gray-900">{formatDate(item.lastRestocked, 'P')}</p>
+                      <p className="text-xs text-gray-600">Reorder Point</p>
+                      <p className="font-medium text-gray-900">{formatNumber(item.reorder_point)} L</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-600">Expiry Date</p>
-                      <p className="font-medium text-gray-900">{formatDate(item.expiryDate, 'P')}</p>
+                      <p className="text-xs text-gray-600">Last Restocked</p>
+                      <p className="font-medium text-gray-900">
+                        {item.last_restocked ? formatDate(item.last_restocked, 'P') : 'N/A'}
+                      </p>
                     </div>
                   </div>
 
@@ -311,7 +258,7 @@ function InventoryContent() {
                   <div className="flex items-center justify-between mb-4 p-3 bg-blue-50 rounded-lg">
                     <span className="text-sm font-medium text-gray-700">Total Inventory Value</span>
                     <span className="text-lg font-bold text-primary">
-                      {formatCurrency(item.quantity * item.price)}
+                      {formatCurrency(Number(item.current_stock_liters) * Number(item.selling_price_per_liter))}
                     </span>
                   </div>
 

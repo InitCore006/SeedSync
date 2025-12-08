@@ -12,7 +12,7 @@ import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import { useFPOMembers } from '@/lib/hooks/useAPI';
 import { formatCurrency, formatDate, getInitials } from '@/lib/utils';
-import { UserPlus, Search, Phone, Mail, Calendar, Eye, Trash2 } from 'lucide-react';
+import { UserPlus, Search, Phone, Mail, Calendar, Eye, Trash2, Package } from 'lucide-react';
 import { API } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { CROPS, INDIAN_STATES } from '@/lib/constants';
@@ -95,7 +95,6 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
         pincode: '',
         village: '',
         primary_crops: [],
-        share_capital: '',
       });
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to create farmer account');
@@ -260,7 +259,7 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
               onChange={(e) => setNewFormData({ ...newFormData, state: e.target.value })}
               options={[
                 { value: '', label: 'Select State' },
-                ...INDIAN_STATES.map(state => ({ value: state, label: state }))
+                ...INDIAN_STATES.map(state => ({ value: state[0], label: state[1] }))
               ]}
             />
             
@@ -291,6 +290,175 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
   );
 }
 
+interface CreateLotModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  member: any;
+}
+
+function CreateLotModal({ isOpen, onClose, onSuccess, member }: CreateLotModalProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    crop_type: '',
+    crop_variety: '',
+    quantity_quintals: '',
+    expected_price_per_quintal: '',
+    harvest_date: '',
+    quality_grade: '',
+    moisture_content: '',
+    oil_content: '',
+    description: '',
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      await API.fpo.createFarmerLot({
+        farmer_id: member.farmer.id,
+        crop_type: formData.crop_type,
+        crop_variety: formData.crop_variety || undefined,
+        quantity_quintals: parseFloat(formData.quantity_quintals),
+        expected_price_per_quintal: parseFloat(formData.expected_price_per_quintal),
+        harvest_date: formData.harvest_date,
+        quality_grade: formData.quality_grade || undefined,
+        moisture_content: formData.moisture_content ? parseFloat(formData.moisture_content) : undefined,
+        oil_content: formData.oil_content ? parseFloat(formData.oil_content) : undefined,
+        description: formData.description || undefined,
+      });
+
+      toast.success('Lot created successfully on behalf of farmer');
+      onSuccess();
+      onClose();
+      setFormData({
+        crop_type: '',
+        crop_variety: '',
+        quantity_quintals: '',
+        expected_price_per_quintal: '',
+        harvest_date: '',
+        quality_grade: '',
+        moisture_content: '',
+        oil_content: '',
+        description: '',
+      });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to create lot');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`Create Lot for ${member?.farmer?.full_name}`} size="lg">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm mb-4">
+          Creating a lot on behalf of farmer member. This lot will be managed by your FPO.
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Select
+            label="Crop Type"
+            required
+            value={formData.crop_type}
+            onChange={(e) => setFormData({ ...formData, crop_type: e.target.value })}
+            options={[
+              { value: '', label: 'Select Crop Type' },
+              ...CROPS.map(crop => ({ value: crop.value, label: crop.label }))
+            ]}
+          />
+
+          <Input
+            label="Crop Variety"
+            placeholder="e.g., Pusa Bold (optional)"
+            value={formData.crop_variety}
+            onChange={(e) => setFormData({ ...formData, crop_variety: e.target.value })}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="Quantity (Quintals)"
+            type="number"
+            step="0.01"
+            placeholder="Enter quantity"
+            required
+            value={formData.quantity_quintals}
+            onChange={(e) => setFormData({ ...formData, quantity_quintals: e.target.value })}
+          />
+
+          <Input
+            label="Expected Price (₹/Quintal)"
+            type="number"
+            step="0.01"
+            placeholder="Enter price"
+            required
+            value={formData.expected_price_per_quintal}
+            onChange={(e) => setFormData({ ...formData, expected_price_per_quintal: e.target.value })}
+          />
+        </div>
+
+        <Input
+          label="Harvest Date"
+          type="date"
+          required
+          value={formData.harvest_date}
+          onChange={(e) => setFormData({ ...formData, harvest_date: e.target.value })}
+        />
+
+        <div className="grid grid-cols-3 gap-4">
+          <Select
+            label="Quality Grade"
+            value={formData.quality_grade}
+            onChange={(e) => setFormData({ ...formData, quality_grade: e.target.value })}
+            options={[
+              { value: '', label: 'Select Grade (optional)' },
+              { value: 'A', label: 'Grade A' },
+              { value: 'B', label: 'Grade B' },
+              { value: 'C', label: 'Grade C' },
+            ]}
+          />
+
+          <Input
+            label="Moisture Content (%)"
+            type="number"
+            step="0.01"
+            placeholder="Optional"
+            value={formData.moisture_content}
+            onChange={(e) => setFormData({ ...formData, moisture_content: e.target.value })}
+          />
+
+          <Input
+            label="Oil Content (%)"
+            type="number"
+            step="0.01"
+            placeholder="Optional"
+            value={formData.oil_content}
+            onChange={(e) => setFormData({ ...formData, oil_content: e.target.value })}
+          />
+        </div>
+
+        <Input
+          label="Description"
+          placeholder="Additional notes about the lot (optional)"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+        />
+
+        <div className="flex gap-3 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" isLoading={isLoading} className="flex-1">
+            Create Lot
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function FPOMembersContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -298,6 +466,8 @@ function FPOMembersContent() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<any>(null);
+  const [isCreateLotModalOpen, setIsCreateLotModalOpen] = useState(false);
+  const [memberForLot, setMemberForLot] = useState<any>(null);
   const { members, isLoading, isError, mutate } = useFPOMembers();
 
   const handleRefresh = () => {
@@ -307,6 +477,11 @@ function FPOMembersContent() {
   const handleViewProfile = (member: any) => {
     setSelectedMember(member);
     setIsViewModalOpen(true);
+  };
+  
+  const handleCreateLot = (member: any) => {
+    setMemberForLot(member);
+    setIsCreateLotModalOpen(true);
   };
   
   const handleRemoveClick = (member: any) => {
@@ -468,6 +643,15 @@ function FPOMembersContent() {
                     </Button>
                     <Button 
                       variant="ghost" 
+                      size="sm"
+                      onClick={() => handleCreateLot(member)}
+                      title="Create Lot"
+                      className="text-green-600 hover:text-green-700"
+                    >
+                      <Package className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
                       size="sm" 
                       className="text-red-600 hover:text-red-700"
                       onClick={() => handleRemoveClick(member)}
@@ -569,7 +753,7 @@ function FPOMembersContent() {
                 <p className="text-sm text-gray-600 mb-2">Primary Crops</p>
                 <div className="flex flex-wrap gap-2">
                   {selectedMember.farmer.primary_crops.map((crop: string) => (
-                    <Badge key={crop} variant="secondary">{crop}</Badge>
+                    <Badge key={crop}>{crop}</Badge>
                   ))}
                 </div>
               </div>
@@ -612,6 +796,19 @@ function FPOMembersContent() {
           </div>
         )}
       </Modal>
+      
+      {/* Create Lot Modal */}
+      {memberForLot && (
+        <CreateLotModal
+          isOpen={isCreateLotModalOpen}
+          onClose={() => {
+            setIsCreateLotModalOpen(false);
+            setMemberForLot(null);
+          }}
+          onSuccess={handleRefresh}
+          member={memberForLot}
+        />
+      )}
     </div>
   );
 }

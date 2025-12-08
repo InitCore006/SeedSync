@@ -16,6 +16,7 @@ import { Plus, Package, Search, Filter, Eye, Edit, Trash2, Wheat, Sprout, Flower
 import { CROPS, QUALITY_GRADES } from '@/lib/constants';
 import API from '@/lib/api';
 import useSWR from 'swr';
+import toast from 'react-hot-toast';
 
 // Helper function to get crop icon
 const getCropIcon = (cropType: string) => {
@@ -113,15 +114,19 @@ function CreateLotModal({ isOpen, onClose, onCreate, warehouses, memberLots, onR
         description: formData.description,
       });
 
-      if (response.data.status === 'success') {
-        onCreate(response.data.data);
+      // Check if response indicates success
+      if (response.data?.status === 'success' || response.status === 'success' || response.data?.data) {
+        toast.success(response.data?.message || 'Aggregated lot created successfully');
+        onCreate(response.data?.data || response.data);
         onRefresh();
         resetForm();
       } else {
-        setError(response.data.message || 'Failed to create aggregated lot');
+        setError(response.data?.message || 'Failed to create aggregated lot');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'An error occurred');
+      const errorMessage = err.response?.data?.message || err.message || 'An error occurred';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -366,22 +371,29 @@ function FPOProcurementContent() {
         warehouse_id: selectedWarehouseId
       });
       
-      if (response.data.status === 'success') {
-        // Refresh the lot list
-        refetchLots();
-        setIsAssignWarehouseModalOpen(false);
-        setSelectedLot(null);
-        setSelectedWarehouseId('');
-      }
+      // Close modal and reset state
+      setIsAssignWarehouseModalOpen(false);
+      setSelectedLot(null);
+      setSelectedWarehouseId('');
+      setAssignError('');
+      setAssigningWarehouse(false);
+      
+      // Show success message
+      toast.success('Warehouse assigned successfully');
+      
+      // Refresh the lot list
+      refetchLots();
     } catch (error: any) {
       setAssignError(error.response?.data?.message || 'Failed to assign warehouse');
-    } finally {
       setAssigningWarehouse(false);
     }
   };
   
   // Separate lots into with/without warehouse
-  const lotsWithoutWarehouse = (opportunities || []).filter((lot: any) => !lot.warehouse_id);
+  // Exclude FPO aggregated lots from warehouse assignment (they're already aggregated from warehoused lots)
+  const lotsWithoutWarehouse = (opportunities || []).filter((lot: any) => 
+    !lot.warehouse_id && lot.listing_type !== 'fpo_aggregated'
+  );
   const lotsWithWarehouse = (opportunities || []).filter((lot: any) => lot.warehouse_id);
 
   if (isLoading) return <Loading fullScreen />;

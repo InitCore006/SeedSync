@@ -1,6 +1,6 @@
 """Processors Serializers"""
 from rest_framework import serializers
-from .models import ProcessorProfile, ProcessingPlant, ProcessingBatch, ProcessingStageLog, FinishedProduct
+from .models import ProcessorProfile, ProcessingPlant, ProcessingBatch, ProcessingStageLog, FinishedProduct, ProcessedProduct
 
 class ProcessingPlantSerializer(serializers.ModelSerializer):
     class Meta:
@@ -111,3 +111,92 @@ class ProcessingBatchCreateSerializer(serializers.ModelSerializer):
             validated_data['batch_number'] = f'{prefix}-{new_num:03d}'
         
         return ProcessingBatch.objects.create(**validated_data)
+
+
+class ProcessedProductSerializer(serializers.ModelSerializer):
+    """Serializer for processed oil products (in liters)"""
+    product_type_display = serializers.CharField(source='get_product_type_display', read_only=True)
+    processing_type_display = serializers.CharField(source='get_processing_type_display', read_only=True)
+    quality_grade_display = serializers.CharField(source='get_quality_grade_display', read_only=True)
+    packaging_type_display = serializers.CharField(source='get_packaging_type_display', read_only=True)
+    
+    processor_name = serializers.CharField(source='processor.company_name', read_only=True)
+    processor_city = serializers.CharField(source='processor.city', read_only=True)
+    processor_state = serializers.CharField(source='processor.state', read_only=True)
+    
+    is_expired = serializers.BooleanField(read_only=True)
+    is_low_stock = serializers.BooleanField(read_only=True)
+    stock_status = serializers.CharField(read_only=True)
+    
+    class Meta:
+        model = ProcessedProduct
+        fields = '__all__'
+        read_only_fields = ['processor', 'available_quantity_liters', 'reserved_quantity_liters']
+
+
+class ProcessedProductCreateSerializer(serializers.ModelSerializer):
+    """Simplified serializer for creating processed products"""
+    
+    class Meta:
+        model = ProcessedProduct
+        fields = [
+            'batch', 'product_type', 'processing_type', 'batch_number', 'sku',
+            'quantity_liters', 'min_order_quantity_liters', 'quality_grade',
+            'fssai_license', 'packaging_type', 'packaging_date',
+            'manufacturing_date', 'expiry_date', 'cost_price_per_liter',
+            'selling_price_per_liter', 'is_available_for_sale', 'is_featured',
+            'storage_location', 'storage_temperature', 'description', 'nutritional_info'
+        ]
+    
+    def validate(self, data):
+        """Validate product data"""
+        # Check expiry date is after manufacturing date
+        if data.get('expiry_date') and data.get('manufacturing_date'):
+            if data['expiry_date'] <= data['manufacturing_date']:
+                raise serializers.ValidationError({
+                    'expiry_date': 'Expiry date must be after manufacturing date'
+                })
+        
+        # Check selling price is greater than cost price
+        if data.get('selling_price_per_liter') and data.get('cost_price_per_liter'):
+            if data['selling_price_per_liter'] <= data['cost_price_per_liter']:
+                raise serializers.ValidationError({
+                    'selling_price_per_liter': 'Selling price must be greater than cost price'
+                })
+        
+        # Check SKU is unique
+        sku = data.get('sku')
+        if sku:
+            if ProcessedProduct.objects.filter(sku=sku).exists():
+                raise serializers.ValidationError({
+                    'sku': 'SKU must be unique'
+                })
+        
+        return data
+    
+    def create(self, validated_data):
+        """Create product with processor from request"""
+        validated_data['processor'] = self.context['request'].user.processor_profile
+        return super().create(validated_data)
+
+
+class ProcessedProductListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for product listings"""
+    product_type_display = serializers.CharField(source='get_product_type_display', read_only=True)
+    processing_type_display = serializers.CharField(source='get_processing_type_display', read_only=True)
+    quality_grade_display = serializers.CharField(source='get_quality_grade_display', read_only=True)
+    processor_name = serializers.CharField(source='processor.company_name', read_only=True)
+    processor_id = serializers.CharField(source='processor.id', read_only=True)
+    stock_status = serializers.CharField(read_only=True)
+    
+    class Meta:
+        model = ProcessedProduct
+        fields = [
+            'id', 'product_type', 'product_type_display', 'processing_type',
+            'processing_type_display', 'quality_grade', 'quality_grade_display',
+            'sku', 'batch_number', 'quantity_liters', 'available_quantity_liters',
+            'min_order_quantity_liters', 'selling_price_per_liter', 'packaging_type',
+            'manufacturing_date', 'expiry_date', 'is_available_for_sale',
+            'processor_name', 'processor_id', 'stock_status', 'created_at'
+        ]
+

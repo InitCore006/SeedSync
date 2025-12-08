@@ -48,7 +48,7 @@ function BidsContent() {
   const filteredBids = bids;
   const pendingCount = bids.filter((b: any) => b.status === 'pending').length;
   const acceptedCount = bids.filter((b: any) => b.status === 'accepted').length;
-  const totalBidValue = bids.reduce((sum: number, b: any) => sum + (b.bid_price * b.quantity / 100), 0);
+  const totalBidValue = bids.reduce((sum: number, b: any) => sum + (b.bid_price * b.quantity), 0);
 
   const handleAcceptBid = async (bidId: string) => {
     try {
@@ -172,7 +172,7 @@ function BidsContent() {
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Quantity</p>
-                        <p className="font-medium text-gray-900">{formatNumber(bid.quantity)} kg</p>
+                        <p className="font-medium text-gray-900">{formatNumber(bid.quantity)} quintals</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Bid Price</p>
@@ -192,7 +192,7 @@ function BidsContent() {
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Total Bid Value</p>
-                        <p className="font-bold text-gray-900">{formatCurrency((bid.bid_price * bid.quantity) / 100)}</p>
+                        <p className="font-bold text-gray-900">{formatCurrency(bid.bid_price * bid.quantity)}</p>
                       </div>
                     </div>
 

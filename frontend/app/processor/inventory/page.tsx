@@ -8,15 +8,29 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
 import Loading from '@/components/ui/Loading';
-import { Package2, Search, AlertCircle, BoxesIcon } from 'lucide-react';
+import { Package2, Search, AlertCircle, BoxesIcon, ShoppingCart } from 'lucide-react';
 import { formatNumber, formatDate } from '@/lib/utils';
-import { useProcessorInventory } from '@/lib/hooks/useAPI';
+import useSWR from 'swr';
+import { API } from '@/lib/api';
+import ListToMarketplaceModal from './ListToMarketplaceModal';
 
 function ProcessorInventoryContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
-  const { inventory, isLoading, isError } = useProcessorInventory();
+  const { data: finishedGoodsResponse, error: finishedError, mutate: mutateFinished } = useSWR(
+    '/processors/finished-goods/',
+    () => API.processor.getFinishedGoods()
+  );
+
+  const { data: inventoryResponse, error: inventoryError } = useSWR(
+    '/processors/inventory/',
+    () => API.processor.getInventory()
+  );
+
+  const isLoading = (!finishedGoodsResponse && !finishedError) || (!inventoryResponse && !inventoryError);
+  const isError = !!finishedError || !!inventoryError;
 
   if (isLoading) return <Loading fullScreen />;
   if (isError) {
@@ -29,20 +43,49 @@ function ProcessorInventoryContent() {
     );
   }
 
-  const rawMaterials = inventory?.raw_materials || [];
-  const finishedProducts = inventory?.finished_products || [];
-  const allInventory = [...rawMaterials, ...finishedProducts];
-  
-  const filteredInventory = allInventory.filter(item =>
-    (categoryFilter === 'all' || 
-     (categoryFilter === 'raw' && item.category === 'raw') ||
-     (categoryFilter === 'finished' && item.category === 'finished')) &&
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Handle nested data structure from API response
+  const finishedGoods = Array.isArray(finishedGoodsResponse?.data?.data?.finished_goods) 
+    ? finishedGoodsResponse.data.data.finished_goods 
+    : Array.isArray(finishedGoodsResponse?.data?.finished_goods)
+    ? finishedGoodsResponse.data.finished_goods
+    : [];
 
-  const rawMaterialsCount = rawMaterials.length;
-  const finishedGoodsCount = finishedProducts.length;
-  const lowStockCount = allInventory.filter(item => item.status === 'low').length;
+  const rawMaterials = Array.isArray(inventoryResponse?.data?.data?.raw_materials)
+    ? inventoryResponse.data.data.raw_materials
+    : Array.isArray(inventoryResponse?.data?.raw_materials)
+    ? inventoryResponse.data.raw_materials
+    : [];
+
+  // Map raw materials to consistent format
+  const rawMaterialsFormatted = rawMaterials.map((item: any, index: number) => ({
+    id: `raw-${index}`,
+    category: 'raw',
+    name: item.name,
+    quantity: item.quantity,
+    unit: item.unit,
+    status: item.status || 'optimal'
+  }));
+  
+  // Combine all inventory items
+  const allInventory = [...rawMaterialsFormatted, ...finishedGoods];
+  
+  const filteredInventory = allInventory.filter((item: any) => {
+    const productName = item.category === 'raw' 
+      ? item.name
+      : item.oil_type ? `${item.oil_type} ${item.product_type === 'refined_oil' ? 'Oil' : 'Cake'}` : 'Product';
+    const matchesSearch = productName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = 
+      categoryFilter === 'all' || 
+      (categoryFilter === 'raw' && item.category === 'raw') ||
+      (categoryFilter === 'oil' && item.product_type === 'refined_oil') ||
+      (categoryFilter === 'cake' && item.product_type === 'oil_cake');
+    return matchesSearch && matchesCategory;
+  });
+
+  const rawCount = rawMaterialsFormatted.length;
+  const oilCount = finishedGoods.filter((item: any) => item.product_type === 'refined_oil').length;
+  const cakeCount = finishedGoods.filter((item: any) => item.product_type === 'oil_cake').length;
+  const inStockCount = finishedGoods.filter((item: any) => item.status === 'in_stock').length;
 
   return (
     <div className="p-6 space-y-6">
@@ -71,7 +114,19 @@ function ProcessorInventoryContent() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Raw Materials</p>
-                <p className="text-3xl font-bold text-blue-600 mt-1">{rawMaterialsCount}</p>
+                <p className="text-3xl font-bold text-amber-600 mt-1">{rawCount}</p>
+              </div>
+              <Package2 className="w-12 h-12 text-amber-500 opacity-20" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Oil Products</p>
+                <p className="text-3xl font-bold text-blue-600 mt-1">{oilCount}</p>
               </div>
               <Package2 className="w-12 h-12 text-blue-500 opacity-20" />
             </div>
@@ -82,22 +137,10 @@ function ProcessorInventoryContent() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Finished Goods</p>
-                <p className="text-3xl font-bold text-green-600 mt-1">{finishedGoodsCount}</p>
+                <p className="text-sm font-medium text-gray-600">Cake Products</p>
+                <p className="text-3xl font-bold text-green-600 mt-1">{cakeCount}</p>
               </div>
               <Package2 className="w-12 h-12 text-green-500 opacity-20" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Low Stock</p>
-                <p className="text-3xl font-bold text-orange-600 mt-1">{lowStockCount}</p>
-              </div>
-              <AlertCircle className="w-12 h-12 text-orange-500 opacity-20" />
             </div>
           </CardContent>
         </Card>
@@ -117,14 +160,14 @@ function ProcessorInventoryContent() {
               />
             </div>
             <div className="flex gap-2">
-              {['all', 'raw', 'finished'].map(cat => (
+              {['all', 'raw', 'oil', 'cake'].map(cat => (
                 <Button
                   key={cat}
                   variant={categoryFilter === cat ? 'primary' : 'outline'}
                   size="sm"
                   onClick={() => setCategoryFilter(cat)}
                 >
-                  {cat === 'all' ? 'All' : cat === 'raw' ? 'Raw Materials' : 'Finished Goods'}
+                  {cat === 'all' ? 'All' : cat === 'raw' ? 'Raw Materials' : cat === 'oil' ? 'Oil' : 'Oil Cake'}
                 </Button>
               ))}
             </div>
@@ -135,58 +178,144 @@ function ProcessorInventoryContent() {
       {/* Inventory Grid */}
       {filteredInventory.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredInventory.map((item, index) => (
-            <Card key={index} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle>{item.name}</CardTitle>
-                    <p className="text-sm text-gray-600 mt-1">{item.location || 'Main Warehouse'}</p>
+          {filteredInventory.map((item: any) => {
+            // Handle raw materials
+            if (item.category === 'raw') {
+              return (
+                <Card key={item.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle>{item.name}</CardTitle>
+                        <p className="text-sm text-gray-600 mt-1">Raw Material</p>
+                      </div>
+                      <Badge variant="status" status="active">
+                        {item.status === 'optimal' ? 'Available' : item.status}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between py-3 border-t border-gray-100">
+                        <span className="text-sm text-gray-600">Quantity:</span>
+                        <span className="font-bold text-gray-900">
+                          {formatNumber(item.quantity)} {item.unit}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <div className="flex-1 text-center text-sm text-gray-500 py-2">
+                        Procured Seeds
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            // Handle finished goods
+            const productName = item.oil_type 
+              ? `${item.oil_type} ${item.product_type === 'refined_oil' ? 'Oil' : 'Cake'}`
+              : item.product_type === 'refined_oil' ? 'Oil' : 'Oil Cake';
+            const isOil = item.product_type === 'refined_oil';
+            const quantity = isOil ? item.quantity_liters : item.quantity_quintals;
+            const unit = isOil ? 'L' : 'Q';
+
+            return (
+              <Card key={item.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle>{productName}</CardTitle>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {isOil ? 'Edible Oil' : 'Oil Cake'}
+                      </p>
+                    </div>
+                    <Badge 
+                      variant="status" 
+                      status={item.status === 'in_stock' ? 'active' : item.status === 'sold' ? 'pending' : 'cancelled'}
+                    >
+                      {item.status === 'in_stock' ? 'In Stock' : item.status === 'sold' ? 'Listed' : 'Reserved'}
+                    </Badge>
                   </div>
-                  <Badge variant="status" status={item.category === 'raw' ? 'pending' : 'active'}>
-                    {item.category === 'raw' ? 'Raw' : 'Finished'}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between py-3 border-t border-gray-100">
-                    <span className="text-sm text-gray-600">Current Stock:</span>
-                    <span className="font-bold text-gray-900">{formatNumber(item.quantity)} {item.unit}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Status:</span>
-                    {item.status === 'low' ? (
-                      <Badge variant="status" status="pending">Low Stock</Badge>
-                    ) : (
-                      <Badge variant="status" status="active">Optimal</Badge>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-3 border-t border-gray-100">
+                      <span className="text-sm text-gray-600">Quantity:</span>
+                      <span className="font-bold text-gray-900">
+                        {formatNumber(quantity)} {unit}
+                      </span>
+                    </div>
+                    
+                    {item.quality_grade && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Quality:</span>
+                        <Badge variant="status" status="active">
+                          Grade {item.quality_grade}
+                        </Badge>
+                      </div>
+                    )}
+
+                    {item.batch_number && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Batch:</span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {item.batch_number}
+                        </span>
+                      </div>
+                    )}
+
+                    {item.storage_location && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Location:</span>
+                        <span className="text-sm text-gray-900">
+                          {item.storage_location}
+                        </span>
+                      </div>
+                    )}
+
+                    {item.production_date && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Produced:</span>
+                        <span className="text-sm text-gray-900">
+                          {formatDate(item.production_date)}
+                        </span>
+                      </div>
                     )}
                   </div>
 
-                  {item.status === 'low' && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-3">
-                      <div className="flex items-start">
-                        <AlertCircle className="w-4 h-4 text-orange-600 mt-0.5 mr-2" />
-                        <p className="text-xs text-orange-800">
-                          Stock needs replenishment
-                        </p>
+                  <div className="flex gap-2 mt-4">
+                    {isOil && item.status === 'in_stock' && (
+                      <Button 
+                        variant="primary" 
+                        size="sm" 
+                        className="flex-1 flex items-center justify-center gap-1"
+                        onClick={() => setSelectedProduct({
+                          id: item.id,
+                          product_name: productName,
+                          quantity_liters: item.quantity_liters
+                        })}
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                        List to Marketplace
+                      </Button>
+                    )}
+                    {item.status === 'sold' && (
+                      <div className="flex-1 text-center text-sm text-gray-600 py-2">
+                        Listed in Marketplace
                       </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2 mt-4">
-                  <Button variant="primary" size="sm" className="flex-1">
-                    Update Stock
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    Details
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                    )}
+                    {!isOil && (
+                      <div className="flex-1 text-center text-sm text-gray-500 py-2">
+                        Oil Cake (Byproduct)
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card>
@@ -198,6 +327,18 @@ function ProcessorInventoryContent() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* List to Marketplace Modal */}
+      {selectedProduct && (
+        <ListToMarketplaceModal
+          finishedGood={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onSuccess={() => {
+            mutateFinished();
+            setSelectedProduct(null);
+          }}
+        />
       )}
     </div>
   );

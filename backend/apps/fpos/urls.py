@@ -14,7 +14,8 @@ from .views import (
     FPORemoveMemberAPIView,
     FPOCreateAggregatedLotAPIView,
     FPOAssignWarehouseAPIView,
-    FPOWarehouseInventoryAPIView
+    FPOWarehouseInventoryAPIView,
+    FPOCreateFarmerLotAPIView
 )
 
 app_name = 'fpos'
@@ -40,6 +41,9 @@ urlpatterns = [
 
     # Create farmer account
     path('create-farmer/', FPOCreateFarmerAPIView.as_view(), name='fpo-create-farmer'),
+    
+    # Create lot on behalf of farmer
+    path('create-farmer-lot/', FPOCreateFarmerLotAPIView.as_view(), name='fpo-create-farmer-lot'),
     
     # Remove member
     path('members/<uuid:membership_id>/remove/', FPORemoveMemberAPIView.as_view(), name='fpo-remove-member'),
