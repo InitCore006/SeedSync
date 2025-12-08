@@ -8,7 +8,9 @@ from .views import (
     RetailerOrderListCreateAPIView,
     RetailerOrderDetailAPIView,
     RetailerInventoryAPIView,
-    RetailerSuppliersAPIView
+    RetailerSuppliersAPIView,
+    RetailerQuickOrderAPIView,
+    RetailerInvoiceDownloadAPIView
 )
 
 router = DefaultRouter()
@@ -22,7 +24,9 @@ urlpatterns = [
     
     # Orders
     path('orders/', RetailerOrderListCreateAPIView.as_view(), name='retailer-orders'),
+    path('orders/quick/', RetailerQuickOrderAPIView.as_view(), name='retailer-quick-order'),
     path('orders/<uuid:pk>/', RetailerOrderDetailAPIView.as_view(), name='retailer-order-detail'),
+    path('orders/<uuid:pk>/invoice/', RetailerInvoiceDownloadAPIView.as_view(), name='retailer-invoice'),
     
     # Inventory
     path('inventory/', RetailerInventoryAPIView.as_view(), name='retailer-inventory'),

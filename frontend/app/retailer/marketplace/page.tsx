@@ -142,10 +142,26 @@ function RetailerMarketplaceContent() {
 
   const { data: productsResponse, error, mutate } = useSWR(
     ['/marketplace/products', processingTypeFilter, qualityFilter],
-    () => API.marketplace.getProducts({
-      processing_type: processingTypeFilter || undefined,
-      quality_grade: qualityFilter || undefined,
-    })
+    () => {
+      console.log('🔍 Fetching marketplace products from API...');
+      console.log('  URL: /api/marketplace/products/');
+      console.log('  Processing Type Filter:', processingTypeFilter || 'all');
+      console.log('  Quality Filter:', qualityFilter || 'all');
+      return API.marketplace.getProducts({
+        processing_type: processingTypeFilter || undefined,
+        quality_grade: qualityFilter || undefined,
+      }).then(response => {
+        console.log('✅ API Response received:', response);
+        console.log('  Status:', response?.status);
+        console.log('  Products count:', response?.data?.data?.length || response?.data?.length || 0);
+        console.log('  Full data structure:', response?.data);
+        return response;
+      }).catch(err => {
+        console.error('❌ API Error:', err);
+        console.error('  Error details:', err?.response?.data);
+        throw err;
+      });
+    }
   );
 
   const isLoading = !productsResponse && !error;
@@ -188,6 +204,8 @@ function RetailerMarketplaceContent() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Debug Info Banner */}
+     
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Oil Marketplace</h1>

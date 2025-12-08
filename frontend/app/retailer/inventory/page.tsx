@@ -29,18 +29,21 @@ function InventoryContent() {
     );
   }
 
-  const filteredInventory = inventory.filter((item: any) =>
+  // Ensure inventory is always an array
+  const inventoryArray = Array.isArray(inventory) ? inventory : [];
+
+  const filteredInventory = inventoryArray.filter((item: any) =>
     item.product_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
     item.processor_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalItems = inventory.length;
-  const totalValue = inventory.reduce((sum: number, item: any) => 
+  const totalItems = inventoryArray.length;
+  const totalValue = inventoryArray.reduce((sum: number, item: any) => 
     sum + (Number(item.current_stock_liters) * Number(item.selling_price_per_liter)), 0
   );
-  const lowStockItems = inventory.filter((item: any) => item.stock_status === 'low_stock' || item.stock_status === 'reorder').length;
-  const outOfStockItems = inventory.filter((item: any) => item.stock_status === 'out_of_stock').length;
+  const lowStockItems = inventoryArray.filter((item: any) => item.stock_status === 'low_stock' || item.stock_status === 'reorder').length;
+  const outOfStockItems = inventoryArray.filter((item: any) => item.stock_status === 'out_of_stock').length;
 
   const getStockStatus = (stockStatus: string) => {
     switch (stockStatus) {

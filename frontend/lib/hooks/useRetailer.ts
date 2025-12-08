@@ -11,7 +11,7 @@ export function useRetailerDashboard() {
   );
 
   return {
-    dashboard: data?.data?.data,
+    dashboard: data?.data,
     isLoading,
     isError: error,
     refetch: mutate,
@@ -28,7 +28,7 @@ export function useRetailerOrders(status?: string) {
   );
 
   return {
-    orders: data?.data?.data || [],
+    orders: data?.data || [],
     isLoading,
     isError: error,
     refetch: mutate,
@@ -45,7 +45,7 @@ export function useRetailerOrder(orderId: string) {
   );
 
   return {
-    order: data?.data?.data,
+    order: data?.data,
     isLoading,
     isError: error,
     refetch: mutate,
@@ -62,7 +62,7 @@ export function useRetailerInventory(stockStatus?: string) {
   );
 
   return {
-    inventory: data?.data?.data || [],
+    inventory: data?.data || [],
     isLoading,
     isError: error,
     refetch: mutate,
@@ -79,7 +79,7 @@ export function useRetailerSuppliers() {
   );
 
   return {
-    suppliers: data?.data?.data || [],
+    suppliers: data?.data || [],
     isLoading,
     isError: error,
     refetch: mutate,
@@ -104,7 +104,7 @@ export function useMarketplaceProducts(filters?: {
   );
 
   return {
-    products: data?.data?.data || [],
+    products: data?.data || [],
     isLoading,
     isError: error,
     refetch: mutate,

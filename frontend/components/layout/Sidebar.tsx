@@ -119,6 +119,12 @@ const navItems: NavItem[] = [
     roles: [USER_ROLES.PROCESSOR],
   },
   {
+    label: 'Orders',
+    href: '/processor/orders',
+    icon: <CheckSquare className="h-5 w-5" />,
+    roles: [USER_ROLES.PROCESSOR],
+  },
+  {
     label: 'Procurement Tracking',
     href: '/processor/tracking',
     icon: <Activity className="h-5 w-5" />,
@@ -158,7 +164,7 @@ const navItems: NavItem[] = [
   },
   {
     label: 'Marketplace',
-    href: '/marketplace',
+    href: '/retailer/marketplace',
     icon: <ShoppingCart className="h-5 w-5" />,
     roles: [USER_ROLES.RETAILER],
   },
@@ -190,18 +196,18 @@ const navItems: NavItem[] = [
   },
   
   // Common
-  {
-    label: 'Traceability',
-    href: '/trace',
-    icon: <LinkIcon className="h-5 w-5" />,
-    roles: [USER_ROLES.FPO, USER_ROLES.PROCESSOR, USER_ROLES.RETAILER, USER_ROLES.GOVERNMENT],
-  },
-  {
-    label: 'Reports',
-    href: '/reports',
-    icon: <FileText className="h-5 w-5" />,
-    roles: [USER_ROLES.FPO, USER_ROLES.PROCESSOR, USER_ROLES.RETAILER, USER_ROLES.GOVERNMENT],
-  },
+  // {
+  //   label: 'Traceability',
+  //   href: '/trace',
+  //   icon: <LinkIcon className="h-5 w-5" />,
+  //   roles: [USER_ROLES.FPO, USER_ROLES.PROCESSOR, USER_ROLES.RETAILER, USER_ROLES.GOVERNMENT],
+  // },
+  // {
+  //   label: 'Reports',
+  //   href: '/reports',
+  //   icon: <FileText className="h-5 w-5" />,
+  //   roles: [USER_ROLES.FPO, USER_ROLES.PROCESSOR, USER_ROLES.RETAILER, USER_ROLES.GOVERNMENT],
+  // },
 ];
 
 export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {

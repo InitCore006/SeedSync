@@ -21,7 +21,10 @@ from .views import (
     ProcessorStartProcessingAPIView,
     ProcessorCompleteProcessingAPIView,
     ProcessorFinishedGoodsAPIView,
-    ListFinishedGoodToMarketplaceAPIView
+    ListFinishedGoodToMarketplaceAPIView,
+    ProcessorOrdersAPIView,
+    ProcessorOrderDetailAPIView,
+    ProcessorOrderStatusUpdateAPIView
 )
 
 app_name = 'processors'
@@ -66,6 +69,11 @@ urlpatterns = [
     # Processed products (oils in liters) for B2B marketplace
     path('products/', ProcessedProductListCreateAPIView.as_view(), name='processed-products'),
     path('products/<uuid:pk>/', ProcessedProductDetailAPIView.as_view(), name='processed-product-detail'),
+    
+    # Order management - Incoming orders from retailers
+    path('orders/', ProcessorOrdersAPIView.as_view(), name='processor-orders'),
+    path('orders/<uuid:pk>/', ProcessorOrderDetailAPIView.as_view(), name='processor-order-detail'),
+    path('orders/<uuid:pk>/status/', ProcessorOrderStatusUpdateAPIView.as_view(), name='processor-order-status'),
     
     # Include router URLs for batch management (CRUD + custom actions)
     path('', include(router.urls)),

@@ -390,6 +390,21 @@ export const processorAPI = {
   }) =>
     api.post<APIResponse>('/processors/finished-goods/list-to-marketplace/', data),
 
+  // Order management - Incoming orders from retailers
+  getOrders: (params?: { status?: string; page?: number }) =>
+    api.get<APIResponse>('/processors/orders/', { params }),
+
+  getOrder: (id: string) =>
+    api.get<APIResponse>(`/processors/orders/${id}/`),
+
+  updateOrderStatus: (id: string, data: {
+    status: string;
+    tracking_number?: string;
+    notes?: string;
+    cancellation_reason?: string;
+  }) =>
+    api.patch<APIResponse>(`/processors/orders/${id}/status/`, data),
+
   // Get processing batches (legacy)
   getBatchesManagement: (params?: { page?: number }) =>
     api.get<PaginatedResponse<any>>('/processors/batches-management/', { params }),
@@ -547,13 +562,29 @@ export const retailerAPI = {
   getOrders: (params?: { status?: string }) =>
     api.get<APIResponse>('/retailers/orders/', { params }),
 
-  // Create order
-  createOrder: (data: any) =>
-    api.post<APIResponse>('/retailers/orders/', data),
+  // Create order (quick order with just product_id and quantity_liters)
+  createOrder: (data: { product_id: string; quantity_liters: number }) =>
+    api.post<APIResponse>('/retailers/orders/quick/', data),
 
   // Get order details
   getOrder: (id: string) =>
     api.get<APIResponse>(`/retailers/orders/${id}/`),
+
+  // Download invoice
+  downloadInvoice: async (id: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('seedsync_token') : null;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
+    const response = await fetch(`${apiUrl}/retailers/orders/${id}/invoice/`, {
+      method: 'GET',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to download invoice');
+    }
+    return await response.blob();
+  },
 
   // Get inventory
   getInventory: (params?: { stock_status?: string }) =>

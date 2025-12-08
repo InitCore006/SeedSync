@@ -1918,3 +1918,221 @@ class ListFinishedGoodToMarketplaceAPIView(APIView):
             status=status.HTTP_201_CREATED
         )
 
+
+class ProcessorOrdersAPIView(APIView):
+    """
+    Get incoming retailer orders for processor
+    GET: /api/processors/orders/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def get(self, request):
+        """Get all orders from retailers for this processor"""
+        try:
+            processor = ProcessorProfile.objects.get(user=request.user)
+        except ProcessorProfile.DoesNotExist:
+            return Response(
+                response_error(message="Processor profile not found"),
+                status=404
+            )
+        
+        # Get orders for this processor
+        from apps.retailers.models import RetailerOrder
+        from apps.retailers.serializers import RetailerOrderSerializer
+        
+        orders = RetailerOrder.objects.filter(
+            processor=processor
+        ).select_related('retailer').prefetch_related('items').order_by('-order_date')
+        
+        # Filter by status if provided
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            orders = orders.filter(status=status_filter)
+        
+        serializer = RetailerOrderSerializer(orders, many=True)
+        
+        return Response(
+            response_success(
+                message="Orders fetched successfully",
+                data=serializer.data
+            )
+        )
+
+
+class ProcessorOrderDetailAPIView(APIView):
+    """
+    Get specific order details for processor
+    GET: /api/processors/orders/<id>/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def get(self, request, pk):
+        """Get order details"""
+        try:
+            processor = ProcessorProfile.objects.get(user=request.user)
+        except ProcessorProfile.DoesNotExist:
+            return Response(
+                response_error(message="Processor profile not found"),
+                status=404
+            )
+        
+        from apps.retailers.models import RetailerOrder
+        from apps.retailers.serializers import RetailerOrderSerializer
+        
+        try:
+            order = RetailerOrder.objects.select_related('retailer').prefetch_related('items').get(
+                id=pk,
+                processor=processor
+            )
+        except RetailerOrder.DoesNotExist:
+            return Response(
+                response_error(message="Order not found"),
+                status=404
+            )
+        
+        serializer = RetailerOrderSerializer(order)
+        
+        return Response(
+            response_success(
+                message="Order details fetched successfully",
+                data=serializer.data
+            )
+        )
+
+
+class ProcessorOrderStatusUpdateAPIView(APIView):
+    """
+    Update order status and handle inventory changes
+    PATCH: /api/processors/orders/<id>/status/
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    @transaction.atomic
+    def patch(self, request, pk):
+        """Update order status with inventory management"""
+        try:
+            processor = ProcessorProfile.objects.get(user=request.user)
+        except ProcessorProfile.DoesNotExist:
+            return Response(
+                response_error(message="Processor profile not found"),
+                status=404
+            )
+        
+        from apps.retailers.models import RetailerOrder, RetailerInventory
+        from apps.retailers.serializers import RetailerOrderSerializer
+        
+        try:
+            order = RetailerOrder.objects.select_related('retailer').prefetch_related('items').get(
+                id=pk,
+                processor=processor
+            )
+        except RetailerOrder.DoesNotExist:
+            return Response(
+                response_error(message="Order not found"),
+                status=404
+            )
+        
+        new_status = request.data.get('status')
+        tracking_number = request.data.get('tracking_number', '')
+        notes = request.data.get('notes', '')
+        
+        if not new_status:
+            return Response(
+                response_error(message="Status is required"),
+                status=400
+            )
+        
+        # Validate status transition
+        valid_transitions = {
+            'pending': ['confirmed', 'cancelled'],
+            'confirmed': ['processing', 'cancelled'],
+            'processing': ['in_transit', 'cancelled'],
+            'in_transit': ['delivered', 'cancelled'],
+            'delivered': [],
+            'cancelled': []
+        }
+        
+        if new_status not in valid_transitions.get(order.status, []):
+            return Response(
+                response_error(
+                    message=f"Cannot transition from {order.status} to {new_status}"
+                ),
+                status=400
+            )
+        
+        old_status = order.status
+        order.status = new_status
+        
+        # Handle status-specific logic
+        if new_status == 'confirmed':
+            # Set expected delivery date (7 days from now)
+            from datetime import timedelta
+            order.expected_delivery_date = (timezone.now() + timedelta(days=7)).date()
+            
+        elif new_status == 'in_transit':
+            # Record tracking number
+            if notes:
+                order.notes = f"{order.notes}\n[Shipped] {notes}" if order.notes else f"[Shipped] {notes}"
+            
+        elif new_status == 'delivered':
+            # Mark as delivered and transfer to retailer inventory
+            order.actual_delivery_date = timezone.now().date()
+            order.payment_status = 'paid'  # Auto-mark as paid on delivery
+            
+            # Transfer stock: reserved → available for processor, add to retailer inventory
+            for item in order.items.all():
+                product = item.product
+                
+                # Update processor's product: remove from reserved
+                product.reserved_quantity_liters -= item.quantity_liters
+                product.save(update_fields=['reserved_quantity_liters'])
+                
+                # Add to retailer inventory or update existing
+                inventory, created = RetailerInventory.objects.get_or_create(
+                    retailer=order.retailer,
+                    product=product,
+                    defaults={
+                        'current_stock_liters': 0,
+                        'min_stock_level': 50,
+                        'max_stock_level': 500,
+                        'reorder_point': 100,
+                        'reorder_quantity': 200,
+                        'last_purchase_price': item.unit_price,
+                        'selling_price_per_liter': item.unit_price * Decimal('1.2'),  # 20% markup
+                        'product_name': item.product_name,
+                        'product_type': item.product_type,
+                        'sku': product.sku
+                    }
+                )
+                
+                # Update stock
+                inventory.current_stock_liters += item.quantity_liters
+                inventory.last_restocked = timezone.now().date()
+                inventory.last_purchase_price = item.unit_price
+                inventory.save()
+                
+        elif new_status == 'cancelled':
+            # Restore product stock: reserved → available
+            cancellation_reason = request.data.get('cancellation_reason', 'Cancelled by processor')
+            order.cancellation_reason = cancellation_reason
+            
+            for item in order.items.all():
+                product = item.product
+                product.reserved_quantity_liters -= item.quantity_liters
+                product.available_quantity_liters += item.quantity_liters
+                product.save(update_fields=['reserved_quantity_liters', 'available_quantity_liters'])
+        
+        if notes and new_status != 'delivered':
+            order.notes = f"{order.notes}\n{notes}" if order.notes else notes
+        
+        order.save()
+        
+        serializer = RetailerOrderSerializer(order)
+        
+        return Response(
+            response_success(
+                message=f"Order status updated from {old_status} to {new_status}",
+                data=serializer.data
+            )
+        )
+
