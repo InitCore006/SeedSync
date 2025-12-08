@@ -14,7 +14,7 @@ export const geminiService = {
   generateContent: async (prompt: string, useProModel: boolean = false): Promise<string> => {
     try {
       const model = genAI.getGenerativeModel({
-        model: useProModel ? 'gemini-1.5-pro-latest' : 'gemini-2.5-flash',
+        model: 'gemini-2.5-flash',
       });
 
       const result = await model.generateContent(prompt);
@@ -31,7 +31,7 @@ export const geminiService = {
   generateJSON: async <T = any>(prompt: string): Promise<T> => {
     try {
       const model = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash', // Best for structured JSON
+        model: 'gemini-2.5-flash',
       });
 
       const result = await model.generateContent(prompt);

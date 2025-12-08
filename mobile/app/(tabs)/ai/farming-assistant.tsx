@@ -11,12 +11,14 @@ import {
   ActivityIndicator,
   Modal,
   Animated,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/colors';
 import { AppHeader, Sidebar } from '@/components';
 import { useAuthStore } from '@/store/authStore';
 import { geminiService } from '@/services/geminiService';
+import { speechService, SpeechRecognitionResult } from '@/services/speechService';
 
 interface Message {
   id: string;
@@ -62,10 +64,12 @@ export default function FarmingAssistantScreen() {
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null);
+  const [recordingDuration, setRecordingDuration] = useState(0);
   const [showRecordingUI, setShowRecordingUI] = useState(false);
+  const [processingVoice, setProcessingVoice] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const scrollViewRef = useRef<ScrollView>(null);
+  const durationInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -73,6 +77,13 @@ export default function FarmingAssistantScreen() {
 
   useEffect(() => {
     if (isRecording) {
+      // Start duration timer
+      setRecordingDuration(0);
+      durationInterval.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+
+      // Pulse animation
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -88,26 +99,49 @@ export default function FarmingAssistantScreen() {
         ])
       ).start();
     } else {
-      pulseAnim.setValue(1);
+      // Clear interval when not recording
+      if (durationInterval.current) {
+        clearInterval(durationInterval.current);
+        durationInterval.current = null;
+      }
     }
-  }, [isRecording]);
+
+    return () => {
+      if (durationInterval.current) {
+        clearInterval(durationInterval.current);
+      }
+    };
+  }, [isRecording, pulseAnim]);
 
   const startRecording = async () => {
     try {
-      // In a real implementation, you would request microphone permissions
-      // and use expo-av or react-native-voice for actual recording
+      // Request permissions and start recording
+      const hasPermission = await speechService.requestPermissions();
+      if (!hasPermission) {
+        Alert.alert(
+          'Permission Required',
+          'Microphone permission is required to use voice input. Please enable it in settings.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      await speechService.startRecording();
       setIsRecording(true);
       setShowRecordingUI(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to start recording', err);
-      alert('Failed to start recording');
+      Alert.alert('Error', 'Failed to start recording. Please try again.');
     }
   };
 
   const stopRecording = async () => {
     try {
       setIsRecording(false);
-      setShowRecordingUI(false);
+      setProcessingVoice(true);
+
+      // Stop recording and get audio URI
+      const audioUri = await speechService.stopRecording();
 
       // Show processing message
       const processingMessage: Message = {
@@ -118,20 +152,97 @@ export default function FarmingAssistantScreen() {
       };
       setMessages((prev) => [...prev, processingMessage]);
 
-      // Simulate speech-to-text processing
-      // In production, integrate with Google Speech-to-Text or similar service
-      setTimeout(() => {
-        const sampleQuestion = 'How do I improve soil quality for my crops?';
-        handleSendMessage(sampleQuestion);
-      }, 1500);
-    } catch (error) {
-      console.error('Failed to stop recording', error);
+      // Convert speech to text using Whisper API (supports Hindi and English)
+      const result: SpeechRecognitionResult = await speechService.convertSpeechToText(audioUri, true);
+      
+      console.log('Speech recognition result:', result);
+
+      // Remove processing message
+      setMessages((prev) => prev.filter(msg => msg.id !== processingMessage.id));
+
+      // Detect language
+      const detectedLang = speechService.detectLanguage(result.transcript);
+      const languageEmoji = detectedLang === 'hindi' ? '🇮🇳' : detectedLang === 'english' ? '🇬🇧' : '🌐';
+
+      // Add user message with detected language indicator
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        text: `${languageEmoji} ${result.transcript}`,
+        isUser: true,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+
+      // Process the question with detected language
+      await processQuestion(result.transcript, detectedLang);
+
+      // Cleanup audio file
+      await speechService.cleanup();
+      setShowRecordingUI(false);
+      setProcessingVoice(false);
+    } catch (err: any) {
+      console.error('Failed to process voice', err);
+      setShowRecordingUI(false);
+      setProcessingVoice(false);
+      Alert.alert(
+        'Error / त्रुटि',
+        'Failed to convert speech to text. Please try again.\n\nआवाज़ को टेक्स्ट में बदलने में विफल। कृपया पुनः प्रयास करें।'
+      );
     }
   };
 
   const cancelRecording = async () => {
-    setIsRecording(false);
-    setShowRecordingUI(false);
+    try {
+      await speechService.cancelRecording();
+      setIsRecording(false);
+      setShowRecordingUI(false);
+      setRecordingDuration(0);
+    } catch (err) {
+      console.error('Failed to cancel recording', err);
+    }
+  };
+
+  const processQuestion = async (questionText: string, language: 'hindi' | 'english' | 'mixed') => {
+    setLoading(true);
+
+    try {
+      // Get farmer context
+      const farmerContext = user?.profile
+        ? `Farmer from ${user.profile.state}, India`
+        : 'Farmer in India';
+
+      // Add language instruction based on detected language
+      let languageInstruction = '';
+      if (language === 'hindi') {
+        languageInstruction = '\n\nकृपया हिंदी में उत्तर दें।';
+      } else if (language === 'mixed') {
+        languageInstruction = '\n\nPlease respond in both Hindi and English.';
+      }
+
+      const response = await geminiService.getFarmingAdvice(
+        questionText + languageInstruction,
+        farmerContext
+      );
+
+      // Add AI response
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: response,
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+    } catch (error) {
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: 'क्षमा करें, मैं आपके प्रश्न को प्रोसेस नहीं कर सका। कृपया पुनः प्रयास करें।\n\nSorry, I couldn\'t process your question. Please try again.',
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSendMessage = async (questionText?: string) => {
@@ -147,35 +258,12 @@ export default function FarmingAssistantScreen() {
     };
     setMessages((prev) => [...prev, userMessage]);
     setInputText('');
-    setLoading(true);
 
-    try {
-      // Get farmer context
-      const farmerContext = user?.profile
-        ? `Farmer from ${user.profile.state}, India`
-        : 'Farmer in India';
+    // Detect language
+    const detectedLang = speechService.detectLanguage(messageText);
 
-      const response = await geminiService.getFarmingAdvice(messageText, farmerContext);
-
-      // Add AI response
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: response,
-        isUser: false,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiMessage]);
-    } catch (error) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: 'Sorry, I couldn\'t process your question. Please try again.',
-        isUser: false,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setLoading(false);
-    }
+    // Process the question
+    await processQuestion(messageText, detectedLang);
   };
 
   const handleQuickQuestion = (question: string) => {
@@ -244,7 +332,7 @@ export default function FarmingAssistantScreen() {
                 <Ionicons name="leaf" size={20} color={COLORS.primary} />
               </View>
               <View style={styles.loadingDots}>
-                <ActivityIndicator color={COLORS.primary} />
+                <ActivityIndicator size="small" color={COLORS.primary} />
                 <Text style={styles.loadingText}>Thinking...</Text>
               </View>
             </View>
@@ -253,16 +341,16 @@ export default function FarmingAssistantScreen() {
           {/* Quick Questions */}
           {messages.length === 1 && (
             <View style={styles.quickQuestionsContainer}>
-              <Text style={styles.quickQuestionsTitle}>Quick Questions:</Text>
+              <Text style={styles.quickQuestionsTitle}>Quick Questions</Text>
               <View style={styles.quickQuestionsGrid}>
-                {QUICK_QUESTIONS.map((question, index) => (
+                {QUICK_QUESTIONS.map((q, index) => (
                   <TouchableOpacity
                     key={index}
-                    style={[styles.quickQuestionCard, { borderColor: question.color }]}
-                    onPress={() => handleQuickQuestion(question.text)}
+                    style={[styles.quickQuestionCard, { borderColor: q.color }]}
+                    onPress={() => handleQuickQuestion(q.text)}
                   >
-                    <Ionicons name={question.icon as any} size={24} color={question.color} />
-                    <Text style={styles.quickQuestionText}>{question.text}</Text>
+                    <Ionicons name={q.icon as any} size={24} color={q.color} />
+                    <Text style={styles.quickQuestionText}>{q.text}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -279,10 +367,10 @@ export default function FarmingAssistantScreen() {
           >
             <Ionicons name="mic" size={24} color={COLORS.primary} />
           </TouchableOpacity>
-          
+
           <TextInput
             style={styles.input}
-            placeholder="Ask your farming question..."
+            placeholder="Ask me anything about farming..."
             placeholderTextColor={COLORS.text.tertiary}
             value={inputText}
             onChangeText={setInputText}
@@ -310,7 +398,7 @@ export default function FarmingAssistantScreen() {
         <View style={styles.recordingOverlay}>
           <View style={styles.recordingCard}>
             <Text style={styles.recordingTitle}>
-              {isRecording ? 'Listening...' : 'Processing...'}
+              {isRecording ? 'सुन रहा हूँ... / Listening...' : 'प्रोसेसिंग... / Processing...'}
             </Text>
             
             <Animated.View
@@ -324,8 +412,19 @@ export default function FarmingAssistantScreen() {
               <Ionicons name="mic" size={48} color={COLORS.white} />
             </Animated.View>
 
+            {/* Recording Duration */}
+            {isRecording && (
+              <Text style={styles.recordingDuration}>
+                {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
+              </Text>
+            )}
+
             <Text style={styles.recordingHint}>
-              {isRecording ? 'Speak your farming question' : 'Converting speech to text...'}
+              {isRecording 
+                ? 'हिंदी या अंग्रेजी में बोलें\nSpeak in Hindi or English' 
+                : processingVoice 
+                ? 'आपकी आवाज़ को टेक्स्ट में बदला जा रहा है...\nConverting speech to text...'
+                : 'Processing...'}
             </Text>
 
             {isRecording && (
@@ -335,7 +434,7 @@ export default function FarmingAssistantScreen() {
                   onPress={cancelRecording}
                 >
                   <Ionicons name="close-circle" size={32} color={COLORS.error} />
-                  <Text style={styles.actionLabel}>Cancel</Text>
+                  <Text style={styles.actionLabel}>रद्द करें / Cancel</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -343,9 +442,13 @@ export default function FarmingAssistantScreen() {
                   onPress={stopRecording}
                 >
                   <Ionicons name="stop-circle" size={56} color={COLORS.primary} />
-                  <Text style={styles.actionLabel}>Stop</Text>
+                  <Text style={styles.actionLabel}>रोकें / Stop</Text>
                 </TouchableOpacity>
               </View>
+            )}
+
+            {processingVoice && (
+              <ActivityIndicator size="large" color={COLORS.primary} style={styles.processingIndicator} />
             )}
           </View>
         </View>
@@ -463,10 +566,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   quickQuestionText: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.text.primary,
+    fontSize: 15,
     fontWeight: '500',
+    color: COLORS.text.primary,
+    flex: 1,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -548,6 +651,16 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
     textAlign: 'center',
     marginBottom: 32,
+    lineHeight: 24,
+  },
+  recordingDuration: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 16,
+  },
+  processingIndicator: {
+    marginTop: 24,
   },
   recordingActions: {
     flexDirection: 'row',

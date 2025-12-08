@@ -85,7 +85,7 @@ def get_market_data_for_role(role=None):
     # Filter by role/buyer_type if provided
     if role:
         role_lower = role.lower()
-        if role_lower in ['fpo', 'processor', 'retailer', 'trader', 'exporter']:
+        if role_lower in ['fpo', 'processor', 'retailer', "farmer"]:
             df = df[df['buyer_type'] == role_lower]
     
     return df
@@ -531,7 +531,7 @@ def get_all_market_insights(role=None):
             insights["role_insights"] = get_retailer_insights(df)
         elif role_lower == 'processor':
             insights["role_insights"] = get_processor_insights(df)
-        elif role_lower in ['trader', 'exporter']:
+        elif role_lower in ['farmer']:
             # For trader and exporter, show general market summary
             insights["role_insights"] = {
                 "market_summary_actual": actual_data,
