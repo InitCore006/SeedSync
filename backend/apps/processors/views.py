@@ -723,10 +723,10 @@ class ProcessingBatchesAPIView(APIView):
                     'id': str(batch.plant.id),
                     'name': batch.plant.plant_name,
                 },
-                'processed_quantity': float(batch.processed_quantity) if batch.processed_quantity else 0,
-                'oil_extracted': float(batch.oil_extracted) if batch.oil_extracted else 0,
-                'cake_produced': float(batch.cake_produced) if batch.cake_produced else 0,
-                'processing_date': batch.processing_date.isoformat() if batch.processing_date else None,
+                'processed_quantity': float(batch.initial_quantity_quintals) if batch.initial_quantity_quintals else 0,
+                'oil_extracted': float(batch.oil_extracted_quintals) if batch.oil_extracted_quintals else 0,
+                'cake_produced': float(batch.cake_produced_quintals) if batch.cake_produced_quintals else 0,
+                'processing_date': batch.start_date.isoformat() if batch.start_date else None,
                 'created_at': batch.created_at.isoformat(),
             })
         
