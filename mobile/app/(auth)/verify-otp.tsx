@@ -14,7 +14,7 @@ import { authAPI } from '@/services/authService';
 import { farmersAPI } from '@/services/farmersService';
 import { logisticsAPI } from '@/services/logisticsService';
 import { useAuthStore } from '@/store/authStore';
-import { getErrorMessage, getErrorTitle, logDetailedError } from '@/utils/errorHandler';
+import { getErrorMessage, getErrorTitle, getErrorDescription, logDetailedError } from '@/utils/errorHandler';
 import { UserProfileCreateData, FarmerProfileCreateData, LogisticsPartnerCreateData } from '@/types/api';
 
 export default function VerifyOTPScreen() {
@@ -37,7 +37,7 @@ export default function VerifyOTPScreen() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [timer]); // Re-run effect when timer changes (for reset)
 
   const createProfile = async (accessToken: string) => {
     if (!profile_data || !role) return;
@@ -125,51 +125,52 @@ export default function VerifyOTPScreen() {
 
     setLoading(true);
     try {
-      if (type === 'register') {
-        console.log('Verifying OTP for registration...');
-        const response = await authAPI.verifyOTP({ phone_number: phone, otp });
-        console.log('OTP verified successfully');
-        
-        const { user, tokens } = response.data;
-        console.log('User:', user.phone_number, '-', user.role_display);
-        
-        if (tokens) {
-          // Login first
-          await login(user, tokens.access, tokens.refresh);
-          console.log('Auto-logged in after registration');
+      const purpose = type === 'register' ? 'registration' : 'login';
+      
+      console.log(`Verifying OTP for ${purpose}...`);
+      const response = await authAPI.verifyOTP({ 
+        phone_number: phone, 
+        otp,
+        purpose 
+      });
+      console.log('OTP verified successfully');
+      
+      const { user, tokens } = response.data;
+      console.log('User:', user.phone_number, '-', user.role_display);
+      
+      if (tokens) {
+        // Login first
+        await login(user, tokens.access, tokens.refresh);
+        console.log('Auto-logged in after verification');
 
-          // Create profile
+        // Create profile only for registration
+        if (type === 'register') {
           await createProfile(tokens.access);
-          
-          console.log('Navigating to main app...');
-          router.replace('/(tabs)');
-        } else {
-          Alert.alert('Success', 'Registration successful! Please login.', [
-            { text: 'OK', onPress: () => router.replace('/(auth)/login') },
-          ]);
         }
-      } else {
-        console.log('Logging in with OTP...');
-        const response = await authAPI.login({ phone_number: phone, otp });
-        console.log('Login successful');
         
-        await login(
-          response.data.user,
-          response.data.tokens.access,
-          response.data.tokens.refresh
-        );
-        console.log('User data stored');
         console.log('Navigating to main app...');
-        
         router.replace('/(tabs)');
+      } else {
+        Alert.alert('Success', 'Verification successful! Please login.', [
+          { text: 'OK', onPress: () => router.replace('/(auth)/login') },
+        ]);
       }
     } catch (error: any) {
       logDetailedError(error, `Verify OTP - ${type === 'register' ? 'Registration' : 'Login'}`);
       const errorTitle = getErrorTitle(error);
-      const errorMessage = getErrorMessage(error);
+      const errorDescription = getErrorDescription(error);
       
-      console.log('Error:', errorTitle, '-', errorMessage);
-      Alert.alert(errorTitle, errorMessage);
+      console.log('Error:', errorTitle);
+      console.log('Description:', errorDescription);
+      
+      // Clear OTP field on error so user can enter new one
+      setOtp('');
+      
+      Alert.alert(
+        errorTitle,
+        errorDescription,
+        [{ text: 'OK', style: 'default' }]
+      );
     } finally {
       setLoading(false);
     }
@@ -182,24 +183,40 @@ export default function VerifyOTPScreen() {
     
     setResending(true);
     try {
-      if (type === 'register') {
-        console.log('Calling sendOTP for registration...');
-        await authAPI.sendOTP(phone);
-        console.log('OTP resent successfully');
-      } else {
-        console.log('Calling sendLoginOTP for login...');
-        await authAPI.sendLoginOTP(phone);
-        console.log('OTP resent successfully');
-      }
-      Alert.alert('Success', 'OTP sent successfully');
+      // Determine the purpose based on type
+      const purpose = type === 'register' ? 'registration' : 'login';
+      
+      console.log(`Sending OTP for ${purpose}...`);
+      console.log('Full phone number being sent:', phone);
+      
+      // Use sendOTP with explicit purpose parameter for both cases
+      const response = await authAPI.sendOTP(phone, purpose);
+      
+      console.log('✅ OTP resent successfully');
+      console.log('📄 Response:', JSON.stringify(response.data, null, 2));
+      
+      Alert.alert(
+        'OTP Sent',
+        `A new verification code has been sent to +91 ${phone}`,
+        [{ text: 'OK', style: 'default' }]
+      );
+      
+      // Reset timer
       setTimer(60);
     } catch (error: any) {
       logDetailedError(error, 'Verify OTP - Resend OTP');
       const errorTitle = getErrorTitle(error);
-      const errorMessage = getErrorMessage(error);
+      const errorDescription = getErrorDescription(error);
       
-      console.log('Error:', errorTitle, '-', errorMessage);
-      Alert.alert(errorTitle, errorMessage);
+      console.log('❌ Resend OTP failed');
+      console.log('Error:', errorTitle);
+      console.log('Description:', errorDescription);
+      
+      Alert.alert(
+        errorTitle,
+        errorDescription,
+        [{ text: 'Try Again', style: 'default' }]
+      );
     } finally {
       setResending(false);
     }
@@ -212,9 +229,7 @@ export default function VerifyOTPScreen() {
     >
       <View style={styles.content}>
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>SeedSync</Text>
-          </View>
+          
           <Text style={styles.title}>Verify OTP</Text>
           <Text style={styles.subtitle}>
             Enter the 6-digit code sent to{'\n'}

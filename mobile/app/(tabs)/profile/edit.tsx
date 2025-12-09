@@ -12,6 +12,7 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { AppHeader, Sidebar, Input, Button, Picker } from '@/components';
 import { COLORS } from '@/constants/colors';
 import { useAuthStore } from '@/store/authStore';
@@ -20,9 +21,9 @@ import { logisticsAPI } from '@/services/logisticsService';
 
 const GENDER_OPTIONS = [
   { label: 'Select Gender', value: '' },
-  { label: 'Male', value: 'M' },
-  { label: 'Female', value: 'F' },
-  { label: 'Other', value: 'O' },
+  { label: 'Male', value: 'male' },
+  { label: 'Female', value: 'female' },
+  { label: 'Other', value: 'other' },
 ];
 
 const VEHICLE_TYPES = [
@@ -39,6 +40,8 @@ export default function EditProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [fetchingProfile, setFetchingProfile] = useState(true);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const isFarmer = user?.role === 'farmer';
   const isLogistics = user?.role === 'logistics';
@@ -119,6 +122,11 @@ export default function EditProfileScreen() {
           gst_number: '',
         });
         setProfilePhoto(profile.profile_photo || null);
+        
+        // Set initial date if available
+        if (profile.date_of_birth) {
+          setSelectedDate(new Date(profile.date_of_birth));
+        }
       } else if (isLogistics) {
         const response = await logisticsAPI.getMyProfile();
         const profile = response.data;
@@ -180,6 +188,26 @@ export default function EditProfileScreen() {
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to pick image');
     }
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+      const formattedDate = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      setFormData(prev => ({ ...prev, date_of_birth: formattedDate }));
+    }
+  };
+
+  const showDatePickerModal = () => {
+    setShowDatePicker(true);
+  };
+
+  const hideDatePicker = () => {
+    setShowDatePicker(false);
   };
 
   const validateForm = (): boolean => {
@@ -341,12 +369,67 @@ export default function EditProfileScreen() {
                     placeholder="Enter your full name"
                 />
 
-                <Input
-                    label="Date of Birth"
-                    value={formData.date_of_birth}
-                    onChangeText={value => setFormData(prev => ({ ...prev, date_of_birth: value }))}
-                    placeholder="YYYY-MM-DD"
-                />
+                {/* Date of Birth with Calendar Picker */}
+                <View>
+                  <Text style={styles.inputLabel}>Date of Birth</Text>
+                  <TouchableOpacity
+                    style={styles.datePickerButton}
+                    onPress={showDatePickerModal}
+                  >
+                    <View style={styles.datePickerContent}>
+                      <Ionicons name="calendar-outline" size={20} color={COLORS.text.secondary} />
+                      <Text style={[
+                        styles.datePickerText,
+                        !formData.date_of_birth && styles.datePickerPlaceholder
+                      ]}>
+                        {formData.date_of_birth 
+                          ? new Date(formData.date_of_birth).toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            })
+                          : 'Select date of birth'
+                        }
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-down" size={20} color={COLORS.text.secondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Date Picker Modal */}
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={handleDateChange}
+                    maximumDate={new Date()}
+                    minimumDate={new Date(1940, 0, 1)}
+                  />
+                )}
+
+                {/* iOS Date Picker Overlay */}
+                {Platform.OS === 'ios' && showDatePicker && (
+                  <View style={styles.iosDatePickerContainer}>
+                    <View style={styles.iosDatePickerHeader}>
+                      <TouchableOpacity onPress={hideDatePicker}>
+                        <Text style={styles.iosDatePickerButton}>Cancel</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.iosDatePickerTitle}>Select Date</Text>
+                      <TouchableOpacity onPress={hideDatePicker}>
+                        <Text style={[styles.iosDatePickerButton, styles.iosDatePickerDone]}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker
+                      value={selectedDate}
+                      mode="date"
+                      display="spinner"
+                      onChange={handleDateChange}
+                      maximumDate={new Date()}
+                      minimumDate={new Date(1940, 0, 1)}
+                    />
+                  </View>
+                )}
 
                 <Picker
                     label="Gender"
@@ -448,71 +531,7 @@ export default function EditProfileScreen() {
                     />
                     </View>
 
-                    <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>KYC Details</Text>
                     
-                    <Input
-                        label="Aadhaar Number"
-                        value={formData.aadhaar_number}
-                        onChangeText={value => setFormData(prev => ({ ...prev, aadhaar_number: value }))}
-                        placeholder="12-digit Aadhaar number"
-                        keyboardType="numeric"
-                        maxLength={12}
-                    />
-
-                    <Input
-                        label="PAN Number"
-                        value={formData.pan_number}
-                        onChangeText={value => setFormData(prev => ({ ...prev, pan_number: value.toUpperCase() }))}
-                        placeholder="PAN number"
-                        autoCapitalize="characters"
-                        maxLength={10}
-                    />
-                    </View>
-
-                    <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Bank Details</Text>
-                    <Text style={styles.sectionSubtitle}>
-                        Add your bank details to receive payments
-                    </Text>
-
-                    <Input
-                        label="Bank Account Number"
-                        value={formData.bank_account_number}
-                        onChangeText={value => setFormData(prev => ({ ...prev, bank_account_number: value }))}
-                        placeholder="Enter account number"
-                        keyboardType="numeric"
-                    />
-
-                    <Input
-                        label="IFSC Code"
-                        value={formData.bank_ifsc_code}
-                        onChangeText={value => setFormData(prev => ({ ...prev, bank_ifsc_code: value.toUpperCase() }))}
-                        placeholder="Enter IFSC code"
-                        autoCapitalize="characters"
-                    />
-
-                    <Input
-                        label="Account Holder Name"
-                        value={formData.bank_account_holder_name}
-                        onChangeText={value => setFormData(prev => ({ ...prev, bank_account_holder_name: value }))}
-                        placeholder="As per bank records"
-                    />
-
-                    <Input
-                        label="Bank Name"
-                        value={formData.bank_name}
-                        onChangeText={value => setFormData(prev => ({ ...prev, bank_name: value }))}
-                        placeholder="e.g., State Bank of India"
-                    />
-
-                    <Input
-                        label="Bank Branch"
-                        value={formData.bank_branch}
-                        onChangeText={value => setFormData(prev => ({ ...prev, bank_branch: value }))}
-                        placeholder="Branch name"
-                    />
-                    </View>
                 </>
                 )}
 
@@ -624,6 +643,72 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.background,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: 8,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minHeight: 52,
+  },
+  datePickerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  datePickerText: {
+    fontSize: 16,
+    color: COLORS.text.primary,
+  },
+  datePickerPlaceholder: {
+    color: COLORS.text.tertiary,
+  },
+  iosDatePickerContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  iosDatePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  iosDatePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+  },
+  iosDatePickerButton: {
+    fontSize: 16,
+    color: COLORS.primary,
+  },
+  iosDatePickerDone: {
+    fontWeight: '600',
   },
 });
      

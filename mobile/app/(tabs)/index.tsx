@@ -117,7 +117,12 @@ export default function DashboardScreen() {
     try {
       const response = await paymentsAPI.getMyWallet();
       if (response.data.data) {
-        setWalletData(response.data.data);
+        const walletResponse = response.data.data;
+        setWalletData({
+          balance: parseFloat(walletResponse.balance) || 0,
+          pending_payments: parseFloat(walletResponse.pending_payments) || 0,
+          total_earned: parseFloat(walletResponse.total_earned) || 0,
+        });
       }
     } catch (error) {
       console.error('Failed to load wallet data:', error);
@@ -410,13 +415,13 @@ export default function DashboardScreen() {
                 {/* Top: Personalized Greeting and Location */}
                 <View style={styles.weatherHeaderRow}>
                   <Text style={styles.weatherGreeting}>
-                    {weatherService.getGreeting()}, {user?.profile?.full_name?.split(' ')[0] || 'Farmer'}!
+                    {weatherService.getGreeting()}!
                   </Text>
                   <View style={styles.locationRow}>
                     <Ionicons name="location" size={13} color="#fff" />
                     <Text style={styles.weatherLocation}>
                       {userLocation?.district || weather?.district || 'Loading...'}
-                      {(userLocation?.state || weather?.state) && `, ${userLocation?.state || weather?.state}`}
+                      {(userLocation?.state || weather?.state) ? `, ${userLocation?.state || weather?.state}` : ''}
                     </Text>
                   </View>
                 </View>

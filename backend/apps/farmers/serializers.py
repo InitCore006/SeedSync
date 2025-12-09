@@ -45,7 +45,7 @@ class FarmerProfileSerializer(serializers.ModelSerializer):
 
 
 class FarmerProfileCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating farmer profile - Single step registration"""
+    """Serializer for creating farmer profile - Supports minimal mobile registration"""
     
     class Meta:
         model = FarmerProfile
@@ -57,13 +57,39 @@ class FarmerProfileCreateSerializer(serializers.ModelSerializer):
             'bank_account_holder_name', 'ifsc_code', 'bank_name', 'bank_branch',
             'preferred_language', 'profile_photo'
         ]
+        extra_kwargs = {
+            'father_name': {'required': False, 'allow_blank': True},
+            'date_of_birth': {'required': False, 'allow_null': True},
+            'gender': {'required': False, 'allow_blank': True},
+            'farming_experience_years': {'required': False},
+            'primary_crops': {'required': False},
+            'village': {'required': False, 'allow_blank': True},
+            'post_office': {'required': False, 'allow_blank': True},
+            'tehsil': {'required': False, 'allow_blank': True},
+            'latitude': {'required': False, 'allow_null': True},
+            'longitude': {'required': False, 'allow_null': True},
+            'aadhaar_number': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'pan_number': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'bank_account_number': {'required': False, 'allow_blank': True},
+            'bank_account_holder_name': {'required': False, 'allow_blank': True},
+            'ifsc_code': {'required': False, 'allow_blank': True},
+            'bank_name': {'required': False, 'allow_blank': True},
+            'bank_branch': {'required': False, 'allow_blank': True},
+            'preferred_language': {'required': False},
+            'profile_photo': {'required': False, 'allow_null': True},
+        }
     
     def validate(self, attrs):
-        # Ensure required fields for initial registration
-        required_fields = ['full_name', 'total_land_acres', 'district', 'state', 'pincode']
+        # Only validate required fields for minimal mobile registration
+        required_fields = ['full_name', 'total_land_acres', 'district', 'state']
         for field in required_fields:
             if field not in attrs or not attrs[field]:
                 raise serializers.ValidationError({field: f"{field.replace('_', ' ').title()} is required"})
+        
+        # Validate total_land_acres is positive
+        if 'total_land_acres' in attrs and attrs['total_land_acres'] <= 0:
+            raise serializers.ValidationError({'total_land_acres': 'Total land must be greater than 0'})
+        
         return attrs
 
 

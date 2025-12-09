@@ -161,9 +161,7 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
           >
             <View style={styles.profileSection}>
               <View style={styles.avatarContainer}>
-                <Text style={styles.avatarText}>
-                  {(activeProfile?.user.profile?.full_name?.charAt(0) || activeProfile?.user.profile?.full_name?.charAt(0) || user?.phone_number?.charAt(0) || 'U').toUpperCase()}
-                </Text>
+                <Ionicons name="person-circle-outline" size={60} color="#fff" />
               </View>
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName} numberOfLines={1}>
@@ -210,17 +208,7 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
 
             <View style={styles.divider} />
 
-            <TouchableOpacity style={styles.menuItem}>
-              <Ionicons name="settings" size={24} color="#6b7280" />
-              <Text style={styles.menuLabel}>Settings</Text>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.menuItem}>
-              <Ionicons name="help-circle" size={24} color="#6b7280" />
-              <Text style={styles.menuLabel}>Help & Support</Text>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-            </TouchableOpacity>
+            
 
             <TouchableOpacity 
               style={[styles.menuItem, styles.logoutItem]}
