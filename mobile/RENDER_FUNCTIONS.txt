@@ -1,0 +1,397 @@
+// ==================== PRICE FORECASTING TAB ====================
+  // Shows all crops price forecasting from /all-crops-forecast/ API
+  const renderPriceForecastingTab = () => {
+    if (!allCropsData?.forecasts) return null;
+
+    const { forecasts, market_summary, quick_insights } = allCropsData;
+
+    return (
+      <View style={styles.tabContent}>
+        <Text style={styles.sectionTitle}>Price Forecasting - All Crops</Text>
+        <Text style={styles.sectionSubtitle}>Comprehensive price analysis for {forecasts.length} major crops</Text>
+
+        {/* Trend Summary Cards */}
+        <View style={styles.trendSummaryContainer}>
+          <View style={[styles.trendSummaryCard, { backgroundColor: '#dcfce7', borderColor: '#16a34a' }]}>
+            <Ionicons name="trending-up" size={24} color="#16a34a" />
+            <Text style={[styles.trendSummaryCount, { color: '#16a34a' }]}>
+              {market_summary.bullish_crops.length}
+            </Text>
+            <Text style={styles.trendSummaryLabel}>Bullish</Text>
+            <Text style={styles.trendSummaryHint}>Prices Rising</Text>
+          </View>
+
+          <View style={[styles.trendSummaryCard, { backgroundColor: '#fee2e2', borderColor: '#dc2626' }]}>
+            <Ionicons name="trending-down" size={24} color="#dc2626" />
+            <Text style={[styles.trendSummaryCount, { color: '#dc2626' }]}>
+              {market_summary.bearish_crops.length}
+            </Text>
+            <Text style={styles.trendSummaryLabel}>Bearish</Text>
+            <Text style={styles.trendSummaryHint}>Prices Falling</Text>
+          </View>
+
+          <View style={[styles.trendSummaryCard, { backgroundColor: '#e0e7ff', borderColor: '#4f46e5' }]}>
+            <Ionicons name="remove" size={24} color="#4f46e5" />
+            <Text style={[styles.trendSummaryCount, { color: '#4f46e5' }]}>
+              {market_summary.stable_crops.length}
+            </Text>
+            <Text style={styles.trendSummaryLabel}>Stable</Text>
+            <Text style={styles.trendSummaryHint}>Steady Prices</Text>
+          </View>
+        </View>
+
+        {/* Price Comparison Chart */}
+        <View style={styles.chartCard}>
+          <Text style={styles.chartTitle}>Price Comparison - Current vs Expected (30 Days)</Text>
+          <View style={styles.barChartContainer}>
+            {forecasts.map((crop, index) => {
+              const currentPrice = parsePrice(crop.current_price);
+              const expectedPrice = parsePrice(crop.expected_price_30_days);
+              const maxPrice = Math.max(...forecasts.map(c => parsePrice(c.expected_price_30_days)));
+              const currentWidth = (currentPrice / maxPrice) * 100;
+              const expectedWidth = (expectedPrice / maxPrice) * 100;
+
+              return (
+                <View key={index} style={styles.barChartRow}>
+                  <Text style={styles.barChartLabel}>{crop.crop}</Text>
+                  <View style={styles.barChartBars}>
+                    <View style={styles.barWrapper}>
+                      <View style={[styles.barCurrent, { width: `${currentWidth}%` }]}>
+                        <Text style={styles.barValue}>₹{currentPrice.toLocaleString('en-IN')}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.barWrapper}>
+                      <View style={[styles.barExpected, { width: `${expectedWidth}%` }]}>
+                        <Text style={styles.barValue}>₹{expectedPrice.toLocaleString('en-IN')}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+          
+          {/* Legend */}
+          <View style={styles.chartLegend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendColor, { backgroundColor: '#3b82f6' }]} />
+              <Text style={styles.legendText}>Current Price</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendColor, { backgroundColor: '#10b981' }]} />
+              <Text style={styles.legendText}>Expected Price</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Individual Crop Cards */}
+        <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 16 }]}>Detailed Analysis</Text>
+        {forecasts.map((crop, index) => {
+          const currentPrice = parsePrice(crop.current_price);
+          const expectedPrice = parsePrice(crop.expected_price_30_days);
+          const isPositive = expectedPrice >= currentPrice;
+          const trendColor = crop.trend === 'BULLISH' ? '#16a34a' : crop.trend === 'BEARISH' ? '#dc2626' : '#4f46e5';
+          const trendBg = crop.trend === 'BULLISH' ? '#dcfce7' : crop.trend === 'BEARISH' ? '#fee2e2' : '#e0e7ff';
+
+          return (
+            <View key={index} style={styles.cropDetailCard}>
+              <View style={styles.cropDetailHeader}>
+                <View style={styles.cropDetailTitle}>
+                  <Ionicons name="leaf" size={24} color={COLORS.primary} />
+                  <Text style={styles.cropDetailName}>{crop.crop}</Text>
+                </View>
+                <View style={[styles.trendChip, { backgroundColor: trendBg, borderColor: trendColor }]}>
+                  <Ionicons 
+                    name={crop.trend === 'BULLISH' ? 'trending-up' : crop.trend === 'BEARISH' ? 'trending-down' : 'remove'} 
+                    size={16} 
+                    color={trendColor} 
+                  />
+                  <Text style={[styles.trendChipText, { color: trendColor }]}>{crop.trend}</Text>
+                </View>
+              </View>
+
+              <View style={styles.cropPriceRow}>
+                <View style={styles.cropPriceCol}>
+                  <Text style={styles.cropPriceLabel}>Current</Text>
+                  <Text style={styles.cropPriceValue}>₹{currentPrice.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.cropPriceUnit}>per quintal</Text>
+                </View>
+                <Ionicons name="arrow-forward" size={24} color="#9ca3af" />
+                <View style={styles.cropPriceCol}>
+                  <Text style={styles.cropPriceLabel}>Expected (30d)</Text>
+                  <Text style={[styles.cropPriceValue, { color: isPositive ? '#16a34a' : '#dc2626' }]}>
+                    ₹{expectedPrice.toLocaleString('en-IN')}
+                  </Text>
+                  <Text style={styles.cropPriceUnit}>{crop.price_change}</Text>
+                </View>
+              </View>
+
+              <View style={styles.priceRangeContainer}>
+                <Text style={styles.priceRangeLabel}>Expected Price Range</Text>
+                <View style={styles.priceRangeBar}>
+                  <Text style={styles.priceRangeText}>{crop.price_range.min}</Text>
+                  <View style={styles.priceRangeLine} />
+                  <Text style={styles.priceRangeText}>{crop.price_range.max}</Text>
+                </View>
+              </View>
+
+              <View style={styles.recommendationChip}>
+                <Ionicons name="bulb" size={16} color="#f59e0b" />
+                <Text style={styles.recommendationChipText}>{crop.recommendation}</Text>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Quick Action Insights */}
+        <View style={styles.quickInsightsCard}>
+          <Text style={styles.quickInsightsTitle}>Quick Action Insights</Text>
+          
+          {quick_insights.buy_now.length > 0 && (
+            <View style={styles.insightRow}>
+              <View style={[styles.insightIcon, { backgroundColor: '#dcfce7' }]}>
+                <Ionicons name="cart" size={20} color="#16a34a" />
+              </View>
+              <View style={styles.insightContent}>
+                <Text style={styles.insightLabel}>Buy Now</Text>
+                <Text style={styles.insightText}>{quick_insights.buy_now.join(', ')}</Text>
+              </View>
+            </View>
+          )}
+
+          {quick_insights.wait_for_better_prices.length > 0 && (
+            <View style={styles.insightRow}>
+              <View style={[styles.insightIcon, { backgroundColor: '#fffbeb' }]}>
+                <Ionicons name="time" size={20} color="#f59e0b" />
+              </View>
+              <View style={styles.insightContent}>
+                <Text style={styles.insightLabel}>Wait for Better Prices</Text>
+                <Text style={styles.insightText}>{quick_insights.wait_for_better_prices.join(', ')}</Text>
+              </View>
+            </View>
+          )}
+
+          {quick_insights.neutral.length > 0 && (
+            <View style={styles.insightRow}>
+              <View style={[styles.insightIcon, { backgroundColor: '#f3f4f6' }]}>
+                <Ionicons name="remove-circle" size={20} color="#6b7280" />
+              </View>
+              <View style={styles.insightContent}>
+                <Text style={styles.insightLabel}>Neutral</Text>
+                <Text style={styles.insightText}>{quick_insights.neutral.join(', ')}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  // ==================== DEMAND FORECASTING TAB ====================
+  // Shows demand forecasting from /quick/demand/ API
+  const renderDemandForecastingTab = () => {
+    if (!demandData?.forecast || !allCropsData?.forecasts) return null;
+
+    const { forecast } = demandData;
+    const { forecasts } = allCropsData;
+
+    const parseDemand = (demandStr: string): number => {
+      const match = demandStr.match(/([\d,]+)/);
+      return match ? parseFloat(match[1].replace(/,/g, '')) : 0;
+    };
+
+    const currentDemand = parseDemand(forecast.current_demand);
+    const expectedDemand = parseDemand(forecast.expected_demand);
+    const demandChange = currentDemand > 0 ? ((expectedDemand - currentDemand) / currentDemand) * 100 : 0;
+
+    return (
+      <View style={styles.tabContent}>
+        <Text style={styles.sectionTitle}>Demand Forecasting</Text>
+        <Text style={styles.sectionSubtitle}>Market demand trends and 30-day projections</Text>
+
+        {/* Overall Demand Overview */}
+        <View style={styles.demandOverviewCard}>
+          <Text style={styles.demandOverviewTitle}>Overall Market Demand</Text>
+          
+          {/* Demand Comparison Cards */}
+          <View style={styles.demandComparisonRow}>
+            <View style={styles.demandComparisonCard}>
+              <Ionicons name="today" size={24} color="#3b82f6" />
+              <Text style={styles.demandComparisonValue}>{forecast.current_demand}</Text>
+              <Text style={styles.demandComparisonLabel}>Current Demand</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={24} color="#9ca3af" />
+            <View style={styles.demandComparisonCard}>
+              <Ionicons name="trending-up" size={24} color="#10b981" />
+              <Text style={[styles.demandComparisonValue, { color: '#10b981' }]}>
+                {forecast.expected_demand}
+              </Text>
+              <Text style={styles.demandComparisonLabel}>Expected Demand</Text>
+            </View>
+          </View>
+
+          {/* Trend Indicator */}
+          <View style={[styles.demandTrendBadge, {
+            backgroundColor: forecast.trend === 'INCREASING' ? '#dcfce7' : 
+                           forecast.trend === 'DECREASING' ? '#fee2e2' : '#e0e7ff',
+            borderColor: forecast.trend === 'INCREASING' ? '#16a34a' : 
+                        forecast.trend === 'DECREASING' ? '#dc2626' : '#4f46e5'
+          }]}>
+            <Ionicons 
+              name={forecast.trend === 'INCREASING' ? 'trending-up' : 
+                   forecast.trend === 'DECREASING' ? 'trending-down' : 'remove'} 
+              size={20} 
+              color={forecast.trend === 'INCREASING' ? '#16a34a' : 
+                    forecast.trend === 'DECREASING' ? '#dc2626' : '#4f46e5'} 
+            />
+            <Text style={[styles.demandTrendText, {
+              color: forecast.trend === 'INCREASING' ? '#16a34a' : 
+                    forecast.trend === 'DECREASING' ? '#dc2626' : '#4f46e5'
+            }]}>
+              {forecast.trend} {Math.abs(demandChange).toFixed(1)}%
+            </Text>
+          </View>
+
+          {/* 30 Days Total */}
+          <View style={styles.totalDemandCard}>
+            <Ionicons name="calendar" size={20} color="#6b7280" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.totalDemandLabel}>Total 30-Day Demand</Text>
+              <Text style={styles.totalDemandValue}>{forecast.total_30_days}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Demand Visualization Chart */}
+        <View style={styles.chartCard}>
+          <Text style={styles.chartTitle}>Demand Growth Projection</Text>
+          <View style={styles.demandChartContainer}>
+            <View style={styles.demandChartBar}>
+              <View style={styles.demandBar}>
+                <View style={[styles.demandBarFillStyle, { 
+                  width: `${expectedDemand > 0 ? (currentDemand / expectedDemand) * 100 : 50}%`,
+                  backgroundColor: '#3b82f6'
+                }]}>
+                  <Text style={styles.demandBarLabel}>Current</Text>
+                </View>
+              </View>
+              <Text style={styles.demandBarValueText}>{forecast.current_demand}</Text>
+            </View>
+            <View style={styles.demandChartBar}>
+              <View style={styles.demandBar}>
+                <View style={[styles.demandBarFillStyle, { 
+                  width: '100%',
+                  backgroundColor: '#10b981'
+                }]}>
+                  <Text style={styles.demandBarLabel}>Expected</Text>
+                </View>
+              </View>
+              <Text style={styles.demandBarValueText}>{forecast.expected_demand}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Crop-wise Demand Contribution */}
+        <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 16 }]}>
+          Crop-wise Demand Analysis
+        </Text>
+        {forecasts.slice(0, 5).map((crop, index) => {
+          const priceChange = parseFloat(crop.price_change.replace('%', '').replace('+', ''));
+          const isPositive = priceChange >= 0;
+          const demandLevel = Math.abs(priceChange) > 5 ? 'High' : Math.abs(priceChange) > 2 ? 'Medium' : 'Low';
+          const demandColor = Math.abs(priceChange) > 5 ? '#16a34a' : Math.abs(priceChange) > 2 ? '#f59e0b' : '#6b7280';
+
+          return (
+            <View key={index} style={styles.demandCropCard}>
+              <View style={styles.demandCropHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="leaf" size={20} color={COLORS.primary} />
+                  <Text style={styles.demandCropName}>{crop.crop}</Text>
+                </View>
+                <View style={[styles.demandLevelBadge, { backgroundColor: demandColor + '20', borderColor: demandColor }]}>
+                  <Text style={[styles.demandLevelText, { color: demandColor }]}>{demandLevel}</Text>
+                </View>
+              </View>
+
+              <View style={styles.demandMetrics}>
+                <View style={styles.demandMetricItem}>
+                  <Ionicons name="trending-up" size={18} color={isPositive ? '#16a34a' : '#dc2626'} />
+                  <Text style={styles.demandMetricLabel}>Price Trend</Text>
+                  <Text style={[styles.demandMetricValue, { color: isPositive ? '#16a34a' : '#dc2626' }]}>
+                    {crop.price_change}
+                  </Text>
+                </View>
+
+                <View style={styles.demandMetricItem}>
+                  <Ionicons name="stats-chart" size={18} color="#3b82f6" />
+                  <Text style={styles.demandMetricLabel}>Market Trend</Text>
+                  <Text style={styles.demandMetricValue}>{crop.trend}</Text>
+                </View>
+
+                <View style={styles.demandMetricItem}>
+                  <Ionicons name="arrow-up" size={18} color="#10b981" />
+                  <Text style={styles.demandMetricLabel}>Demand Level</Text>
+                  <Text style={styles.demandMetricValue}>{demandLevel}</Text>
+                </View>
+              </View>
+
+              <View style={styles.demandProgressBar}>
+                <View style={styles.demandProgressTrack}>
+                  <View 
+                    style={[
+                      styles.demandProgressFill, 
+                      { 
+                        width: `${Math.min(100, Math.abs(priceChange) * 10)}%`,
+                        backgroundColor: demandColor
+                      }
+                    ]} 
+                  />
+                </View>
+                <Text style={styles.demandProgressLabel}>
+                  {demandLevel} demand with {Math.abs(priceChange)}% price change
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Demand Insights */}
+        <View style={styles.marketRecommendationsCard}>
+          <Text style={styles.marketRecommendationsTitle}>Demand Insights</Text>
+          
+          <View style={styles.recommendationSection}>
+            <View style={styles.recommendationSectionHeader}>
+              <Ionicons 
+                name={forecast.trend === 'INCREASING' ? "arrow-up-circle" : "arrow-down-circle"} 
+                size={20} 
+                color={forecast.trend === 'INCREASING' ? "#16a34a" : "#dc2626"} 
+              />
+              <Text style={[styles.recommendationSectionTitle, { 
+                color: forecast.trend === 'INCREASING' ? "#16a34a" : "#dc2626" 
+              }]}>
+                Overall Demand is {forecast.trend}
+              </Text>
+            </View>
+            <Text style={styles.recommendationSectionText}>
+              {forecast.trend === 'INCREASING' 
+                ? `Market demand is expected to increase by ${Math.abs(demandChange).toFixed(1)}% over the next 30 days. This is a good time to prepare for higher sales volumes.`
+                : `Market demand shows ${forecast.trend.toLowerCase()} trend. Plan inventory accordingly.`
+              }
+            </Text>
+          </View>
+
+          <View style={styles.recommendationSection}>
+            <View style={styles.recommendationSectionHeader}>
+              <Ionicons name="calendar" size={20} color="#3b82f6" />
+              <Text style={[styles.recommendationSectionTitle, { color: "#3b82f6" }]}>
+                30-Day Projection
+              </Text>
+            </View>
+            <Text style={styles.recommendationSectionText}>
+              Total expected market demand over the next 30 days: {forecast.total_30_days}. Daily average: {forecast.expected_demand}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };

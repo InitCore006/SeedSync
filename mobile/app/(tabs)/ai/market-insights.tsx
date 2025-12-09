@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,771 +8,806 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  Animated,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '@/constants/colors';
 import { AppHeader, Sidebar } from '@/components';
 import { useAuthStore } from '@/store/authStore';
-import { marketInsightsService, MarketInsightsResponse } from '@/services/marketInsightsService';
+import { 
+  marketInsightsService, 
+  MarketForecastResponse,
+  AllCropsForecastResponse,
+  DemandForecastResponse,
+  CropForecast
+} from '@/services/marketInsightsService';
 
 const { width } = Dimensions.get('window');
-const CHART_WIDTH = width - 80;
 
-// Utility function to get crop color
-const getCropColor = (crop: string): string => {
-  const colors: Record<string, string> = {
-    groundnut: '#f59e0b',
-    mustard: '#eab308',
-    sesame: '#a855f7',
-    soybean: '#22c55e',
-    sunflower: '#f97316',
-  };
-  return colors[crop.toLowerCase()] || COLORS.primary;
-};
+// Tab type
+type TabType = 'marketInsights' | 'priceForecasting' | 'demandForecasting';
 
-// Pie chart component
-const PieChartSlice = ({ percentage, color, label, value, startAngle }: any) => {
-  const size = 200;
-  const radius = size / 2;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDasharray = `${(percentage / 100) * circumference} ${circumference}`;
-  
-  return (
-    <View style={styles.pieChartLegendItem}>
-      <View style={[styles.pieChartLegendColor, { backgroundColor: color }]} />
-      <View style={styles.pieChartLegendText}>
-        <Text style={styles.pieChartLegendLabel}>{label}</Text>
-        <Text style={styles.pieChartLegendValue}>{value} ({percentage.toFixed(1)}%)</Text>
-      </View>
-    </View>
-  );
-};
+// Crop options
+const CROP_OPTIONS = [
+  { label: 'All Crops', value: 'all' },
+  { label: 'Sesame', value: 'sesame' },
+  { label: 'Soybean', value: 'soybean' },
+  { label: 'Mustard', value: 'mustard' },
+  { label: 'Groundnut', value: 'groundnut' },
+  { label: 'Sunflower', value: 'sunflower' },
+];
 
-// Utility function to aggregate data by crop
-const aggregateByCrop = (data: any) => {
-  const cropData: Record<string, { demand: number; supply: number; avgPrice: number; count: number }> = {};
-  
-  if (!data.crop_type || !Array.isArray(data.crop_type)) return [];
-  
-  data.crop_type.forEach((crop: string, idx: number) => {
-    if (!cropData[crop]) {
-      cropData[crop] = { demand: 0, supply: 0, avgPrice: 0, count: 0 };
-    }
-    cropData[crop].demand += data.demand_quintals?.[idx] || 0;
-    cropData[crop].supply += data.supply_quintals?.[idx] || 0;
-    cropData[crop].avgPrice += data.avg_price?.[idx] || 0;
-    cropData[crop].count += 1;
-  });
-
-  return Object.entries(cropData).map(([crop, values]) => ({
-    crop,
-    demand: Math.round(values.demand),
-    supply: Math.round(values.supply),
-    gap: Math.round(values.demand - values.supply),
-    avgPrice: Math.round(values.avgPrice / values.count),
-  }));
-};
+// Time period options
+const TIME_PERIODS = [
+  { label: '7 Days', value: 7 },
+  { label: '15 Days', value: 15 },
+  { label: '30 Days', value: 30 },
+  { label: '60 Days', value: 60 },
+  { label: '90 Days', value: 90 },
+];
 
 export default function MarketInsightsScreen() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [marketData, setMarketData] = useState<MarketInsightsResponse | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<'overview' | 'opportunities' | 'prices' | 'forecast'>('overview');
-  const [selectedChartType, setSelectedChartType] = useState<'bar' | 'pie' | 'line'>('bar');
-  const animatedValue = useRef(new Animated.Value(0)).current;
+  const [marketData, setMarketData] = useState<MarketForecastResponse | null>(null);
+  const [allCropsData, setAllCropsData] = useState<AllCropsForecastResponse | null>(null);
+  const [demandData, setDemandData] = useState<DemandForecastResponse | null>(null);
+  const [selectedTab, setSelectedTab] = useState<TabType>('marketInsights');
+  const [selectedCrop, setSelectedCrop] = useState<string>('all');
+  const [timePeriod, setTimePeriod] = useState<number>(30);
+  const [showCropFilter, setShowCropFilter] = useState(false);
+  const [showTimeFilter, setShowTimeFilter] = useState(false);
 
   useEffect(() => {
-    fetchMarketInsights();
-  }, []);
+    fetchMarketData();
+  }, [timePeriod]);
 
-  const fetchMarketInsights = async () => {
+  const fetchMarketData = async () => {
     try {
       setLoading(true);
-      const role = user?.role as 'fpo' | 'retailer' | 'processor' | 'farmer' | undefined;
-      const data = await marketInsightsService.getMarketInsights(role);
-      setMarketData(data);
+      const [farmerData, cropsData, demandForecast] = await Promise.all([
+        marketInsightsService.getMarketForecast('farmer'),
+        marketInsightsService.getAllCropsForecast(timePeriod, 5),
+        marketInsightsService.getDemandForecast()
+      ]);
+      setMarketData(farmerData);
+      setAllCropsData(cropsData);
+      setDemandData(demandForecast);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to fetch market insights');
+      Alert.alert('Error', error.message || 'Failed to fetch market data');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const handleRefresh = () => {
+  const onRefresh = () => {
     setRefreshing(true);
-    fetchMarketInsights();
+    fetchMarketData();
   };
 
-  const renderInsightCard = (title: string, icon: string, data: Record<string, any>, color: string) => {
-    const hasData = Object.keys(data).length > 0;
+  const getActionButtonStyle = (action: string) => {
+    switch (action) {
+      case 'Sell Soon':
+        return { colors: ['#ef4444', '#dc2626'] as const, icon: 'trending-down' as const, textColor: '#fff' };
+      case 'Wait & Watch':
+        return { colors: ['#3b82f6', '#2563eb'] as const, icon: 'time' as const, textColor: '#fff' };
+      case 'Flexible':
+        return { colors: ['#10b981', '#059669'] as const, icon: 'checkmark-circle' as const, textColor: '#fff' };
+      default:
+        return { colors: ['#6b7280', '#4b5563'] as const, icon: 'eye' as const, textColor: '#fff' };
+    }
+  };
+
+  const parsePrice = (priceStr: string): number => {
+    const match = priceStr.match(/₹([\d,]+\.?\d*)/);
+    return match ? parseFloat(match[1].replace(/,/g, '')) : 0;
+  };
+
+  const formatNumber = (num: number): string => {
+    if (num >= 10000000) {
+      return `₹${(num / 10000000).toFixed(2)} Cr`;
+    } else if (num >= 100000) {
+      return `₹${(num / 100000).toFixed(2)} L`;
+    } else if (num >= 1000) {
+      return `₹${(num / 1000).toFixed(2)} K`;
+    }
+    return `₹${num.toFixed(2)}`;
+  };
+
+  const formatQuantity = (qty: string): string => {
+    const match = qty.match(/([\d,]+)/);
+    if (!match) return qty;
+    const num = parseFloat(match[1].replace(/,/g, ''));
+    if (num >= 10000) {
+      return `${(num / 1000).toFixed(1)}K quintals`;
+    }
+    return qty;
+  };
+
+  const getCropDisplayName = (crop: string): string => {
+    return crop.charAt(0).toUpperCase() + crop.slice(1);
+  };
+
+  // ==================== MARKET INSIGHTS TAB ====================
+  // Shows farmer-specific market insights (NO price forecasting data)
+  const renderMarketInsightsTab = () => {
+    if (!marketData?.insights) return null;
+
+    const { insights } = marketData;
 
     return (
-      <View style={styles.insightCard}>
-        <View style={[styles.cardHeader, { backgroundColor: color + '15' }]}>
-          <Ionicons name={icon as any} size={24} color={color} />
-          <Text style={styles.cardTitle}>{title}</Text>
-        </View>
-        
-        {hasData ? (
-          <View style={styles.cardContent}>
-            {Object.entries(data).map(([key, value], index) => (
-              <View key={index} style={styles.dataRow}>
-                <Text style={styles.dataKey}>{key.replace(/_/g, ' ').toUpperCase()}:</Text>
-                <Text style={styles.dataValue}>
-                  {typeof value === 'object' ? JSON.stringify(value, null, 2) : value}
+      <View style={styles.tabContent}>
+        <Text style={styles.sectionTitle}>Farmer Market Insights</Text>
+        <Text style={styles.sectionSubtitle}>Key market information and actionable recommendations</Text>
+
+        {/* Recommendation Card */}
+        {insights.recommendation && (
+          <View style={styles.recommendationCard}>
+            <View style={styles.recommendationHeader}>
+              <Ionicons name="bulb" size={20} color="#f59e0b" />
+              <Text style={styles.recommendationTitle}>Recommendation</Text>
+            </View>
+            <View style={[styles.actionBadge, { 
+              backgroundColor: insights.recommendation.action === 'Sell Soon' ? '#fee2e2' : 
+                               insights.recommendation.action === 'Wait & Watch' ? '#dbeafe' :
+                               insights.recommendation.action === 'Flexible' ? '#dcfce7' : '#f3f4f6',
+              borderColor: insights.recommendation.action === 'Sell Soon' ? '#dc2626' : 
+                          insights.recommendation.action === 'Wait & Watch' ? '#3b82f6' :
+                          insights.recommendation.action === 'Flexible' ? '#10b981' : '#6b7280'
+            }]}>
+              <Text style={[styles.actionBadgeText, {
+                color: insights.recommendation.action === 'Sell Soon' ? '#dc2626' : 
+                       insights.recommendation.action === 'Wait & Watch' ? '#3b82f6' :
+                       insights.recommendation.action === 'Flexible' ? '#10b981' : '#6b7280'
+              }]}>
+                {insights.recommendation.action}
+              </Text>
+            </View>
+            <Text style={styles.recommendationMessage}>{insights.recommendation.message}</Text>
+            {insights.recommendation.suggestion && (
+              <Text style={styles.recommendationSuggestion}>
+                💡 {insights.recommendation.suggestion}
+              </Text>
+            )}
+            {insights.recommendation.best_time_to_sell && (
+              <View style={styles.bestTimeContainer}>
+                <Ionicons name="calendar" size={16} color="#6b7280" />
+                <Text style={styles.bestTimeText}>
+                  Best Time: {insights.recommendation.best_time_to_sell}
                 </Text>
               </View>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Ionicons name="file-tray-outline" size={32} color={COLORS.text.tertiary} />
-            <Text style={styles.noDataText}>No data available</Text>
+            )}
           </View>
         )}
-      </View>
-    );
-  };
 
-  const renderCropBar = (crop: string, demand: number, supply: number, maxValue: number, avgPrice: number) => {
-    const demandWidth = (demand / maxValue) * CHART_WIDTH;
-    const supplyWidth = (supply / maxValue) * CHART_WIDTH;
-    const gap = demand - supply;
-    const gapColor = gap > 0 ? COLORS.error : '#22c55e';
-
-    return (
-      <View key={crop} style={styles.cropBarContainer}>
-        <Text style={styles.cropName}>{crop.charAt(0).toUpperCase() + crop.slice(1)}</Text>
-        
-        <View style={styles.barWrapper}>
-          {/* Demand Bar */}
-          <View style={styles.barRow}>
-            <Text style={styles.barLabel}>Demand</Text>
-            <View style={styles.barBackground}>
-              <View style={[styles.barFill, { width: demandWidth, backgroundColor: '#3b82f6' }]} />
-            </View>
-            <Text style={styles.barValue}>{demand.toLocaleString()} Q</Text>
-          </View>
-
-          {/* Supply Bar */}
-          <View style={styles.barRow}>
-            <Text style={styles.barLabel}>Supply</Text>
-            <View style={styles.barBackground}>
-              <View style={[styles.barFill, { width: supplyWidth, backgroundColor: '#22c55e' }]} />
-            </View>
-            <Text style={styles.barValue}>{supply.toLocaleString()} Q</Text>
-          </View>
-        </View>
-
-        {/* Gap and Price Info */}
-        <View style={styles.cropFooter}>
-          <View style={[styles.gapBadge, { backgroundColor: gapColor + '15' }]}>
-            <Text style={[styles.gapText, { color: gapColor }]}>
-              Gap: {gap > 0 ? '+' : ''}{gap.toLocaleString()} Q
-            </Text>
-          </View>
-          <View style={styles.priceBadge}>
-            <Ionicons name="cash-outline" size={14} color={COLORS.warning} />
-            <Text style={styles.priceText}>₹{avgPrice.toLocaleString()}/Q</Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const renderShortageCard = (shortage: any, index: number) => {
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const month = monthNames[shortage.month - 1];
-    
-    return (
-      <View key={index} style={styles.shortageCard}>
-        <View style={styles.shortageHeader}>
-          <View style={styles.shortageIcon}>
-            <Ionicons name="alert-circle" size={24} color={COLORS.error} />
-          </View>
-          <View style={styles.shortageInfo}>
-            <Text style={styles.shortageCrop}>{shortage.crop_type}</Text>
-            <Text style={styles.shortageDate}>{month} {shortage.year}</Text>
-          </View>
-          <View style={styles.shortageGap}>
-            <Text style={styles.shortageGapValue}>{Math.round(shortage.demand_supply_gap).toLocaleString()}</Text>
-            <Text style={styles.shortageGapLabel}>Quintals Short</Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const renderPieChart = (cropStats: any[]) => {
-    const total = cropStats.reduce((sum, stat) => sum + stat.demand, 0);
-    
-    return (
-      <View style={styles.pieChartContainer}>
-        <View style={styles.pieChartHeader}>
-          <Text style={styles.chartTitle}>Crop Distribution by Demand</Text>
-          <View style={styles.chartControls}>
-            <TouchableOpacity 
-              style={[styles.chartControlBtn, selectedChartType === 'pie' && styles.chartControlBtnActive]}
-              onPress={() => setSelectedChartType('pie')}
-            >
-              <Ionicons name="pie-chart" size={16} color={selectedChartType === 'pie' ? COLORS.white : COLORS.text.secondary} />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.chartControlBtn, selectedChartType === 'bar' && styles.chartControlBtnActive]}
-              onPress={() => setSelectedChartType('bar')}
-            >
-              <Ionicons name="bar-chart" size={16} color={selectedChartType === 'bar' ? COLORS.white : COLORS.text.secondary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {selectedChartType === 'pie' ? (
-          <View style={styles.pieChartContent}>
-            {/* Donut Chart Visualization */}
-            <View style={styles.donutChart}>
-              {cropStats.map((stat, index) => {
-                const percentage = (stat.demand / total) * 100;
-                return (
-                  <View key={stat.crop} style={styles.donutSegment}>
-                    <View style={[styles.donutBar, { 
-                      width: `${percentage}%`, 
-                      backgroundColor: getCropColor(stat.crop),
-                      height: 40
-                    }]} />
+        {/* Top Crops by Price */}
+        <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 16 }]}>Top Crops by Price</Text>
+        {insights.top_crops_by_price.map((crop, index) => {
+          const price = parsePrice(crop.average_price);
+          const demandPercent = parseFloat(crop.market_demand.match(/[\d.]+/)?.[0] || '0');
+          
+          return (
+            <View key={index} style={styles.cropCard}>
+              <View style={styles.cropHeaderRow}>
+                <View style={styles.cropRank}>
+                  <View style={[styles.rankBadge, { 
+                    backgroundColor: index === 0 ? '#fbbf24' : index === 1 ? '#d1d5db' : '#cd7f32'
+                  }]}>
+                    <Text style={styles.rankText}>#{index + 1}</Text>
                   </View>
-                );
-              })}
-            </View>
-            
-            {/* Legend */}
-            <View style={styles.pieChartLegend}>
-              {cropStats.map((stat) => {
-                const percentage = (stat.demand / total) * 100;
-                return (
-                  <PieChartSlice
-                    key={stat.crop}
-                    percentage={percentage}
-                    color={getCropColor(stat.crop)}
-                    label={stat.crop.charAt(0).toUpperCase() + stat.crop.slice(1)}
-                    value={`${stat.demand.toLocaleString()} Q`}
-                    startAngle={0}
-                  />
-                );
-              })}
-            </View>
-          </View>
-        ) : (
-          <View style={styles.barChartContent}>
-            {cropStats.map((stat) => {
-              const maxDemand = Math.max(...cropStats.map(s => s.demand));
-              const barWidth = (stat.demand / maxDemand) * (width - 120);
+                </View>
+                <View style={styles.cropInfo}>
+                  <Text style={styles.cropName}>{getCropDisplayName(crop.crop)}</Text>
+                  <View style={styles.cropMetrics}>
+                    <View style={styles.cropMetric}>
+                      <Ionicons name="cash" size={16} color={COLORS.primary} />
+                      <Text style={styles.cropMetricText}>
+                        ₹{price.toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                    <View style={styles.cropMetric}>
+                      <Ionicons name="trending-up" size={16} color="#3b82f6" />
+                      <Text style={styles.cropMetricText}>{crop.market_demand}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
               
+              {/* Demand Bar */}
+              <View style={styles.demandBarContainer}>
+                <Text style={styles.demandBarLabel}>Market Demand</Text>
+                <View style={styles.demandBarTrack}>
+                  <View 
+                    style={[
+                      styles.demandBarFill, 
+                      { 
+                        width: `${demandPercent}%`,
+                        backgroundColor: index === 0 ? COLORS.primary : index === 1 ? '#3b82f6' : '#10b981'
+                      }
+                    ]} 
+                  />
+                </View>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Seasonal Information */}
+        <View style={styles.seasonalTipCard}>
+          <Ionicons name="sunny" size={24} color="#f59e0b" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.seasonalTipTitle}>Seasonal Tip</Text>
+            <Text style={styles.seasonalTip}>{insights.seasonal_tip}</Text>
+            <View style={styles.bestSeasonBadge}>
+              <Ionicons name="star" size={14} color="#10b981" />
+              <Text style={styles.bestSeasonText}>Best Season: {insights.best_season.toUpperCase()}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  // ==================== PRICE FORECASTING TAB ====================
+  // Shows all crops price forecasting from /all-crops-forecast/ API
+  const renderPriceForecastingTab = () => {
+    if (!allCropsData?.forecasts) return null;
+
+    const { forecasts, market_summary, quick_insights } = allCropsData;
+
+    return (
+      <View style={styles.tabContent}>
+        <Text style={styles.sectionTitle}>Price Forecasting - All Crops</Text>
+        <Text style={styles.sectionSubtitle}>Comprehensive price analysis for {forecasts.length} major crops</Text>
+
+        {/* Trend Summary Cards */}
+        <View style={styles.trendSummaryContainer}>
+          <View style={[styles.trendSummaryCard, { backgroundColor: '#dcfce7', borderColor: '#16a34a' }]}>
+            <Ionicons name="trending-up" size={24} color="#16a34a" />
+            <Text style={[styles.trendSummaryCount, { color: '#16a34a' }]}>
+              {market_summary.bullish_crops.length}
+            </Text>
+            <Text style={styles.trendSummaryLabel}>Bullish</Text>
+            <Text style={styles.trendSummaryHint}>Prices Rising</Text>
+          </View>
+
+          <View style={[styles.trendSummaryCard, { backgroundColor: '#fee2e2', borderColor: '#dc2626' }]}>
+            <Ionicons name="trending-down" size={24} color="#dc2626" />
+            <Text style={[styles.trendSummaryCount, { color: '#dc2626' }]}>
+              {market_summary.bearish_crops.length}
+            </Text>
+            <Text style={styles.trendSummaryLabel}>Bearish</Text>
+            <Text style={styles.trendSummaryHint}>Prices Falling</Text>
+          </View>
+
+          <View style={[styles.trendSummaryCard, { backgroundColor: '#e0e7ff', borderColor: '#4f46e5' }]}>
+            <Ionicons name="remove" size={24} color="#4f46e5" />
+            <Text style={[styles.trendSummaryCount, { color: '#4f46e5' }]}>
+              {market_summary.stable_crops.length}
+            </Text>
+            <Text style={styles.trendSummaryLabel}>Stable</Text>
+            <Text style={styles.trendSummaryHint}>Steady Prices</Text>
+          </View>
+        </View>
+
+        {/* Price Comparison Chart */}
+        <View style={styles.chartCard}>
+          <Text style={styles.chartTitle}>Price Comparison - Current vs Expected (30 Days)</Text>
+          <View style={styles.barChartContainer}>
+            {forecasts.map((crop, index) => {
+              const currentPrice = parsePrice(crop.current_price);
+              const expectedPrice = parsePrice(crop.expected_price_30_days);
+              const maxPrice = Math.max(...forecasts.map(c => parsePrice(c.expected_price_30_days)));
+              const currentWidth = (currentPrice / maxPrice) * 100;
+              const expectedWidth = (expectedPrice / maxPrice) * 100;
+
               return (
-                <View key={stat.crop} style={styles.barChartRow}>
-                  <Text style={styles.barChartLabel}>{stat.crop.charAt(0).toUpperCase() + stat.crop.slice(1)}</Text>
-                  <View style={styles.barChartBarContainer}>
-                    <Animated.View 
-                      style={[styles.barChartBar, { 
-                        width: barWidth, 
-                        backgroundColor: getCropColor(stat.crop)
-                      }]} 
-                    />
+                <View key={index} style={styles.barChartRow}>
+                  <Text style={styles.barChartLabel}>{crop.crop}</Text>
+                  <View style={styles.barChartBars}>
+                    <View style={styles.barWrapper}>
+                      <View style={[styles.barCurrent, { width: `${currentWidth}%` }]}>
+                        <Text style={styles.barValue}>₹{currentPrice.toLocaleString('en-IN')}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.barWrapper}>
+                      <View style={[styles.barExpected, { width: `${expectedWidth}%` }]}>
+                        <Text style={styles.barValue}>₹{expectedPrice.toLocaleString('en-IN')}</Text>
+                      </View>
+                    </View>
                   </View>
-                  <Text style={styles.barChartValue}>{stat.demand.toLocaleString()}</Text>
                 </View>
               );
             })}
           </View>
-        )}
-      </View>
-    );
-  };
-
-  const renderLineChart = (priceData: any) => {
-    if (!priceData?.crop_type) return null;
-
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const chartData: Record<string, any[]> = {};
-
-    // Group data by crop
-    priceData.crop_type.forEach((crop: string, idx: number) => {
-      if (!chartData[crop]) chartData[crop] = [];
-      chartData[crop].push({
-        month: months[priceData.month[idx] - 1],
-        price: priceData.avg_price[idx],
-        monthNum: priceData.month[idx],
-        year: priceData.year[idx]
-      });
-    });
-
-    // Get all unique months across all crops
-    const allMonths = Array.from(new Set(priceData.month)).sort((a, b) => a - b);
-    const monthLabels = allMonths.map(m => months[m - 1]);
-
-    // Get all prices to calculate scale
-    const allPrices = priceData.avg_price.filter((p: number) => p > 0);
-    const maxPrice = Math.max(...allPrices);
-    const minPrice = Math.min(...allPrices);
-    const priceRange = maxPrice - minPrice || 1;
-
-    // Get top 3 crops by average price
-    const cropAverages = Object.entries(chartData).map(([crop, data]: [string, any]) => ({
-      crop,
-      avgPrice: data.reduce((sum: number, d: any) => sum + d.price, 0) / data.length,
-      data: data.sort((a: any, b: any) => a.monthNum - b.monthNum)
-    })).sort((a, b) => b.avgPrice - a.avgPrice).slice(0, 3);
-
-    return (
-      <View style={styles.lineChartContainer}>
-        <View style={styles.lineChartHeader}>
-          <Text style={styles.chartTitle}>Price Trends Comparison</Text>
-          <Text style={styles.chartSubtitle}>Top 3 Crops by Average Price</Text>
-        </View>
-        
-        {/* Legend */}
-        <View style={styles.chartLegend}>
-          {cropAverages.map(({ crop }) => (
-            <View key={crop} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: getCropColor(crop) }]} />
-              <Text style={styles.legendLabel}>{crop.charAt(0).toUpperCase() + crop.slice(1)}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.lineChartContent}>
-          <View style={styles.lineChartYAxis}>
-            <Text style={styles.yAxisLabel}>₹{Math.round(maxPrice).toLocaleString()}</Text>
-            <Text style={styles.yAxisLabel}>₹{Math.round((maxPrice + minPrice) / 2).toLocaleString()}</Text>
-            <Text style={styles.yAxisLabel}>₹{Math.round(minPrice).toLocaleString()}</Text>
-          </View>
           
-          <View style={styles.lineChartGraph}>
-            {/* Grid lines */}
-            <View style={styles.gridLines}>
-              {[0, 1, 2, 3, 4].map(i => (
-                <View key={i} style={styles.gridLine} />
-              ))}
+          {/* Legend */}
+          <View style={styles.chartLegend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendColor, { backgroundColor: '#3b82f6' }]} />
+              <Text style={styles.legendText}>Current Price</Text>
             </View>
-            
-            {/* Line paths for each crop */}
-            {cropAverages.map(({ crop, data }) => (
-              <View key={crop} style={styles.linePath}>
-                {data.map((point: any, index: number) => {
-                  const monthIndex = allMonths.indexOf(point.monthNum);
-                  if (monthIndex === -1) return null;
-                  
-                  const x = (monthIndex / (allMonths.length - 1)) * (width - 140);
-                  const y = ((maxPrice - point.price) / priceRange) * 130;
-                  
-                  return (
-                    <View key={`${crop}-${index}`} style={[styles.linePoint, { left: x, top: y }]}>
-                      <View style={[styles.pointDot, { 
-                        backgroundColor: getCropColor(crop),
-                        borderWidth: 2,
-                        borderColor: COLORS.white
-                      }]} />
-                    </View>
-                  );
-                })}
-              </View>
-            ))}
-            
-            {/* X-axis labels */}
-            <View style={styles.xAxisLabels}>
-              {monthLabels.map((month, index) => (
-                <Text key={index} style={styles.xAxisLabel}>{month}</Text>
-              ))}
+            <View style={styles.legendItem}>
+              <View style={[styles.legendColor, { backgroundColor: '#10b981' }]} />
+              <Text style={styles.legendText}>Expected Price</Text>
             </View>
           </View>
         </View>
 
-        {/* Price Stats */}
-        <View style={styles.priceStats}>
-          {cropAverages.map(({ crop, avgPrice }) => (
-            <View key={crop} style={styles.priceStatItem}>
-              <View style={[styles.priceStatDot, { backgroundColor: getCropColor(crop) }]} />
-              <View style={styles.priceStatInfo}>
-                <Text style={styles.priceStatLabel}>{crop.charAt(0).toUpperCase() + crop.slice(1)}</Text>
-                <Text style={styles.priceStatValue}>₹{Math.round(avgPrice).toLocaleString()}/Q avg</Text>
+        {/* Individual Crop Cards */}
+        <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 16 }]}>Detailed Analysis</Text>
+        {forecasts.map((crop, index) => {
+          const currentPrice = parsePrice(crop.current_price);
+          const expectedPrice = parsePrice(crop.expected_price_30_days);
+          const isPositive = expectedPrice >= currentPrice;
+          const trendColor = crop.trend === 'BULLISH' ? '#16a34a' : crop.trend === 'BEARISH' ? '#dc2626' : '#4f46e5';
+          const trendBg = crop.trend === 'BULLISH' ? '#dcfce7' : crop.trend === 'BEARISH' ? '#fee2e2' : '#e0e7ff';
+
+          return (
+            <View key={index} style={styles.cropDetailCard}>
+              <View style={styles.cropDetailHeader}>
+                <View style={styles.cropDetailTitle}>
+                  <Ionicons name="leaf" size={24} color={COLORS.primary} />
+                  <Text style={styles.cropDetailName}>{crop.crop}</Text>
+                </View>
+                <View style={[styles.trendChip, { backgroundColor: trendBg, borderColor: trendColor }]}>
+                  <Ionicons 
+                    name={crop.trend === 'BULLISH' ? 'trending-up' : crop.trend === 'BEARISH' ? 'trending-down' : 'remove'} 
+                    size={16} 
+                    color={trendColor} 
+                  />
+                  <Text style={[styles.trendChipText, { color: trendColor }]}>{crop.trend}</Text>
+                </View>
+              </View>
+
+              <View style={styles.cropPriceRow}>
+                <View style={styles.cropPriceCol}>
+                  <Text style={styles.cropPriceLabel}>Current</Text>
+                  <Text style={styles.cropPriceValue}>₹{currentPrice.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.cropPriceUnit}>per quintal</Text>
+                </View>
+                <Ionicons name="arrow-forward" size={24} color="#9ca3af" />
+                <View style={styles.cropPriceCol}>
+                  <Text style={styles.cropPriceLabel}>Expected (30d)</Text>
+                  <Text style={[styles.cropPriceValue, { color: isPositive ? '#16a34a' : '#dc2626' }]}>
+                    ₹{expectedPrice.toLocaleString('en-IN')}
+                  </Text>
+                  <Text style={styles.cropPriceUnit}>{crop.price_change}</Text>
+                </View>
+              </View>
+
+              <View style={styles.priceRangeContainer}>
+                <Text style={styles.priceRangeLabel}>Expected Price Range</Text>
+                <View style={styles.priceRangeBar}>
+                  <Text style={styles.priceRangeText}>{crop.price_range.min}</Text>
+                  <View style={styles.priceRangeLine} />
+                  <Text style={styles.priceRangeText}>{crop.price_range.max}</Text>
+                </View>
+              </View>
+
+              <View style={styles.recommendationChip}>
+                <Ionicons name="bulb" size={16} color="#f59e0b" />
+                <Text style={styles.recommendationChipText}>{crop.recommendation}</Text>
               </View>
             </View>
-          ))}
+          );
+        })}
+
+        {/* Quick Action Insights */}
+        <View style={styles.quickInsightsCard}>
+          <Text style={styles.quickInsightsTitle}>Quick Action Insights</Text>
+          
+          {quick_insights.buy_now.length > 0 && (
+            <View style={styles.insightRow}>
+              <View style={[styles.insightIcon, { backgroundColor: '#dcfce7' }]}>
+                <Ionicons name="cart" size={20} color="#16a34a" />
+              </View>
+              <View style={styles.insightContent}>
+                <Text style={styles.insightLabel}>Buy Now</Text>
+                <Text style={styles.insightText}>{quick_insights.buy_now.join(', ')}</Text>
+              </View>
+            </View>
+          )}
+
+          {quick_insights.wait_for_better_prices.length > 0 && (
+            <View style={styles.insightRow}>
+              <View style={[styles.insightIcon, { backgroundColor: '#fffbeb' }]}>
+                <Ionicons name="time" size={20} color="#f59e0b" />
+              </View>
+              <View style={styles.insightContent}>
+                <Text style={styles.insightLabel}>Wait for Better Prices</Text>
+                <Text style={styles.insightText}>{quick_insights.wait_for_better_prices.join(', ')}</Text>
+              </View>
+            </View>
+          )}
+
+          {quick_insights.neutral.length > 0 && (
+            <View style={styles.insightRow}>
+              <View style={[styles.insightIcon, { backgroundColor: '#f3f4f6' }]}>
+                <Ionicons name="remove-circle" size={20} color="#6b7280" />
+              </View>
+              <View style={styles.insightContent}>
+                <Text style={styles.insightLabel}>Neutral</Text>
+                <Text style={styles.insightText}>{quick_insights.neutral.join(', ')}</Text>
+              </View>
+            </View>
+          )}
         </View>
       </View>
     );
   };
 
-  const renderOpportunityScore = (shortage: any) => {
-    const gap = shortage.demand_supply_gap?.[0] || 0;
-    const score = Math.min((gap / 3000) * 100, 100);
-    
+  // ==================== DEMAND FORECASTING TAB ====================
+  // Shows demand forecasting from /quick/demand/ API
+  const renderDemandForecastingTab = () => {
+    if (!demandData?.forecast || !allCropsData?.forecasts) return null;
+
+    const { forecast } = demandData;
+    const { forecasts } = allCropsData;
+
+    const parseDemand = (demandStr: string): number => {
+      const match = demandStr.match(/([\d,]+)/);
+      return match ? parseFloat(match[1].replace(/,/g, '')) : 0;
+    };
+
+    const currentDemand = parseDemand(forecast.current_demand);
+    const expectedDemand = parseDemand(forecast.expected_demand);
+    const demandChange = currentDemand > 0 ? ((expectedDemand - currentDemand) / currentDemand) * 100 : 0;
+
     return (
-      <View style={styles.opportunityScoreCard}>
-        <View style={styles.scoreCircle}>
-          <View style={[styles.scoreCircleInner, { 
-            borderColor: score > 70 ? '#22c55e' : score > 40 ? COLORS.warning : COLORS.error,
-            borderWidth: 8
+      <View style={styles.tabContent}>
+        <Text style={styles.sectionTitle}>Demand Forecasting</Text>
+        <Text style={styles.sectionSubtitle}>Market demand trends and 30-day projections</Text>
+
+        {/* Overall Demand Overview */}
+        <View style={styles.demandOverviewCard}>
+          <Text style={styles.demandOverviewTitle}>Overall Market Demand</Text>
+          
+          {/* Demand Comparison Cards */}
+          <View style={styles.demandComparisonRow}>
+            <View style={styles.demandComparisonCard}>
+              <Ionicons name="today" size={24} color="#3b82f6" />
+              <Text style={styles.demandComparisonValue}>{forecast.current_demand}</Text>
+              <Text style={styles.demandComparisonLabel}>Current Demand</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={24} color="#9ca3af" />
+            <View style={styles.demandComparisonCard}>
+              <Ionicons name="trending-up" size={24} color="#10b981" />
+              <Text style={[styles.demandComparisonValue, { color: '#10b981' }]}>
+                {forecast.expected_demand}
+              </Text>
+              <Text style={styles.demandComparisonLabel}>Expected Demand</Text>
+            </View>
+          </View>
+
+          {/* Trend Indicator */}
+          <View style={[styles.demandTrendBadge, {
+            backgroundColor: forecast.trend === 'INCREASING' ? '#dcfce7' : 
+                           forecast.trend === 'DECREASING' ? '#fee2e2' : '#e0e7ff',
+            borderColor: forecast.trend === 'INCREASING' ? '#16a34a' : 
+                        forecast.trend === 'DECREASING' ? '#dc2626' : '#4f46e5'
           }]}>
-            <Text style={styles.scoreValue}>{Math.round(score)}</Text>
-            <Text style={styles.scoreLabel}>Score</Text>
+            <Ionicons 
+              name={forecast.trend === 'INCREASING' ? 'trending-up' : 
+                   forecast.trend === 'DECREASING' ? 'trending-down' : 'remove'} 
+              size={20} 
+              color={forecast.trend === 'INCREASING' ? '#16a34a' : 
+                    forecast.trend === 'DECREASING' ? '#dc2626' : '#4f46e5'} 
+            />
+            <Text style={[styles.demandTrendText, {
+              color: forecast.trend === 'INCREASING' ? '#16a34a' : 
+                    forecast.trend === 'DECREASING' ? '#dc2626' : '#4f46e5'
+            }]}>
+              {forecast.trend} {Math.abs(demandChange).toFixed(1)}%
+            </Text>
           </View>
-        </View>
-        
-        <View style={styles.scoreDetails}>
-          <View style={styles.scoreDetailRow}>
-            <Ionicons name="trending-up" size={20} color="#22c55e" />
-            <Text style={styles.scoreDetailLabel}>Demand Gap:</Text>
-            <Text style={styles.scoreDetailValue}>{Math.round(gap).toLocaleString()} Q</Text>
-          </View>
-          <View style={styles.scoreDetailRow}>
-            <Ionicons name="flash" size={20} color={COLORS.warning} />
-            <Text style={styles.scoreDetailLabel}>Urgency:</Text>
-            <Text style={styles.scoreDetailValue}>{score > 70 ? 'High' : score > 40 ? 'Medium' : 'Low'}</Text>
-          </View>
-          <View style={styles.scoreDetailRow}>
-            <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
-            <Text style={styles.scoreDetailLabel}>Recommendation:</Text>
-            <Text style={styles.scoreDetailValue}>{score > 70 ? 'Sell Now' : 'Monitor'}</Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
 
-  const renderExecutiveSummary = () => {
-    if (!marketData?.farmer_insights) return null;
-
-    const cropStats = aggregateByCrop(marketData.market_summary.actual);
-    const topShortage = marketData.farmer_insights.market_shortages;
-    const topPrice = marketData.farmer_insights.best_price_crops;
-    const forecastShortage = marketData.farmer_insights.forecast_shortages;
-
-    // Calculate key insights
-    const highestGapCrop = topShortage.crop_type?.[0];
-    const highestGapAmount = topShortage.demand_supply_gap?.[0];
-    const bestPriceCrop = topPrice.crop_type?.[0];
-    const bestPriceAmount = topPrice.avg_price?.[0];
-    const nextOpportunityCrop = forecastShortage.crop_type?.[0];
-    const nextOpportunityGap = forecastShortage.demand_supply_gap?.[0];
-
-    return (
-      <View style={styles.executiveCard}>
-        <View style={styles.executiveHeader}>
-          <View style={styles.executiveIcon}>
-            <Ionicons name="bulb" size={28} color={COLORS.warning} />
-          </View>
-          <View style={styles.executiveHeaderText}>
-            <Text style={styles.executiveTitle}>Key Insights for Farmers</Text>
-            <Text style={styles.executiveSubtitle}>Personalized recommendations based on market data</Text>
-          </View>
-        </View>
-
-        <View style={styles.insightGrid}>
-          {/* Top Opportunity Now */}
-          <View style={[styles.insightBox, { borderLeftColor: '#22c55e', borderLeftWidth: 4 }]}>
-            <View style={styles.insightBoxHeader}>
-              <Ionicons name="trending-up" size={20} color="#22c55e" />
-              <Text style={styles.insightBoxLabel}>Best Opportunity Now</Text>
+          {/* 30 Days Total */}
+          <View style={styles.totalDemandCard}>
+            <Ionicons name="calendar" size={20} color="#6b7280" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.totalDemandLabel}>Total 30-Day Demand</Text>
+              <Text style={styles.totalDemandValue}>{forecast.total_30_days}</Text>
             </View>
-            <Text style={styles.insightBoxCrop}>{highestGapCrop?.toUpperCase()}</Text>
-            <Text style={styles.insightBoxValue}>+{Math.round(highestGapAmount || 0).toLocaleString()} Q shortage</Text>
-            <Text style={styles.insightBoxHint}>High demand, limited supply</Text>
           </View>
+        </View>
 
-          {/* Best Price */}
-          <View style={[styles.insightBox, { borderLeftColor: COLORS.warning, borderLeftWidth: 4 }]}>
-            <View style={styles.insightBoxHeader}>
-              <Ionicons name="cash" size={20} color={COLORS.warning} />
-              <Text style={styles.insightBoxLabel}>Highest Price</Text>
+        {/* Demand Visualization Chart */}
+        <View style={styles.chartCard}>
+          <Text style={styles.chartTitle}>Demand Growth Projection</Text>
+          <View style={styles.demandChartContainer}>
+            <View style={styles.demandChartBar}>
+              <View style={styles.demandBar}>
+                <View style={[styles.demandBarFillStyle, { 
+                  width: `${expectedDemand > 0 ? (currentDemand / expectedDemand) * 100 : 50}%`,
+                  backgroundColor: '#3b82f6'
+                }]}>
+                  <Text style={styles.demandBarLabelText}>Current</Text>
+                </View>
+              </View>
+              <Text style={styles.demandBarValueText}>{forecast.current_demand}</Text>
             </View>
-            <Text style={styles.insightBoxCrop}>{bestPriceCrop?.toUpperCase()}</Text>
-            <Text style={styles.insightBoxValue}>₹{Math.round(bestPriceAmount || 0).toLocaleString()}/Q</Text>
-            <Text style={styles.insightBoxHint}>Best market rate available</Text>
+            <View style={styles.demandChartBar}>
+              <View style={styles.demandBar}>
+                <View style={[styles.demandBarFillStyle, { 
+                  width: '100%',
+                  backgroundColor: '#10b981'
+                }]}>
+                  <Text style={styles.demandBarLabelText}>Expected</Text>
+                </View>
+              </View>
+              <Text style={styles.demandBarValueText}>{forecast.expected_demand}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Crop-wise Demand Contribution */}
+        <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 16 }]}>
+          Crop-wise Demand Analysis
+        </Text>
+        {forecasts.slice(0, 5).map((crop, index) => {
+          const priceChange = parseFloat(crop.price_change.replace('%', '').replace('+', ''));
+          const isPositive = priceChange >= 0;
+          const demandLevel = Math.abs(priceChange) > 5 ? 'High' : Math.abs(priceChange) > 2 ? 'Medium' : 'Low';
+          const demandColor = Math.abs(priceChange) > 5 ? '#16a34a' : Math.abs(priceChange) > 2 ? '#f59e0b' : '#6b7280';
+
+          return (
+            <View key={index} style={styles.demandCropCard}>
+              <View style={styles.demandCropHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="leaf" size={20} color={COLORS.primary} />
+                  <Text style={styles.demandCropName}>{crop.crop}</Text>
+                </View>
+                <View style={[styles.demandLevelBadge, { backgroundColor: demandColor + '20', borderColor: demandColor }]}>
+                  <Text style={[styles.demandLevelText, { color: demandColor }]}>{demandLevel}</Text>
+                </View>
+              </View>
+
+              <View style={styles.demandMetrics}>
+                <View style={styles.demandMetricItem}>
+                  <Ionicons name="trending-up" size={18} color={isPositive ? '#16a34a' : '#dc2626'} />
+                  <Text style={styles.demandMetricLabel}>Price Trend</Text>
+                  <Text style={[styles.demandMetricValue, { color: isPositive ? '#16a34a' : '#dc2626' }]}>
+                    {crop.price_change}
+                  </Text>
+                </View>
+
+                <View style={styles.demandMetricItem}>
+                  <Ionicons name="stats-chart" size={18} color="#3b82f6" />
+                  <Text style={styles.demandMetricLabel}>Market Trend</Text>
+                  <Text style={styles.demandMetricValue}>{crop.trend}</Text>
+                </View>
+
+                <View style={styles.demandMetricItem}>
+                  <Ionicons name="arrow-up" size={18} color="#10b981" />
+                  <Text style={styles.demandMetricLabel}>Demand Level</Text>
+                  <Text style={styles.demandMetricValue}>{demandLevel}</Text>
+                </View>
+              </View>
+
+              <View style={styles.demandProgressBar}>
+                <View style={styles.demandProgressTrack}>
+                  <View 
+                    style={[
+                      styles.demandProgressFill, 
+                      { 
+                        width: `${Math.min(100, Math.abs(priceChange) * 10)}%`,
+                        backgroundColor: demandColor
+                      }
+                    ]} 
+                  />
+                </View>
+                <Text style={styles.demandProgressLabel}>
+                  {demandLevel} demand with {Math.abs(priceChange)}% price change
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Demand Insights */}
+        <View style={styles.marketRecommendationsCard}>
+          <Text style={styles.marketRecommendationsTitle}>Demand Insights</Text>
+          
+          <View style={styles.recommendationSection}>
+            <View style={styles.recommendationSectionHeader}>
+              <Ionicons 
+                name={forecast.trend === 'INCREASING' ? "arrow-up-circle" : "arrow-down-circle"} 
+                size={20} 
+                color={forecast.trend === 'INCREASING' ? "#16a34a" : "#dc2626"} 
+              />
+              <Text style={[styles.recommendationSectionTitle, { 
+                color: forecast.trend === 'INCREASING' ? "#16a34a" : "#dc2626" 
+              }]}>
+                Overall Demand is {forecast.trend}
+              </Text>
+            </View>
+            <Text style={styles.recommendationSectionText}>
+              {forecast.trend === 'INCREASING' 
+                ? `Market demand is expected to increase by ${Math.abs(demandChange).toFixed(1)}% over the next 30 days. This is a good time to prepare for higher sales volumes.`
+                : `Market demand shows ${forecast.trend.toLowerCase()} trend. Plan inventory accordingly.`
+              }
+            </Text>
           </View>
 
-          {/* Future Opportunity */}
-          <View style={[styles.insightBox, { borderLeftColor: '#3b82f6', borderLeftWidth: 4 }]}>
-            <View style={styles.insightBoxHeader}>
+          <View style={styles.recommendationSection}>
+            <View style={styles.recommendationSectionHeader}>
               <Ionicons name="calendar" size={20} color="#3b82f6" />
-              <Text style={styles.insightBoxLabel}>Next Month's Best</Text>
+              <Text style={[styles.recommendationSectionTitle, { color: "#3b82f6" }]}>
+                30-Day Projection
+              </Text>
             </View>
-            <Text style={styles.insightBoxCrop}>{nextOpportunityCrop?.toUpperCase()}</Text>
-            <Text style={styles.insightBoxValue}>+{Math.round(nextOpportunityGap || 0).toLocaleString()} Q forecast gap</Text>
-            <Text style={styles.insightBoxHint}>Plan ahead for this crop</Text>
-          </View>
-
-          {/* Market Activity */}
-          <View style={[styles.insightBox, { borderLeftColor: COLORS.primary, borderLeftWidth: 4 }]}>
-            <View style={styles.insightBoxHeader}>
-              <Ionicons name="bar-chart" size={20} color={COLORS.primary} />
-              <Text style={styles.insightBoxLabel}>Total Market Activity</Text>
-            </View>
-            <Text style={styles.insightBoxCrop}>{cropStats.length} CROPS</Text>
-            <Text style={styles.insightBoxValue}>{marketData.total_orders.toLocaleString()} orders</Text>
-            <Text style={styles.insightBoxHint}>Active marketplace</Text>
+            <Text style={styles.recommendationSectionText}>
+              Total expected market demand over the next 30 days: {forecast.total_30_days}. Daily average: {forecast.expected_demand}
+            </Text>
           </View>
         </View>
       </View>
     );
   };
 
-  const renderPriceCard = (price: any, index: number, isBest: boolean = true) => {
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const month = monthNames[price.month - 1];
-    
-    return (
-      <View key={index} style={styles.priceCard}>
-        <View style={styles.priceCardHeader}>
-          <View style={[styles.priceIcon, { backgroundColor: isBest ? '#22c55e15' : COLORS.primary + '15' }]}>
-            <Ionicons name={isBest ? "trending-up" : "cash"} size={20} color={isBest ? '#22c55e' : COLORS.primary} />
-          </View>
-          <View style={styles.priceInfo}>
-            <Text style={styles.priceCrop}>{price.crop_type}</Text>
-            <Text style={styles.priceDate}>{month} {price.year}</Text>
-          </View>
-        </View>
-        <View style={styles.priceAmount}>
-          <Text style={styles.priceSymbol}>₹</Text>
-          <Text style={styles.priceValue}>{Math.round(price.avg_price).toLocaleString()}</Text>
-          <Text style={styles.priceUnit}>/Q</Text>
-        </View>
-      </View>
-    );
+  const renderContent = () => {
+    switch (selectedTab) {
+      case 'marketInsights':
+        return renderMarketInsightsTab();
+      case 'priceForecasting':
+        return renderPriceForecastingTab();
+      case 'demandForecasting':
+        return renderDemandForecastingTab();
+      default:
+        return null;
+    }
   };
 
-  if (loading && !refreshing) {
+  if (loading) {
     return (
       <View style={styles.container}>
-        <AppHeader
-          title="Market Insights"
-          onMenuPress={() => setSidebarVisible(true)}
-        />
+        <AppHeader onMenuPress={() => setSidebarVisible(true)} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading market data...</Text>
+          <Text style={styles.loadingText}>Loading market insights...</Text>
         </View>
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       </View>
     );
   }
 
+  const actionStyle = marketData?.insights?.recommendation 
+    ? getActionButtonStyle(marketData.insights.recommendation.action)
+    : getActionButtonStyle('Monitor Market');
+
   return (
     <View style={styles.container}>
-      <AppHeader
-        title="Market Insights"
-        onMenuPress={() => setSidebarVisible(true)}
-      />
-      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-
-      {/* Category Tabs */}
-      <View style={styles.tabBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContent}>
-          <TouchableOpacity
-            style={[styles.tab, selectedTab === 'overview' && styles.tabActive]}
-            onPress={() => setSelectedTab('overview')}
-          >
-            <Ionicons name="grid" size={20} color={selectedTab === 'overview' ? COLORS.white : COLORS.text.secondary} />
-            <Text style={[styles.tabText, selectedTab === 'overview' && styles.tabTextActive]}>Overview</Text>
-          </TouchableOpacity>
+      <AppHeader onMenuPress={() => setSidebarVisible(true)} />
+      
+      <ScrollView 
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+        }
+      >
+        {/* Header Section */}
+        <LinearGradient
+          colors={[COLORS.primary, '#059669']}
+          style={styles.header}
+        >
+          <View style={styles.headerContent}>
+            <Ionicons name="analytics" size={32} color="#fff" />
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>Market Insights</Text>
+              <Text style={styles.headerSubtitle}>Smart farming decisions based on data</Text>
+            </View>
+          </View>
           
-          <TouchableOpacity
-            style={[styles.tab, selectedTab === 'opportunities' && styles.tabActive]}
-            onPress={() => setSelectedTab('opportunities')}
-          >
-            <Ionicons name="trending-up" size={20} color={selectedTab === 'opportunities' ? COLORS.white : COLORS.text.secondary} />
-            <Text style={[styles.tabText, selectedTab === 'opportunities' && styles.tabTextActive]}>Opportunities</Text>
-          </TouchableOpacity>
+          {/* Market Summary */}
+          {marketData?.insights?.summary && (
+            <View style={styles.summaryCards}>
+              <View style={styles.summaryCard}>
+                <Ionicons name="wallet" size={20} color="#fff" />
+                <Text style={styles.summaryValue}>
+                  {formatNumber(parsePrice(marketData.insights.summary.total_market_value))}
+                </Text>
+                <Text style={styles.summaryLabel}>Total Market Value</Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <Ionicons name="cube" size={20} color="#fff" />
+                <Text style={styles.summaryValue}>
+                  {formatQuantity(marketData.insights.summary.total_quantity)}
+                </Text>
+                <Text style={styles.summaryLabel}>Total Volume</Text>
+              </View>
+            </View>
+          )}
           
-        
-          
-          <TouchableOpacity
-            style={[styles.tab, selectedTab === 'forecast' && styles.tabActive]}
-            onPress={() => setSelectedTab('forecast')}
-          >
-            <Ionicons name="telescope" size={20} color={selectedTab === 'forecast' ? COLORS.white : COLORS.text.secondary} />
-            <Text style={[styles.tabText, selectedTab === 'forecast' && styles.tabTextActive]}>Forecast</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
+          {marketData?.insights?.summary && (
+            <View style={[styles.summaryCards, { marginTop: 12 }]}>
+              <View style={styles.summaryCard}>
+                <Ionicons name="cash-outline" size={20} color="#fff" />
+                <Text style={styles.summaryValue}>
+                  ₹{parsePrice(marketData.insights.summary.average_price).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </Text>
+                <Text style={styles.summaryLabel}>Average Price</Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <Ionicons name="receipt-outline" size={20} color="#fff" />
+                <Text style={styles.summaryValue}>
+                  {marketData.insights.summary.total_transactions.toLocaleString('en-IN')}
+                </Text>
+                <Text style={styles.summaryLabel}>Total Orders</Text>
+              </View>
+            </View>
+          )}
+        </LinearGradient>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-
-        {marketData && (
-          <>
-            {/* Overview Tab */}
-            {selectedTab === 'overview' && (
-              <>
-                {renderExecutiveSummary()}
-                
-                {/* Quick Stats */}
-                <View style={styles.statsRow}>
-                  <View style={styles.statCard}>
-                    <Ionicons name="cart" size={24} color={COLORS.primary} />
-                    <Text style={styles.statValue}>{marketData.total_orders}</Text>
-                    <Text style={styles.statLabel}>Total Orders</Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Ionicons name="leaf" size={24} color="#22c55e" />
-                    <Text style={styles.statValue}>{aggregateByCrop(marketData.market_summary.actual).length}</Text>
-                    <Text style={styles.statLabel}>Active Crops</Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Ionicons name="analytics" size={24} color={COLORS.warning} />
-                    <Text style={styles.statValue}>
-                      {Math.round(aggregateByCrop(marketData.market_summary.actual).reduce((sum, s) => sum + s.gap, 0))}
-                    </Text>
-                    <Text style={styles.statLabel}>Total Gap (Q)</Text>
-                  </View>
-                </View>
-
-                {/* Crop Distribution Chart */}
-                {renderPieChart(aggregateByCrop(marketData.market_summary.actual))}
-              </>
-            )}
-
-            {/* Opportunities Tab */}
-            {selectedTab === 'opportunities' && marketData.farmer_insights && (
-              <>
-                <View style={styles.tabHeader}>
-                  <Ionicons name="bulb" size={28} color={COLORS.warning} />
-                  <Text style={styles.tabHeaderTitle}>Market Opportunities</Text>
-                  <Text style={styles.tabHeaderSubtitle}>Current shortages with high profit potential</Text>
-                </View>
-
-                {/* Opportunity Score */}
-                {renderOpportunityScore(marketData.farmer_insights.market_shortages)}
-
-                {/* Top Shortages */}
-                <Text style={styles.sectionTitle}>🚨 High-Demand Crops</Text>
-                <View style={styles.shortagesContainer}>
-                  {marketData.farmer_insights.market_shortages.crop_type?.slice(0, 5).map((crop: any, idx: number) => 
-                    renderShortageCard({
-                      crop_type: crop,
-                      year: marketData.farmer_insights!.market_shortages.year[idx],
-                      month: marketData.farmer_insights!.market_shortages.month[idx],
-                      demand_supply_gap: marketData.farmer_insights!.market_shortages.demand_supply_gap[idx]
-                    }, idx)
-                  )}
-                </View>
-
-                {/* Action Items */}
-                <View style={styles.actionCard}>
-                  <View style={styles.actionHeader}>
-                    <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
-                    <Text style={styles.actionTitle}>Recommended Actions</Text>
-                  </View>
-                  
-                  <View style={styles.actionList}>
-                    {marketData.farmer_insights.market_shortages?.crop_type?.[0] && (
-                      <View style={styles.actionItem}>
-                        <View style={styles.actionNumber}>
-                          <Text style={styles.actionNumberText}>1</Text>
-                        </View>
-                        <View style={styles.actionContent}>
-                          <Text style={styles.actionItemTitle}>
-                            Sell {marketData.farmer_insights.market_shortages.crop_type[0]} Now
-                          </Text>
-                          <Text style={styles.actionItemDesc}>
-                            Current shortage of {Math.round(marketData.farmer_insights.market_shortages.demand_supply_gap[0]).toLocaleString()} quintals. 
-                            High demand means better negotiating power.
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              </>
-            )}
-
-            
-
-            {/* Forecast Tab */}
-            {selectedTab === 'forecast' && marketData.farmer_insights && (
-              <>
-                <View style={styles.tabHeader}>
-                  <Ionicons name="telescope" size={28} color="#3b82f6" />
-                  <Text style={styles.tabHeaderTitle}>AI Forecasts</Text>
-                  <Text style={styles.tabHeaderSubtitle}>Predictions for next 60 days</Text>
-                </View>
-
-                {/* Forecast Shortages */}
-                {marketData.farmer_insights.forecast_shortages?.crop_type && (
-                  <>
-                    <Text style={styles.sectionTitle}>📈 Predicted Shortages</Text>
-                    <Text style={styles.sectionSubtitle}>Plan your planting based on future demand</Text>
-                    <View style={styles.shortagesContainer}>
-                      {marketData.farmer_insights.forecast_shortages.crop_type.slice(0, 5).map((crop: any, idx: number) => 
-                        renderShortageCard({
-                          crop_type: crop,
-                          year: marketData.farmer_insights!.forecast_shortages.year[idx],
-                          month: marketData.farmer_insights!.forecast_shortages.month[idx],
-                          demand_supply_gap: marketData.farmer_insights!.forecast_shortages.demand_supply_gap[idx]
-                        }, idx)
-                      )}
-                    </View>
-                  </>
-                )}
-
-                {/* Forecast Prices */}
-                {marketData.farmer_insights.forecast_best_prices?.crop_type && (
-                  <>
-                    <Text style={styles.sectionTitle}>🔮 Predicted Prices</Text>
-                    <Text style={styles.sectionSubtitle}>AI-powered price forecasts</Text>
-                    <View style={styles.priceGrid}>
-                      {marketData.farmer_insights.forecast_best_prices.crop_type.slice(0, 6).map((crop: any, idx: number) => 
-                        renderPriceCard({
-                          crop_type: crop,
-                          year: marketData.farmer_insights!.forecast_best_prices.year[idx],
-                          month: marketData.farmer_insights!.forecast_best_prices.month[idx],
-                          avg_price: marketData.farmer_insights!.forecast_best_prices.avg_price[idx]
-                        }, idx, false)
-                      )}
-                    </View>
-                  </>
-                )}
-
-                {/* Planning Tips */}
-                <View style={styles.planningCard}>
-                  <Ionicons name="calendar" size={24} color={COLORS.primary} />
-                  <Text style={styles.planningTitle}>Smart Planning Tips</Text>
-                  <View style={styles.planningTips}>
-                    <View style={styles.planningTip}>
-                      <Ionicons name="checkmark-circle" size={16} color="#22c55e" />
-                      <Text style={styles.planningTipText}>Start preparing seeds 30 days before predicted shortage</Text>
-                    </View>
-                    <View style={styles.planningTip}>
-                      <Ionicons name="checkmark-circle" size={16} color="#22c55e" />
-                      <Text style={styles.planningTipText}>Monitor soil conditions for forecasted crops</Text>
-                    </View>
-                    <View style={styles.planningTip}>
-                      <Ionicons name="checkmark-circle" size={16} color="#22c55e" />
-                      <Text style={styles.planningTipText}>Book FPO services early for predicted high-demand periods</Text>
-                    </View>
-                  </View>
-                </View>
-              </>
-            )}
-          </>
-        )}
-
-        {/* Empty State */}
-        {!marketData?.data_available && (
-          <View style={styles.emptyState}>
-            <Ionicons name="analytics-outline" size={64} color={COLORS.text.tertiary} />
-            <Text style={styles.emptyStateTitle}>No Market Data Available</Text>
-            <Text style={styles.emptyStateText}>
-              Market insights are generated based on order data. Check back later for updates.
-            </Text>
-            <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
-              <Ionicons name="refresh" size={20} color={COLORS.primary} />
-              <Text style={styles.refreshButtonText}>Refresh</Text>
-            </TouchableOpacity>
+        {/* Action Button */}
+        {marketData?.insights?.recommendation && (
+          <View style={styles.actionButtonContainer}>
+            <LinearGradient
+              colors={actionStyle.colors}
+              style={styles.actionButton}
+            >
+              <Ionicons name={actionStyle.icon} size={24} color={actionStyle.textColor} />
+              <Text style={[styles.actionButtonText, { color: actionStyle.textColor }]}>
+                {marketData.insights.recommendation.action}
+              </Text>
+            </LinearGradient>
           </View>
         )}
+
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity
+            style={[styles.tab, selectedTab === 'marketInsights' && styles.activeTab]}
+            onPress={() => setSelectedTab('marketInsights')}
+          >
+            <Ionicons 
+              name="bulb" 
+              size={20} 
+              color={selectedTab === 'marketInsights' ? COLORS.primary : '#6b7280'} 
+            />
+            <Text style={[styles.tabText, selectedTab === 'marketInsights' && styles.activeTabText]}>
+              Market Insights
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.tab, selectedTab === 'priceForecasting' && styles.activeTab]}
+            onPress={() => setSelectedTab('priceForecasting')}
+          >
+            <Ionicons 
+              name="trending-up" 
+              size={20} 
+              color={selectedTab === 'priceForecasting' ? COLORS.primary : '#6b7280'} 
+            />
+            <Text style={[styles.tabText, selectedTab === 'priceForecasting' && styles.activeTabText]}>
+              Price Forecast
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.tab, selectedTab === 'demandForecasting' && styles.activeTab]}
+            onPress={() => setSelectedTab('demandForecasting')}
+          >
+            <Ionicons 
+              name="stats-chart" 
+              size={20} 
+              color={selectedTab === 'demandForecasting' ? COLORS.primary : '#6b7280'} 
+            />
+            <Text style={[styles.tabText, selectedTab === 'demandForecasting' && styles.activeTabText]}>
+              Demand Forecast
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Tab Content */}
+        {renderContent()}
       </ScrollView>
+
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </View>
   );
 }
@@ -780,465 +815,10 @@ export default function MarketInsightsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#f9fafb',
   },
-  tabBar: {
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingVertical: 12,
-  },
-  tabScrollContent: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: COLORS.background,
-  },
-  tabActive: {
-    backgroundColor: COLORS.primary,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text.secondary,
-  },
-  tabTextActive: {
-    color: COLORS.white,
-  },
-  tabHeader: {
-    margin: 20,
-    marginBottom: 0,
-    alignItems: 'center',
-  },
-  tabHeaderTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  tabHeaderSubtitle: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    textAlign: 'center',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    gap: 12,
-    marginBottom: 20,
-  },
-  statCard: {
+  scrollView: {
     flex: 1,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  pieChartContainer: {
-    margin: 20,
-    marginTop: 0,
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  pieChartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-  },
-  chartControls: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  chartControlBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chartControlBtnActive: {
-    backgroundColor: COLORS.primary,
-  },
-  pieChartContent: {
-    gap: 20,
-  },
-  donutChart: {
-    flexDirection: 'row',
-    height: 40,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  donutSegment: {
-    height: '100%',
-  },
-  donutBar: {
-    height: '100%',
-  },
-  pieChartLegend: {
-    gap: 12,
-  },
-  pieChartLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  pieChartLegendColor: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  pieChartLegendText: {
-    flex: 1,
-  },
-  pieChartLegendLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    textTransform: 'capitalize',
-  },
-  pieChartLegendValue: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-    marginTop: 2,
-  },
-  barChartContent: {
-    gap: 16,
-  },
-  barChartRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  barChartLabel: {
-    width: 80,
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    textTransform: 'capitalize',
-  },
-  barChartBarContainer: {
-    flex: 1,
-    height: 28,
-    backgroundColor: COLORS.background,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  barChartBar: {
-    height: '100%',
-    borderRadius: 14,
-  },
-  barChartValue: {
-    width: 60,
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    textAlign: 'right',
-  },
-  lineChartContainer: {
-    margin: 20,
-    marginTop: 0,
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  lineChartHeader: {
-    marginBottom: 16,
-  },
-  chartSubtitle: {
-    fontSize: 13,
-    color: COLORS.text.secondary,
-    marginTop: 4,
-  },
-  chartLegend: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 20,
-    flexWrap: 'wrap',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  legendLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    textTransform: 'capitalize',
-  },
-  priceStats: {
-    marginTop: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    gap: 12,
-  },
-  priceStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  priceStatDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  priceStatInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  priceStatLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    textTransform: 'capitalize',
-  },
-  priceStatValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  lineChartContent: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  lineChartYAxis: {
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-  },
-  yAxisLabel: {
-    fontSize: 11,
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-  },
-  lineChartGraph: {
-    flex: 1,
-    height: 160,
-    position: 'relative',
-  },
-  gridLines: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 30,
-    justifyContent: 'space-between',
-  },
-  gridLine: {
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
-  linePath: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 30,
-  },
-  linePoint: {
-    position: 'absolute',
-    width: 12,
-    height: 12,
-  },
-  pointDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 3,
-    borderColor: COLORS.white,
-  },
-  pointTooltip: {
-    position: 'absolute',
-    top: -28,
-    left: -20,
-    backgroundColor: COLORS.text.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  pointTooltipText: {
-    fontSize: 10,
-    color: COLORS.white,
-    fontWeight: '600',
-  },
-  xAxisLabels: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  xAxisLabel: {
-    fontSize: 10,
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-  },
-  opportunityScoreCard: {
-    margin: 20,
-    marginTop: 0,
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  scoreCircle: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  scoreCircleInner: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scoreValue: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-  },
-  scoreLabel: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  scoreDetails: {
-    gap: 12,
-  },
-  scoreDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  scoreDetailLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.text.secondary,
-  },
-  scoreDetailValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-  },
-  planningCard: {
-    margin: 20,
-    marginTop: 0,
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  planningTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginTop: 12,
-    marginBottom: 16,
-  },
-  planningTips: {
-    gap: 12,
-  },
-  planningTip: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  planningTipText: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    lineHeight: 20,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-    minHeight: 400,
-  },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  refreshButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: COLORS.white,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-  },
-  refreshButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
   },
   loadingContainer: {
     flex: 1,
@@ -1246,564 +826,1129 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: 12,
     fontSize: 16,
-    color: COLORS.text.secondary,
+    color: '#6b7280',
   },
-  scrollView: {
-    flex: 1,
+  header: {
+    padding: 20,
+    paddingTop: 24,
+    paddingBottom: 24,
   },
-  scrollContent: {
-    paddingBottom: 32,
-  },
-  summaryCard: {
-    margin: 20,
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  summaryHeader: {
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     marginBottom: 20,
   },
-  summaryTitle: {
-    fontSize: 20,
+  headerText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 24,
     fontWeight: '700',
-    color: COLORS.text.primary,
+    color: '#fff',
+    marginBottom: 4,
   },
-  summaryStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  dateRange: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  dateRangeText: {
+  headerSubtitle: {
     fontSize: 14,
-    color: COLORS.text.secondary,
+    color: '#f0fdf4',
   },
-  chartCard: {
-    marginHorizontal: 20,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
+  summaryCards: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 8,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#f0fdf4',
+    marginTop: 4,
+  },
+  actionButtonContainer: {
     padding: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  cropBarContainer: {
-    marginBottom: 24,
-  },
-  cropName: {
-    fontSize: 16,
+  actionButtonText: {
+    fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text.primary,
-    marginBottom: 12,
-    textTransform: 'capitalize',
   },
-  barWrapper: {
+  tabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
-  barRow: {
+  tab: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
   },
-  barLabel: {
-    width: 60,
-    fontSize: 12,
+  activeTab: {
+    backgroundColor: '#f0fdf4',
+  },
+  tabText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text.secondary,
+    color: '#6b7280',
   },
-  barBackground: {
+  activeTabText: {
+    color: COLORS.primary,
+  },
+  tabContent: {
+    padding: 20,
+  },
+  filtersContainer: {
+    marginBottom: 20,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  filterButton: {
     flex: 1,
-    height: 20,
-    backgroundColor: COLORS.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
     borderRadius: 10,
-    overflow: 'hidden',
+    padding: 12,
+    gap: 6,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
-  barFill: {
-    height: '100%',
-    borderRadius: 10,
-  },
-  barValue: {
-    width: 80,
-    fontSize: 12,
+  filterButtonText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text.primary,
-    textAlign: 'right',
+    color: '#111827',
+    flex: 1,
   },
-  cropFooter: {
+  filterDropdown: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginTop: 8,
+    padding: 8,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  filterOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  gapBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    padding: 12,
     borderRadius: 8,
   },
-  gapText: {
-    fontSize: 13,
-    fontWeight: '600',
+  filterOptionActive: {
+    backgroundColor: '#f0fdf4',
   },
-  priceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.warning + '15',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  priceText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.warning,
-  },
-  insightCard: {
-    margin: 20,
-    marginTop: 0,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 16,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-  },
-  cardContent: {
-    padding: 16,
-    paddingTop: 0,
-  },
-  dataRow: {
-    marginBottom: 12,
-  },
-  dataKey: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.text.secondary,
-    marginBottom: 4,
-  },
-  dataValue: {
-    fontSize: 15,
-    color: COLORS.text.primary,
-    lineHeight: 22,
-  },
-  noDataContainer: {
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  noDataText: {
+  filterOptionText: {
     fontSize: 14,
-    color: COLORS.text.tertiary,
-    marginTop: 8,
+    color: '#6b7280',
   },
-  infoCard: {
-    margin: 20,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    gap: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  filterOptionTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
   },
-  infoText: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    lineHeight: 22,
-  },
-  executiveCard: {
-    margin: 20,
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 5,
-  },
-  executiveHeader: {
+  cropHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-  },
-  executiveIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.warning + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  executiveHeaderText: {
-    flex: 1,
-  },
-  executiveTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  executiveSubtitle: {
-    fontSize: 13,
-    color: COLORS.text.secondary,
-    lineHeight: 18,
-  },
-  insightGrid: {
-    gap: 16,
-  },
-  insightBox: {
-    backgroundColor: COLORS.background,
+    backgroundColor: '#f0fdf4',
     borderRadius: 12,
     padding: 16,
+    marginBottom: 16,
+    gap: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
   },
-  insightBoxHeader: {
+  cropHeaderText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    flex: 1,
+  },
+  priceCardsRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  priceCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  priceCardLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  priceCardValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  priceCardSubtext: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  priceCardIcon: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+  },
+  chartCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  chartTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  trendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  trendBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  lineChart: {
+    flexDirection: 'row',
+    height: 220,
+  },
+  yAxis: {
+    width: 60,
+    justifyContent: 'space-between',
+    paddingRight: 8,
+  },
+  yAxisLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    textAlign: 'right',
+    fontWeight: '500',
+  },
+  chartArea: {
+    flex: 1,
+  },
+  chartGrid: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 25,
+    justifyContent: 'space-between',
+  },
+  gridLine: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+  },
+  lineChartPath: {
+    flex: 1,
+    marginBottom: 25,
+  },
+  trendLineContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  trendLine: {
+    width: '100%',
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+    opacity: 0.6,
+  },
+  dataPoints: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  dataPoint: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 3,
+    borderColor: '#fff',
+    position: 'absolute',
+    bottom: -7,
+  },
+  dataPointLabel: {
+    position: 'absolute',
+    bottom: 20,
+    left: -20,
+    backgroundColor: '#111827',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  dataPointLabelText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  xAxis: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  xAxisLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  priceChangeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  priceChangeLeft: {
+    flex: 1,
+  },
+  priceChangeLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  priceChangeValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  priceChangeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 4,
+  },
+  priceChangeChipText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  recommendationCard: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  recommendationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  insightBoxLabel: {
-    fontSize: 12,
+  recommendationTitle: {
+    fontSize: 15,
     fontWeight: '600',
-    color: COLORS.text.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: '#92400e',
   },
-  insightBoxCrop: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  recommendationMessage: {
+    fontSize: 15,
+    color: '#78350f',
+    marginBottom: 8,
+    lineHeight: 22,
   },
-  insightBoxValue: {
+  recommendationSuggestion: {
+    fontSize: 14,
+    color: '#78350f',
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  bestTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  bestTimeText: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: COLORS.primary,
-    marginBottom: 6,
-  },
-  insightBoxHint: {
-    fontSize: 12,
-    color: COLORS.text.tertiary,
-    fontStyle: 'italic',
-  },
-  actionCard: {
-    margin: 20,
-    marginTop: 0,
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  actionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  actionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-  },
-  actionList: {
-    gap: 16,
-  },
-  actionItem: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionNumberText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.white,
-  },
-  actionContent: {
-    flex: 1,
-  },
-  actionItemTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text.primary,
+    color: '#111827',
     marginBottom: 4,
   },
-  actionItemDesc: {
-    fontSize: 13,
-    color: COLORS.text.secondary,
-    lineHeight: 20,
-  },
-  statBox: {
-    flex: 1,
-  },
-  statLabel: {
-    fontSize: 13,
-    color: COLORS.text.secondary,
-    marginBottom: 6,
-  },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: COLORS.border,
-    marginHorizontal: 16,
-  },
-  heroSection: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-    backgroundColor: COLORS.white,
-  },
-  heroIcon: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: COLORS.warning + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
     marginBottom: 20,
   },
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-    marginBottom: 10,
-  },
-  heroSubtitle: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  rotating: {
-    transform: [{ rotate: '360deg' }],
-  },
-  viewModeToggle: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    padding: 4,
-    marginTop: 16,
-    gap: 4,
-  },
-  viewModeButton: {
-    flex: 1,
+  actionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
     gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
   },
-  viewModeButtonActive: {
-    backgroundColor: COLORS.primary,
+  actionBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
-  viewModeText: {
+  cropHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  seasonalTipTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text.secondary,
+    color: '#6b7280',
+    marginBottom: 8,
   },
-  viewModeTextActive: {
-    color: COLORS.white,
-  },
-  shortageCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  shortageHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  shortageIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.error + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shortageInfo: {
-    flex: 1,
-  },
-  shortageCrop: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    textTransform: 'capitalize',
-    marginBottom: 4,
-  },
-  shortageDate: {
+  bestSeasonText: {
     fontSize: 13,
-    color: COLORS.text.secondary,
+    color: '#1f2937',
+    marginTop: 4,
   },
-  shortageGap: {
-    alignItems: 'flex-end',
-  },
-  shortageGapValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.error,
-    marginBottom: 2,
-  },
-  shortageGapLabel: {
-    fontSize: 11,
-    color: COLORS.text.secondary,
-  },
-  shortagesContainer: {
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  priceCard: {
-    width: '47%',
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
+  cropCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    marginBottom: 12,
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
-  priceCardHeader: {
+  cropCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     marginBottom: 12,
   },
-  priceIcon: {
+  cropRank: {
+    marginRight: 12,
+  },
+  rankBadge: {
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  priceInfo: {
+  rankText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  cropInfo: {
     flex: 1,
   },
-  priceCrop: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    textTransform: 'capitalize',
-    marginBottom: 2,
-  },
-  priceDate: {
-    fontSize: 11,
-    color: COLORS.text.secondary,
-  },
-  priceAmount: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  priceSymbol: {
-    fontSize: 16,
+  cropName: {
+    fontSize: 18,
     fontWeight: '600',
-    color: COLORS.text.secondary,
-    marginRight: 2,
+    color: '#111827',
+    marginBottom: 6,
   },
-  priceValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.text.primary,
-  },
-  priceUnit: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text.secondary,
-    marginLeft: 4,
-  },
-  priceGrid: {
+  cropMetrics: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    gap: 16,
+  },
+  cropMetric: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cropMetricText: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  demandBarContainer: {
+    marginTop: 8,
+  },
+  demandBarLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 6,
+  },
+  demandBarTrack: {
+    height: 8,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  demandBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  seasonalTipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
     gap: 12,
-    marginHorizontal: 20,
+  },
+  seasonalTip: {
+    flex: 1,
+    fontSize: 14,
+    color: '#78350f',
+    lineHeight: 20,
+  },
+  seasonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
     marginBottom: 20,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 4,
+  seasonCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    marginHorizontal: 20,
+  bestSeasonCard: {
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  bestSeasonBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10b981',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  bestSeasonBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  seasonIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 12,
   },
+  seasonName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  seasonMonths: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  seasonRecommendation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+  },
+  seasonRecommendationText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  calendarCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  calendarTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  calendarMonth: {
+    width: (width - 88) / 6,
+    alignItems: 'center',
+  },
+  calendarMonthBar: {
+    width: '100%',
+    height: 40,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  calendarMonthSeason: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  calendarMonthLabel: {
+    fontSize: 10,
+    color: '#6b7280',
+  },
+  calendarLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  calendarLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  calendarLegendColor: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+  },
+  calendarLegendText: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  
+  // ==================== PRICE FORECASTING TAB STYLES ====================
+  trendSummaryContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 12,
+  },
+  trendSummaryCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  trendSummaryCount: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  trendSummaryLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginTop: 4,
+  },
+  trendSummaryHint: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  barChartContainer: {
+    marginBottom: 12,
+  },
+  barChartRow: {
+    marginBottom: 16,
+  },
+  barChartLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 6,
+  },
+  barChartBars: {
+    gap: 6,
+  },
+  barWrapper: {
+    height: 28,
+  },
+  barCurrent: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 6,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    minWidth: 80,
+  },
+  barExpected: {
+    backgroundColor: '#10b981',
+    borderRadius: 6,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    minWidth: 80,
+  },
+  barValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  chartLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 8,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendColor: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  cropDetailCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cropDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cropDetailTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cropDetailName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  trendChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    gap: 4,
+  },
+  trendChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cropPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cropPriceCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  cropPriceLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  cropPriceValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  cropPriceUnit: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+  priceRangeContainer: {
+    marginBottom: 12,
+  },
+  priceRangeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  priceRangeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  priceRangeLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#e5e7eb',
+    marginHorizontal: 12,
+  },
+  priceRangeText: {
+    fontSize: 12,
+    color: '#1f2937',
+    fontWeight: '600',
+  },
+  recommendationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    gap: 6,
+  },
+  recommendationChipText: {
+    fontSize: 13,
+    color: '#92400e',
+    flex: 1,
+  },
+  quickInsightsCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  quickInsightsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 16,
+  },
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    gap: 12,
+  },
+  insightIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightContent: {
+    flex: 1,
+  },
+  insightLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  insightText: {
+    fontSize: 13,
+    color: '#6b7280',
+    lineHeight: 18,
+  },
+
+  // ==================== DEMAND FORECASTING TAB STYLES ====================
+  demandOverviewCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  demandOverviewTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 16,
+  },
+  demandComparisonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  demandComparisonCard: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 10,
+  },
+  demandComparisonValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginTop: 8,
+  },
+  demandComparisonLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  demandTrendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 2,
+    marginBottom: 12,
+    gap: 8,
+  },
+  demandTrendText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  totalDemandCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    padding: 12,
+    borderRadius: 8,
+    gap: 12,
+  },
+  totalDemandLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  totalDemandValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  demandChartContainer: {
+    marginTop: 8,
+    gap: 16,
+  },
+  demandChartBar: {
+    gap: 8,
+  },
+  demandBar: {
+    height: 40,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  demandBarFillStyle: {
+    height: '100%',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  demandBarLabelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  demandBarValueText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  demandCropCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  demandCropHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  demandCropName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  demandLevelBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1.5,
+  },
+  demandLevelText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  demandMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 8,
+  },
+  demandMetricItem: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+  },
+  demandMetricLabel: {
+    fontSize: 10,
+    color: '#6b7280',
+    marginTop: 4,
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  demandMetricValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1f2937',
+    textAlign: 'center',
+  },
+  demandProgressBar: {
+    marginTop: 8,
+  },
+  demandProgressTrack: {
+    height: 10,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 5,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  demandProgressFill: {
+    height: '100%',
+    borderRadius: 5,
+  },
+  demandProgressLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  marketRecommendationsCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  marketRecommendationsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 16,
+  },
+  recommendationSection: {
+    marginBottom: 16,
+  },
+  recommendationSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  recommendationSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  recommendationSectionText: {
+    fontSize: 13,
+    color: '#4b5563',
+    lineHeight: 20,
+  },
 });
-       
+

@@ -13,19 +13,13 @@ django.setup()
 
 from django.contrib.auth import get_user_model
 from apps.farmers.models import FarmerProfile, FarmLand
-from apps.fpos.models import FPOProfile, FPOMembership, FPOWarehouse
+from apps.fpos.models import FPOProfile, FPOMembership
 from apps.processors.models import ProcessorProfile, ProcessingPlant
 from apps.retailers.models import RetailerProfile, Store
-from apps.lots.models import ProcurementLot, LotImage
+from apps.lots.models import ProcurementLot
 from apps.crops.models import CropMaster, CropVariety, MandiPrice, MSPRecord
-from apps.bids.models import Bid, BidAcceptance
-from apps.logistics.models import LogisticsPartner, Vehicle, Shipment
-from apps.payments.models import Payment, Wallet
-from apps.warehouses.models import Warehouse, Inventory, StockMovement
-from apps.marketplace.models import Listing, Order, Review
-from datetime import date
-from decimal import Decimal
-from django.utils import timezone
+from apps.marketplace.models import Order
+from apps.processors.models import ProcessingBatch
 
 User = get_user_model()
 
@@ -585,618 +579,134 @@ for i, profile in enumerate(retailer_profiles):
         print(f"  ✓ {store.store_name}")
 
 # -------------------------------------------------------------
-# MSP RECORDS
-# -------------------------------------------------------------
-print("\n💰 Creating MSP records...")
-
-msp_data = [
-    # Kharif Season 2024-25
-    {
-        'crop_type': 'groundnut',
-        'year': 2024,
-        'season': 'kharif',
-        'msp_per_quintal': 6377.00,
-        'bonus_per_quintal': 0.00,
-        'notification_number': 'MSP/2024-25/KHARIF/001',
-        'notification_date': date(2024, 6, 12),
-        'effective_from': date(2024, 6, 15),
-        'effective_to': date(2025, 6, 14),
-        'notes': 'MSP for Kharif Marketing Season 2024-25 - Groundnut (in shell)'
-    },
-    {
-        'crop_type': 'soybean',
-        'year': 2024,
-        'season': 'kharif',
-        'msp_per_quintal': 4892.00,
-        'bonus_per_quintal': 0.00,
-        'notification_number': 'MSP/2024-25/KHARIF/002',
-        'notification_date': date(2024, 6, 12),
-        'effective_from': date(2024, 6, 15),
-        'effective_to': date(2025, 6, 14),
-        'notes': 'MSP for Kharif Marketing Season 2024-25 - Soybean (yellow)'
-    },
-    {
-        'crop_type': 'sunflower',
-        'year': 2024,
-        'season': 'kharif',
-        'msp_per_quintal': 7050.00,
-        'bonus_per_quintal': 0.00,
-        'notification_number': 'MSP/2024-25/KHARIF/003',
-        'notification_date': date(2024, 6, 12),
-        'effective_from': date(2024, 6, 15),
-        'effective_to': date(2025, 6, 14),
-        'notes': 'MSP for Kharif Marketing Season 2024-25 - Sunflower Seed'
-    },
-    {
-        'crop_type': 'sesame',
-        'year': 2024,
-        'season': 'kharif',
-        'msp_per_quintal': 8635.00,
-        'bonus_per_quintal': 0.00,
-        'notification_number': 'MSP/2024-25/KHARIF/004',
-        'notification_date': date(2024, 6, 12),
-        'effective_from': date(2024, 6, 15),
-        'effective_to': date(2025, 6, 14),
-        'notes': 'MSP for Kharif Marketing Season 2024-25 - Sesamum'
-    },
-    # Rabi Season 2024-25
-    {
-        'crop_type': 'mustard',
-        'year': 2024,
-        'season': 'rabi',
-        'msp_per_quintal': 5650.00,
-        'bonus_per_quintal': 0.00,
-        'notification_number': 'MSP/2024-25/RABI/001',
-        'notification_date': date(2024, 9, 18),
-        'effective_from': date(2024, 10, 1),
-        'effective_to': date(2025, 9, 30),
-        'notes': 'MSP for Rabi Marketing Season 2024-25 - Rapeseed & Mustard'
-    },
-    {
-        'crop_type': 'groundnut',
-        'year': 2024,
-        'season': 'rabi',
-        'msp_per_quintal': 6377.00,
-        'bonus_per_quintal': 0.00,
-        'notification_number': 'MSP/2024-25/RABI/002',
-        'notification_date': date(2024, 9, 18),
-        'effective_from': date(2024, 10, 1),
-        'effective_to': date(2025, 9, 30),
-        'notes': 'MSP for Rabi Marketing Season 2024-25 - Groundnut (in shell)'
-    },
-    {
-        'crop_type': 'sunflower',
-        'year': 2024,
-        'season': 'rabi',
-        'msp_per_quintal': 7050.00,
-        'bonus_per_quintal': 0.00,
-        'notification_number': 'MSP/2024-25/RABI/003',
-        'notification_date': date(2024, 9, 18),
-        'effective_from': date(2024, 10, 1),
-        'effective_to': date(2025, 9, 30),
-        'notes': 'MSP for Rabi Marketing Season 2024-25 - Sunflower Seed'
-    },
-]
-
-for msp_info in msp_data:
-    record, created = MSPRecord.objects.update_or_create(
-        crop_type=msp_info['crop_type'],
-        year=msp_info['year'],
-        season=msp_info['season'],
-        defaults={
-            'msp_per_quintal': msp_info['msp_per_quintal'],
-            'bonus_per_quintal': msp_info['bonus_per_quintal'],
-            'notification_number': msp_info['notification_number'],
-            'notification_date': msp_info['notification_date'],
-            'effective_from': msp_info['effective_from'],
-            'effective_to': msp_info['effective_to'],
-            'notes': msp_info['notes']
-        }
-    )
-    status = "Created" if created else "Updated"
-    print(f"  ✓ {status}: {record.get_crop_type_display()} - {record.get_season_display()} {record.year} - ₹{record.msp_per_quintal}/quintal")
-
-# -------------------------------------------------------------
-# WAREHOUSES & FPO WAREHOUSES
-# -------------------------------------------------------------
-print("\n🏭 Creating warehouses...")
-
-# Get FPO for warehouse association
-fpo_profiles = list(FPOProfile.objects.all())
-
-if fpo_profiles:
-    # Use the first FPO for all warehouses (since we only have one)
-    main_fpo = fpo_profiles[0]
-    
-    warehouses_data = [
-        {
-            'warehouse_name': 'Gujarat Groundnut Storage Hub',
-            'warehouse_code': 'WH-GJ-001',
-            'warehouse_type': 'warehouse',
-            'address': 'APMC Yard, Rajkot',
-            'district': 'Rajkot',
-            'state': 'Gujarat',
-            'pincode': '360001',
-            'capacity_quintals': Decimal('5000.00'),
-            'current_stock_quintals': Decimal('3200.00'),
-            'fpo': main_fpo,
-        },
-        {
-            'warehouse_name': 'Maharashtra Soybean Warehouse',
-            'warehouse_code': 'WH-MH-002',
-            'warehouse_type': 'warehouse',
-            'address': 'Agri Complex, Latur',
-            'district': 'Latur',
-            'state': 'Maharashtra',
-            'pincode': '413512',
-            'capacity_quintals': Decimal('8000.00'),
-            'current_stock_quintals': Decimal('5400.00'),
-            'fpo': main_fpo,
-        },
-        {
-            'warehouse_name': 'Rajasthan Mustard Storage',
-            'warehouse_code': 'WH-RJ-003',
-            'warehouse_type': 'godown',
-            'address': 'Mandi Samiti, Jaipur',
-            'district': 'Jaipur',
-            'state': 'Rajasthan',
-            'pincode': '302001',
-            'capacity_quintals': Decimal('6000.00'),
-            'current_stock_quintals': Decimal('4100.00'),
-            'fpo': main_fpo,
-        },
-    ]
-
-    fpo_warehouses = []
-    for wh_data in warehouses_data:
-        warehouse, created = FPOWarehouse.objects.get_or_create(
-            warehouse_code=wh_data['warehouse_code'],
-            defaults=wh_data
-        )
-        fpo_warehouses.append(warehouse)
-        status = "Created" if created else "Exists"
-        print(f"  ✓ {status}: {warehouse.warehouse_name} ({warehouse.district})")
-else:
-    fpo_warehouses = []
-    print("  ⚠ No FPO found, skipping warehouse creation")
-
-# -------------------------------------------------------------
-# PROCUREMENT LOTS
+# PROCUREMENT LOTS (Market Data for Forecasting)
 # -------------------------------------------------------------
 print("\n📦 Creating procurement lots...")
 
-farmers = list(FarmerProfile.objects.all()[:10])
-today = timezone.now()
-
-lots_data = [
-    {
-        'farmer': farmers[0] if farmers else None,
-        'crop_type': 'groundnut',
-        'crop_variety': 'GG-20',
-        'harvest_date': today.date() - timedelta(days=15),
-        'quantity_quintals': Decimal('125.50'),
-        'available_quantity_quintals': Decimal('125.50'),
-        'quality_grade': 'A',
-        'moisture_content': Decimal('7.5'),
-        'oil_content': Decimal('48.2'),
-        'expected_price_per_quintal': Decimal('6500.00'),
-        'pickup_address': 'Village Kheralu, Mehsana, Gujarat',
-        'status': 'available',
-        'storage_conditions': 'Cool, dry warehouse storage',
-        'organic_certified': False,
-    },
-    {
-        'farmer': farmers[1] if len(farmers) > 1 else None,
-        'crop_type': 'soybean',
-        'crop_variety': 'JS-335',
-        'harvest_date': today.date() - timedelta(days=10),
-        'quantity_quintals': Decimal('200.00'),
-        'available_quantity_quintals': Decimal('150.00'),
-        'quality_grade': 'A',
-        'moisture_content': Decimal('11.0'),
-        'oil_content': Decimal('19.5'),
-        'expected_price_per_quintal': Decimal('5000.00'),
-        'pickup_address': 'Latur District, Maharashtra',
-        'status': 'partially_sold',
-        'storage_conditions': 'FPO warehouse',
-        'organic_certified': True,
-    },
-    {
-        'farmer': farmers[2] if len(farmers) > 2 else None,
-        'crop_type': 'mustard',
-        'crop_variety': 'Pusa Bold',
-        'harvest_date': today.date() - timedelta(days=20),
-        'quantity_quintals': Decimal('180.75'),
-        'available_quantity_quintals': Decimal('0.00'),
-        'quality_grade': 'B+',
-        'moisture_content': Decimal('8.2'),
-        'oil_content': Decimal('39.8'),
-        'expected_price_per_quintal': Decimal('5800.00'),
-        'final_price_per_quintal': Decimal('5900.00'),
-        'pickup_address': 'Tonk Road, Jaipur, Rajasthan',
-        'status': 'sold',
-        'sold_date': today - timedelta(days=5),
-        'storage_conditions': 'Farm storage',
-        'organic_certified': False,
-    },
-    {
-        'farmer': farmers[3] if len(farmers) > 3 else None,
-        'crop_type': 'sunflower',
-        'crop_variety': 'KBSH-44',
-        'harvest_date': today.date() - timedelta(days=7),
-        'quantity_quintals': Decimal('95.25'),
-        'available_quantity_quintals': Decimal('95.25'),
-        'quality_grade': 'A+',
-        'moisture_content': Decimal('6.8'),
-        'oil_content': Decimal('41.5'),
-        'expected_price_per_quintal': Decimal('7200.00'),
-        'pickup_address': 'Belgaum District, Karnataka',
-        'status': 'available',
-        'storage_conditions': 'Cool storage',
-        'organic_certified': False,
-    },
-    {
-        'farmer': farmers[4] if len(farmers) > 4 else None,
-        'crop_type': 'sesame',
-        'crop_variety': 'Gujarat Til-2',
-        'harvest_date': today.date() - timedelta(days=12),
-        'quantity_quintals': Decimal('45.50'),
-        'available_quantity_quintals': Decimal('45.50'),
-        'quality_grade': 'A',
-        'moisture_content': Decimal('7.0'),
-        'oil_content': Decimal('50.5'),
-        'expected_price_per_quintal': Decimal('8800.00'),
-        'pickup_address': 'Banaskantha, Gujarat',
-        'status': 'available',
-        'storage_conditions': 'Farm shed',
-        'organic_certified': True,
-    },
-]
+crop_types = ['soybean', 'mustard', 'groundnut', 'sunflower', 'sesame']
+quality_grades = ['A', 'B', 'C']
+seasons = ['rabi', 'kharif']
 
 procurement_lots = []
-for lot_data in lots_data:
-    lot = ProcurementLot.objects.create(**lot_data)
+for i in range(50):  # Create 50 lots
+    farmer = random.choice(farmer_profiles)
+    crop_type = random.choice(crop_types)
+    season = 'rabi' if crop_type == 'mustard' else random.choice(seasons)
+    
+    # Random date in last 365 days
+    days_ago = random.randint(0, 365)
+    harvest_date = datetime.now().date() - timedelta(days=days_ago + 30)
+    created_date = datetime.now() - timedelta(days=days_ago)
+    
+    quantity = random.uniform(50, 500)
+    price = {
+        'soybean': random.uniform(3800, 4300),
+        'mustard': random.uniform(4200, 4800),
+        'groundnut': random.uniform(5500, 6500),
+        'sunflower': random.uniform(5000, 6000),
+        'sesame': random.uniform(7000, 9000)
+    }[crop_type]
+    
+    lot = ProcurementLot.objects.create(
+        farmer=farmer,
+        fpo=farmer.fpo,
+        crop_type=crop_type,
+        harvest_date=harvest_date,
+        quantity_quintals=quantity,
+        available_quantity_quintals=random.uniform(0, quantity * 0.3),
+        quality_grade=random.choice(quality_grades),
+        moisture_content=random.uniform(8, 12),
+        oil_content=random.uniform(38, 52),
+        expected_price_per_quintal=price,
+        final_price_per_quintal=price * random.uniform(0.95, 1.05),
+        status=random.choice(['sold', 'delivered']),
+        listing_type='individual',
+        listed_date=created_date,
+        sold_date=created_date + timedelta(days=random.randint(1, 10)),
+        created_at=created_date,
+        updated_at=created_date
+    )
     procurement_lots.append(lot)
-    print(f"  ✓ Created: {lot.lot_number} - {lot.crop_type} ({lot.quantity_quintals}Q)")
-
-# -------------------------------------------------------------
-# LOGISTICS PARTNERS & VEHICLES
-# -------------------------------------------------------------
-print("\n🚚 Creating logistics partners and vehicles...")
-
-# Create logistics users
-logistics_users_data = [
-    {
-        'phone_number': '+919876001001',
-        'role': 'logistics',
-        'is_active': True,
-        'profile_data': {
-            'full_name': 'Express Transport Services',
-            'address': 'Transport Nagar, Ahmedabad',
-            'city': 'Ahmedabad',
-            'state': 'Gujarat',
-            'pincode': '380001'
-        },
-        'logistics_data': {
-            'company_name': 'Express Transport Services',
-            'gst_number': 'GST24ABCDE1234F1Z5',
-            'transport_license': 'TL-GJ-2024-001',
-            'is_verified': True,
-            'service_states': ['Gujarat', 'Maharashtra', 'Rajasthan'],
-            'average_rating': Decimal('4.5'),
-            'total_deliveries': 156,
-        }
-    },
-    {
-        'phone_number': '+919876001002',
-        'role': 'logistics',
-        'is_active': True,
-        'profile_data': {
-            'full_name': 'Reliable Logistics Pvt Ltd',
-            'address': 'Logistics Hub, Pune',
-            'city': 'Pune',
-            'state': 'Maharashtra',
-            'pincode': '411001'
-        },
-        'logistics_data': {
-            'company_name': 'Reliable Logistics Pvt Ltd',
-            'gst_number': 'GST27XYZAB5678G2Z1',
-            'transport_license': 'TL-MH-2023-089',
-            'is_verified': True,
-            'service_states': ['Maharashtra', 'Karnataka', 'Telangana'],
-            'average_rating': Decimal('4.7'),
-            'total_deliveries': 234,
-        }
-    },
-]
-
-logistics_partners = []
-for log_data in logistics_users_data:
-    user, created = User.objects.get_or_create(
-        phone_number=log_data['phone_number'],
-        defaults={
-            'role': log_data['role'],
-            'is_active': log_data['is_active']
-        }
-    )
-    if created:
-        user.set_password('logistics123')
-        user.save()
     
-    # Create user profile
-    from apps.users.models import UserProfile
-    profile, _ = UserProfile.objects.get_or_create(
-        user=user,
-        defaults=log_data['profile_data']
-    )
+print(f"  ✓ Created {len(procurement_lots)} procurement lots")
+
+# -------------------------------------------------------------
+# MARKETPLACE ORDERS (Primary Data Source)
+# -------------------------------------------------------------
+print("\n🛒 Creating marketplace orders...")
+
+orders = []
+for i in range(100):
+    lot = random.choice(procurement_lots)
     
-    # Create logistics partner profile
-    partner, created = LogisticsPartner.objects.get_or_create(
-        user=user,
-        defaults=log_data['logistics_data']
-    )
-    logistics_partners.append(partner)
-    status = "Created" if created else "Exists"
-    print(f"  ✓ {status}: {partner.company_name}")
-
-# Create vehicles for logistics partners
-vehicles_data = [
-    {
-        'logistics_partner': logistics_partners[0],
-        'vehicle_number': 'GJ-01-AB-1234',
-        'vehicle_type': 'medium_truck',
-        'capacity_quintals': Decimal('300.00'),
-        'vehicle_model': 'Tata LPT 1613',
-        'year_of_manufacture': 2022,
-        'is_active': True,
-        'is_available': True,
-    },
-    {
-        'logistics_partner': logistics_partners[0],
-        'vehicle_number': 'GJ-01-CD-5678',
-        'vehicle_type': 'large_truck',
-        'capacity_quintals': Decimal('500.00'),
-        'vehicle_model': 'Ashok Leyland 2518',
-        'year_of_manufacture': 2021,
-        'is_active': True,
-        'is_available': False,
-    },
-    {
-        'logistics_partner': logistics_partners[1] if len(logistics_partners) > 1 else logistics_partners[0],
-        'vehicle_number': 'MH-12-EF-9101',
-        'vehicle_type': 'medium_truck',
-        'capacity_quintals': Decimal('350.00'),
-        'vehicle_model': 'Eicher Pro 3015',
-        'year_of_manufacture': 2023,
-        'is_active': True,
-        'is_available': True,
-    },
-]
-
-vehicles = []
-for veh_data in vehicles_data:
-    vehicle, created = Vehicle.objects.get_or_create(
-        vehicle_number=veh_data['vehicle_number'],
-        defaults=veh_data
-    )
-    vehicles.append(vehicle)
-    status = "Created" if created else "Exists"
-    print(f"  ✓ {status}: {vehicle.vehicle_number} ({vehicle.get_vehicle_type_display()})")
-
-# -------------------------------------------------------------
-# BIDS
-# -------------------------------------------------------------
-print("\n💰 Creating bids...")
-
-# Get FPOs and Processors for bidding
-fpos = list(FPOProfile.objects.all()[:3])
-processors = list(ProcessorProfile.objects.all()[:2])
-
-bids_data = [
-    {
-        'lot': procurement_lots[0] if procurement_lots else None,
-        'bidder_type': 'fpo',
-        'bidder_id': fpos[0].id if fpos else None,
-        'bidder_name': fpos[0].organization_name if fpos else 'Test FPO',
-        'bidder_user': fpos[0].user if fpos else None,
-        'offered_price_per_quintal': Decimal('6550.00'),
-        'quantity_quintals': Decimal('125.50'),
-        'pickup_location': 'FPO Collection Center, Mehsana',
-        'expected_pickup_date': (today + timedelta(days=7)).date(),
-        'payment_terms': '7_days',
-        'advance_payment_percentage': Decimal('25.00'),
-        'status': 'pending',
-        'message': 'We offer competitive pricing and immediate payment terms.',
-    },
-    {
-        'lot': procurement_lots[0] if procurement_lots else None,
-        'bidder_type': 'processor',
-        'bidder_id': processors[0].id if processors else None,
-        'bidder_name': processors[0].company_name if processors else 'Test Processor',
-        'bidder_user': processors[0].user if processors else None,
-        'offered_price_per_quintal': Decimal('6600.00'),
-        'quantity_quintals': Decimal('125.50'),
-        'pickup_location': 'Processing Plant, Rajkot',
-        'expected_pickup_date': (today + timedelta(days=5)).date(),
-        'payment_terms': '15_days',
-        'advance_payment_percentage': Decimal('30.00'),
-        'status': 'accepted',
-        'message': 'Premium quality required for oil extraction.',
-    },
-    {
-        'lot': procurement_lots[1] if len(procurement_lots) > 1 else None,
-        'bidder_type': 'fpo',
-        'bidder_id': fpos[0].id if fpos else None,
-        'bidder_name': fpos[0].organization_name if fpos else 'Test FPO',
-        'bidder_user': fpos[0].user if fpos else None,
-        'offered_price_per_quintal': Decimal('5050.00'),
-        'quantity_quintals': Decimal('50.00'),
-        'pickup_location': 'Latur FPO Warehouse',
-        'expected_pickup_date': (today + timedelta(days=10)).date(),
-        'payment_terms': '7_days',
-        'advance_payment_percentage': Decimal('20.00'),
-        'status': 'accepted',
-        'message': 'Bulk purchase for aggregation.',
-    },
-]
-
-bids = []
-for bid_data in bids_data:
-    if bid_data['lot'] and bid_data['bidder_user']:
-        bid = Bid.objects.create(**bid_data)
-        bids.append(bid)
-        print(f"  ✓ Created: Bid on {bid.lot.lot_number} - ₹{bid.offered_price_per_quintal}/Q ({bid.status})")
-
-# -------------------------------------------------------------
-# PAYMENTS & WALLETS
-# -------------------------------------------------------------
-print("\n💳 Creating wallets and payments...")
-
-# Create wallets for all users
-all_users = User.objects.filter(is_active=True)
-for user in all_users:
-    wallet, created = Wallet.objects.get_or_create(
-        user=user,
-        defaults={
-            'balance': Decimal('50000.00') if user.role in ['fpo', 'processor', 'retailer'] else Decimal('5000.00'),
-            'is_active': True
-        }
-    )
-    if created:
-        print(f"  ✓ Created wallet for {user.phone_number} - ₹{wallet.balance}")
-
-# Create payments for accepted bids
-accepted_bids = [bid for bid in bids if bid.status == 'accepted']
-for bid in accepted_bids[:2]:  # Create payments for first 2 accepted bids
-    payment = Payment.objects.create(
-        lot=bid.lot,
-        bid=bid,
-        payer_id=bid.bidder_id,
-        payer_name=bid.bidder_name,
-        payer_type=bid.bidder_type,
-        payee_id=bid.lot.farmer.id if bid.lot.farmer else None,
-        payee_name=bid.lot.farmer.full_name if bid.lot.farmer else 'Unknown',
-        gross_amount=bid.total_amount,
-        commission_percentage=Decimal('2.5'),
-        commission_amount=bid.total_amount * Decimal('0.025'),
-        payment_method='bank_transfer',
-        status='completed' if bid == accepted_bids[0] else 'pending',
-        completed_at=today if bid == accepted_bids[0] else None,
-    )
-    print(f"  ✓ Created: Payment {payment.payment_id} - ₹{payment.net_amount} ({payment.status})")
-
-# -------------------------------------------------------------
-# SHIPMENTS
-# -------------------------------------------------------------
-print("\n📦 Creating shipments...")
-
-if logistics_partners and vehicles and procurement_lots:
-    shipments_data = [
-        {
-            'logistics_partner': logistics_partners[0],
-            'lot': procurement_lots[2] if len(procurement_lots) > 2 else procurement_lots[0],
-            'vehicle': vehicles[1] if len(vehicles) > 1 else vehicles[0],
-            'status': 'delivered',
-            'scheduled_pickup_date': today - timedelta(days=4),
-            'actual_pickup_date': today - timedelta(days=4),
-            'scheduled_delivery_date': today - timedelta(days=2),
-            'actual_delivery_date': today - timedelta(days=2),
-            'pickup_address': 'Tonk Road, Jaipur',
-            'delivery_address': 'Processing Plant, Ajmer',
-            'quoted_price': Decimal('3500.00'),
-            'final_price': Decimal('3500.00'),
-            'driver_name': 'Ramesh Kumar',
-            'driver_phone': '+919898989898',
-        },
-        {
-            'logistics_partner': logistics_partners[0],
-            'lot': procurement_lots[0] if procurement_lots else None,
-            'vehicle': vehicles[0],
-            'status': 'accepted',
-            'scheduled_pickup_date': today + timedelta(days=3),
-            'pickup_address': 'Village Kheralu, Mehsana',
-            'delivery_address': 'Processing Plant, Rajkot',
-            'quoted_price': Decimal('2800.00'),
-            'driver_name': 'Suresh Patel',
-            'driver_phone': '+919787878787',
-        },
-    ]
+    # Random buyer
+    buyer_role = random.choice(['processor', 'retailer', 'fpo'])
+    if buyer_role == 'processor':
+        buyer = random.choice(processor_users)
+    elif buyer_role == 'retailer':
+        buyer = random.choice(retailer_users)
+    else:
+        buyer = fpo_user
     
-    shipments = []
-    for ship_data in shipments_data:
-        if ship_data['lot']:
-            shipment = Shipment.objects.create(**ship_data)
-            shipments.append(shipment)
-            print(f"  ✓ Created: Shipment #{shipment.id} - {shipment.get_status_display()}")
-
-# -------------------------------------------------------------
-# MARKETPLACE LISTINGS
-# -------------------------------------------------------------
-print("\n🛒 Creating marketplace listings...")
-
-if procurement_lots:
-    listings_data = [
-        {
-            'lot': procurement_lots[0],
-            'is_active': True,
-            'featured': True,
-        },
-        {
-            'lot': procurement_lots[3] if len(procurement_lots) > 3 else procurement_lots[0],
-            'is_active': True,
-            'featured': False,
-        },
-    ]
+    quantity = random.uniform(10, min(100, lot.quantity_quintals))
+    price_per_quintal = lot.final_price_per_quintal or lot.expected_price_per_quintal
+    total_amount = quantity * price_per_quintal
     
-    listings = []
-    for list_data in listings_data:
-        listing, created = Listing.objects.get_or_create(
-            lot=list_data['lot'],
-            defaults=list_data
-        )
-        listings.append(listing)
-        status = "Created" if created else "Exists"
-        print(f"  ✓ {status}: Listing for {listing.lot.lot_number}")
-
-# -------------------------------------------------------------
-# INVENTORY & STOCK MOVEMENTS
-# -------------------------------------------------------------
-print("\n📊 Creating inventory records...")
-
-if fpo_warehouses and procurement_lots:
-    # Create inventory for lots stored in warehouses
-    inventory_data = [
-        {
-            'warehouse': fpo_warehouses[0],
-            'lot': procurement_lots[1] if len(procurement_lots) > 1 else procurement_lots[0],
-            'quantity': Decimal('200.00'),
-        },
-        {
-            'warehouse': fpo_warehouses[1] if len(fpo_warehouses) > 1 else fpo_warehouses[0],
-            'lot': procurement_lots[4] if len(procurement_lots) > 4 else procurement_lots[0],
-            'quantity': Decimal('45.50'),
-        },
-    ]
+    # Order date within last 365 days
+    days_ago = random.randint(0, 365)
+    order_date = datetime.now() - timedelta(days=days_ago)
     
-    for inv_data in inventory_data:
-        inventory, created = Inventory.objects.get_or_create(
-            warehouse=inv_data['warehouse'],
-            lot=inv_data['lot'],
-            defaults={'quantity': inv_data['quantity']}
-        )
-        status = "Created" if created else "Exists"
-        print(f"  ✓ {status}: Inventory - {inventory.lot.lot_number} in {inventory.warehouse.warehouse_name}")
-        
-        # Create stock movement record
-        if created:
-            movement = StockMovement.objects.create(
-                warehouse=inv_data['warehouse'],
-                lot=inv_data['lot'],
-                movement_type='in',
-                quantity=inv_data['quantity'],
-                remarks='Initial stock entry from farmer'
-            )
-            print(f"  ✓ Created: Stock IN - {movement.quantity}Q")
+    order = Order.objects.create(
+        order_number=f"ORD-{2024000 + i}",
+        buyer=buyer,
+        lot=lot,
+        quantity=quantity,
+        total_amount=total_amount,
+        status=random.choice(['completed', 'delivered']),
+        created_at=order_date,
+        updated_at=order_date
+    )
+    orders.append(order)
+
+print(f"  ✓ Created {len(orders)} marketplace orders")
+
+# -------------------------------------------------------------
+# PROCESSING BATCHES (Processor Demand Data)
+# -------------------------------------------------------------
+print("\n🏭 Creating processing batches...")
+
+processing_plants = list(ProcessingPlant.objects.all())
+batches = []
+
+for i in range(30):
+    plant = random.choice(processing_plants)
+    lot = random.choice(procurement_lots)
+    
+    quantity = random.uniform(50, 200)
+    
+    # Batch date within last 365 days
+    days_ago = random.randint(0, 365)
+    batch_date = datetime.now() - timedelta(days=days_ago)
+    
+    batch = ProcessingBatch.objects.create(
+        plant=plant,
+        lot=lot,
+        batch_number=f"BATCH-{2024000 + i}",
+        initial_quantity_quintals=quantity,
+        oil_extracted_quintals=quantity * random.uniform(0.35, 0.50),
+        cake_produced_quintals=quantity * random.uniform(0.45, 0.60),
+        processing_method=random.choice(['cold_pressed', 'hot_pressed', 'expeller_pressed']),
+        current_stage='packaging',
+        status=random.choice(['completed', 'in_progress']),
+        quality_grade=random.choice(quality_grades),
+        start_date=batch_date,
+        completion_date=batch_date + timedelta(days=random.randint(3, 10)),
+        created_at=batch_date,
+        updated_at=batch_date
+    )
+    batches.append(batch)
+
+print(f"  ✓ Created {len(batches)} processing batches")
 
 # -------------------------------------------------------------
 # SUMMARY
@@ -1209,29 +719,24 @@ print(f"  - Crop Masters: {CropMaster.objects.count()}")
 print(f"  - Crop Varieties: {CropVariety.objects.count()}")
 print(f"  - Farmers: {FarmerProfile.objects.count()}")
 print(f"  - FPOs: {FPOProfile.objects.count()}")
-print(f"  - FPO Warehouses: {FPOWarehouse.objects.count()}")
 print(f"  - Processors: {ProcessorProfile.objects.count()}")
 print(f"  - Processing Plants: {ProcessingPlant.objects.count()}")
 print(f"  - Retailers: {RetailerProfile.objects.count()}")
 print(f"  - Stores: {Store.objects.count()}")
-print(f"  - Logistics Partners: {LogisticsPartner.objects.count()}")
-print(f"  - Vehicles: {Vehicle.objects.count()}")
 print(f"  - Procurement Lots: {ProcurementLot.objects.count()}")
-print(f"  - Bids: {Bid.objects.count()}")
-print(f"  - Payments: {Payment.objects.count()}")
-print(f"  - Wallets: {Wallet.objects.count()}")
-print(f"  - Shipments: {Shipment.objects.count()}")
-print(f"  - Marketplace Listings: {Listing.objects.count()}")
-print(f"  - Inventory Records: {Inventory.objects.count()}")
-print(f"  - Stock Movements: {StockMovement.objects.count()}")
-print(f"  - MSP Records: {MSPRecord.objects.count()}")
+print(f"  - Marketplace Orders: {Order.objects.count()}")
+print(f"  - Processing Batches: {ProcessingBatch.objects.count()}")
+print("\n📈 Market Data for Forecasting:")
+print(f"  - Total Transactions: {Order.objects.count() + ProcurementLot.objects.filter(status__in=['sold', 'delivered']).count()}")
+print(f"  - Date Range: Last 365 days")
+print(f"  - Crops: {', '.join(crop_types)}")
+print(f"  - Ready for ARIMA forecasting! ✨")
 
 print("\n🔑 Test Credentials:")
 print("  Farmer: +919876543200 / farmer123")
 print("  FPO: +919876000001 / fpo123")
 print("  Processor: +919876000100 / processor123")
 print("  Retailer: +919876000200 / retailer123")
-print("  Logistics: +919876001001 / logistics123")
 print("  Government: +919876000099 / gov123")
 
 print("\n🚀 Ready to demo!")

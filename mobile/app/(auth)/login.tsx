@@ -13,7 +13,7 @@ import { router } from 'expo-router';
 import { Button, Input } from '@/components';
 import { COLORS } from '@/constants/colors';
 import { authAPI } from '@/services/authService';
-import { getErrorMessage, getErrorTitle, logDetailedError } from '@/utils/errorHandler';
+import { getErrorMessage, getErrorTitle, getErrorDescription, logDetailedError } from '@/utils/errorHandler';
 
 export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -43,10 +43,21 @@ export default function LoginScreen() {
     } catch (error: any) {
       logDetailedError(error, 'Login Screen - Send OTP');
       const errorTitle = getErrorTitle(error);
-      const errorMessage = getErrorMessage(error);
+      const errorDescription = getErrorDescription(error);
       
-      console.log('❌ Showing error alert:', errorTitle, '-', errorMessage);
-      Alert.alert(errorTitle, errorMessage);
+      console.log('❌ Showing error alert:', errorTitle);
+      console.log('📄 Error description:', errorDescription);
+      
+      Alert.alert(
+        errorTitle,
+        errorDescription,
+        [
+          { 
+            text: 'OK', 
+            style: 'default'
+          }
+        ]
+      );
     } finally {
       setLoading(false);
     }
@@ -59,7 +70,7 @@ export default function LoginScreen() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={styles.logo}>🌾</Text>
+        
           <Text style={styles.title}>SeedSync</Text>
           <Text style={styles.subtitle}>
             Connecting farmers to better markets
@@ -97,9 +108,7 @@ export default function LoginScreen() {
               style={styles.registerButton}
               onPress={() => router.push('/(auth)/register-farmer')}
             >
-              <View style={styles.registerButtonIcon}>
-                <Text style={styles.registerButtonEmoji}>🌾</Text>
-              </View>
+              
               <View style={styles.registerButtonContent}>
                 <Text style={styles.registerButtonTitle}>Farmer</Text>
                 <Text style={styles.registerButtonSubtitle}>Sell your produce directly</Text>

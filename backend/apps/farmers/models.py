@@ -104,6 +104,7 @@ class FarmerProfile(TimeStampedModel):
     state = models.CharField(max_length=50, choices=INDIAN_STATES)
     pincode = models.CharField(
         max_length=6,
+        blank=True,
         validators=[validate_pincode]
     )
     

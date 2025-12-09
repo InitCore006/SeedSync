@@ -72,16 +72,36 @@ class SendOTPAPIView(APIView):
             phone_number = serializer.validated_data['phone_number']  # Already formatted with +91
             purpose = serializer.validated_data['purpose']
             
-            # Check if user exists (for login)
+            # Check if user exists based on purpose
             user = None
             if purpose == 'login':
                 try:
                     user = User.objects.get(phone_number=phone_number)
                 except User.DoesNotExist:
                     return Response(
-                        response_error(message="User not found. Please register first."),
+                        response_error(
+                            message="Account not found. Please register first to create an account.",
+                            errors={'phone_number': ['No account exists with this phone number']}
+                        ),
                         status=status.HTTP_404_NOT_FOUND
                     )
+            elif purpose == 'registration':
+                # For registration, check if user already exists
+                try:
+                    user = User.objects.get(phone_number=phone_number)
+                    # If user exists and is already verified, they should login instead
+                    if user.is_verified:
+                        return Response(
+                            response_error(
+                                message="Account already exists. Please login instead.",
+                                errors={'phone_number': ['This phone number is already registered']}
+                            ),
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    # If user exists but not verified, we can resend OTP for registration
+                except User.DoesNotExist:
+                    # User doesn't exist yet - this is fine for registration OTP
+                    pass
             
             # Create OTP
             otp = OTPVerification.create_otp(

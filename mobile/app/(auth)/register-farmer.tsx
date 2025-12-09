@@ -8,6 +8,7 @@ import {
   Platform,
   Alert,
   TouchableOpacity,
+  SafeAreaView,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { router } from 'expo-router';
@@ -19,6 +20,8 @@ import { farmersAPI } from '@/services/farmersService';
 import { useAuthStore } from '@/store/authStore';
 import { useFarmerStore } from '@/store/farmerStore';
 import { INDIAN_STATES } from '@/constants/states';
+import { getErrorMessage, getErrorTitle, getErrorDescription, logDetailedError } from '@/utils/errorHandler';
+import type { FarmerProfileCreateData, UserProfileCreateData } from '@/types/api';
 
 export default function RegisterFarmerScreen() {
   const { login } = useAuthStore();
@@ -37,34 +40,19 @@ export default function RegisterFarmerScreen() {
   const [formData, setFormData] = useState({
     full_name: '',
     father_name: '',
-    gender: 'male',
-    date_of_birth: '',
-    email: '',
     
     // Address
-    address: '',
     village: '',
-    post_office: '',
-    tehsil: '',
-    city: '',
     district: '',
     state: '',
     pincode: '',
     
     // Farm Details
     total_land_acres: '',
-    farming_experience_years: '',
     
-    // Bank Details
-    bank_account_number: '',
-    bank_account_holder_name: '',
-    ifsc_code: '',
-    bank_name: '',
-    bank_branch: '',
-    
-    // KYC (Optional)
-    aadhaar_number: '',
-    pan_number: '',
+    // Location coordinates (auto-populated)
+    latitude: null as number | null,
+    longitude: null as number | null,
   });
 
   const handleSendOTP = async () => {
@@ -84,10 +72,15 @@ export default function RegisterFarmerScreen() {
       setOtpSent(true);
       Alert.alert('OTP Sent', 'Please check your phone for the verification code');
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || 
-                      error.response?.data?.message || 
-                      'Failed to send OTP';
-      Alert.alert('Error', errorMsg);
+      logDetailedError(error, 'Register Farmer - Send OTP');
+      const errorTitle = getErrorTitle(error);
+      const errorDescription = getErrorDescription(error);
+      
+      Alert.alert(
+        errorTitle,
+        errorDescription,
+        [{ text: 'OK', style: 'default' }]
+      );
     } finally {
       setLoading(false);
     }
@@ -117,10 +110,15 @@ export default function RegisterFarmerScreen() {
       setStep(2);
       Alert.alert('Success', 'Phone verified! Please complete your profile');
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || 
-                      error.response?.data?.message || 
-                      'Invalid OTP';
-      Alert.alert('Error', errorMsg);
+      logDetailedError(error, 'Register Farmer - Verify OTP');
+      const errorTitle = getErrorTitle(error);
+      const errorDescription = getErrorDescription(error);
+      
+      Alert.alert(
+        errorTitle,
+        errorDescription,
+        [{ text: 'Try Again', style: 'default' }]
+      );
     } finally {
       setLoading(false);
     }
@@ -128,56 +126,82 @@ export default function RegisterFarmerScreen() {
 
   const handleCompleteRegistration = async () => {
     // Validate required fields
-    if (!formData.full_name || !formData.district || !formData.state) {
-      Alert.alert('Required Fields', 'Please fill in full name, district, and state');
+    if (!formData.full_name.trim()) {
+      Alert.alert('Required Field', 'Please enter your full name');
       return;
     }
 
-    if (!formData.total_land_acres) {
-      Alert.alert('Required Field', 'Please enter your total farmland area');
+    if (!formData.district.trim() || !formData.state) {
+      Alert.alert('Required Fields', 'Please select both district and state');
+      return;
+    }
+
+    if (!formData.total_land_acres || parseFloat(formData.total_land_acres) <= 0) {
+      Alert.alert('Invalid Input', 'Please enter a valid farmland area greater than 0');
       return;
     }
 
     setLoading(true);
     try {
-      // Create UserProfile first
-      await authAPI.updateProfile({
-        full_name: formData.full_name,
-        address: formData.address,
-        city: formData.city,
-        district: formData.district,
-        state: formData.state,
-        pincode: formData.pincode,
-        aadhaar_number: formData.aadhaar_number || undefined,
-        pan_number: formData.pan_number || undefined,
-      });
+      // Fetch coordinates from address using geocoding
+      let latitude = null;
+      let longitude = null;
+      
+      try {
+        const stateName = INDIAN_STATES.find(s => s.value === formData.state)?.label || formData.state;
+        const address = `${formData.village ? formData.village + ', ' : ''}${formData.district}, ${stateName}, ${formData.pincode || ''}`;
+        
+        console.log('Fetching coordinates for address:', address);
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+          {
+            headers: {
+              'User-Agent': 'SeedSync Mobile App'
+            }
+          }
+        );
+        
+        const data = await response.json();
+        if (data && data.length > 0) {
+          // Limit to 6 decimal places for precision
+          latitude = parseFloat(parseFloat(data[0].lat).toFixed(6));
+          longitude = parseFloat(parseFloat(data[0].lon).toFixed(6));
+          console.log('Coordinates fetched:', { latitude, longitude });
+        } else {
+          console.log('No coordinates found for address');
+        }
+      } catch (geoError) {
+        console.log('Geocoding error:', geoError);
+        // Continue without coordinates - it's optional
+      }
 
-      // Create FarmerProfile
-      const farmerProfileData = {
-        full_name: formData.full_name,
-        father_name: formData.father_name,
-        gender: formData.gender,
-        date_of_birth: formData.date_of_birth || undefined,
-        total_land_acres: parseFloat(formData.total_land_acres),
-        farming_experience_years: formData.farming_experience_years ? 
-          parseInt(formData.farming_experience_years) : 0,
-        village: formData.village,
-        tehsil: formData.tehsil,
-        district: formData.district,
+      // Update user profile with address and coordinates
+      const userProfileData: Partial<UserProfileCreateData> = {
+        district: formData.district.trim(),
         state: formData.state,
-        pincode: formData.pincode,
-        post_office: formData.post_office,
-        bank_account_number: formData.bank_account_number,
-        bank_account_holder_name: formData.bank_account_holder_name,
-        ifsc_code: formData.ifsc_code,
-        bank_name: formData.bank_name,
-        bank_branch: formData.bank_branch,
-        aadhaar_number: formData.aadhaar_number || undefined,
-        pan_number: formData.pan_number || undefined,
+        pincode: formData.pincode?.trim() || undefined,
+        latitude: latitude || undefined,
+        longitude: longitude || undefined,
+      };
+      
+      await authAPI.updateProfile(userProfileData);
+
+      // Create FarmerProfile (village is farmer-specific)
+      const farmerProfileData: FarmerProfileCreateData = {
+        full_name: formData.full_name.trim(),
+        father_name: formData.father_name?.trim() || undefined,
+        total_land_acres: parseFloat(formData.total_land_acres),
+        village: formData.village?.trim() || undefined,
+        district: formData.district.trim(),
+        state: formData.state,
+        pincode: formData.pincode?.trim() || '',
+        latitude: latitude || undefined,
+        longitude: longitude || undefined,
       };
 
+      console.log('Creating farmer profile with data:', farmerProfileData);
       const profileResponse = await farmersAPI.createProfile(farmerProfileData);
-      setProfile(profileResponse.data);
+      setProfile(profileResponse.data.data || null);
 
       Alert.alert(
         'Registration Complete! 🎉',
@@ -185,12 +209,15 @@ export default function RegisterFarmerScreen() {
         [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
       );
     } catch (error: any) {
-      console.error('Registration error:', error);
-      const errorMsg = error.response?.data?.detail || 
-                      error.response?.data?.message ||
-                      JSON.stringify(error.response?.data) ||
-                      'Failed to complete registration';
-      Alert.alert('Error', errorMsg);
+      logDetailedError(error, 'Register Farmer - Complete Registration');
+      const errorTitle = getErrorTitle(error);
+      const errorDescription = getErrorDescription(error);
+      
+      Alert.alert(
+        errorTitle,
+        errorDescription,
+        [{ text: 'Try Again', style: 'default' }]
+      );
     } finally {
       setLoading(false);
     }
@@ -200,7 +227,7 @@ export default function RegisterFarmerScreen() {
     <View style={styles.stepContainer}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
+          <Ionicons name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerTextContainer}>
           <Text style={styles.stepIndicator}>Step 1 of 2</Text>
@@ -211,13 +238,12 @@ export default function RegisterFarmerScreen() {
 
       <Input
         label="Phone Number *"
-        placeholder="10-digit mobile number"
+        placeholder="Enter 10-digit phone number"
         value={phoneNumber}
         onChangeText={setPhoneNumber}
         keyboardType="phone-pad"
         maxLength={10}
         editable={!otpSent}
-        icon="call-outline"
       />
 
       {otpSent && (
@@ -228,7 +254,6 @@ export default function RegisterFarmerScreen() {
           onChangeText={setOtp}
           keyboardType="number-pad"
           maxLength={6}
-          icon="shield-checkmark-outline"
         />
       )}
 
@@ -247,13 +272,13 @@ export default function RegisterFarmerScreen() {
             loading={loading}
             style={styles.button}
           />
-          <Button
+          {/* <Button
             title="Resend OTP"
             onPress={handleSendOTP}
             variant="outline"
             disabled={loading}
             style={styles.button}
-          />
+          /> */}
         </>
       )}
     </View>
@@ -263,7 +288,7 @@ export default function RegisterFarmerScreen() {
     <View style={styles.stepContainer}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => setStep(1)} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
+          <Ionicons name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerTextContainer}>
           <Text style={styles.stepIndicator}>Step 2 of 2</Text>
@@ -279,47 +304,24 @@ export default function RegisterFarmerScreen() {
         label="Full Name *"
         placeholder="Your full name"
         value={formData.full_name}
-        onChangeText={(text) => setFormData({ ...formData, full_name: text })}
-        icon="person-outline"
+        onChangeText={(text) => {
+          // Only allow letters and spaces
+          const filtered = text.replace(/[^a-zA-Z\s]/g, '');
+          setFormData({ ...formData, full_name: filtered });
+        }}
+        maxLength={100}
       />
 
       <Input
         label="Father's Name"
         placeholder="Father's name"
         value={formData.father_name}
-        onChangeText={(text) => setFormData({ ...formData, father_name: text })}
-      />
-
-      <View style={styles.pickerContainer}>
-        <Text style={styles.label}>Gender</Text>
-        <View style={styles.picker}>
-          <Picker
-            selectedValue={formData.gender}
-            onValueChange={(value) => setFormData({ ...formData, gender: value })}
-          >
-            <Picker.Item label="Male" value="male" />
-            <Picker.Item label="Female" value="female" />
-            <Picker.Item label="Other" value="other" />
-          </Picker>
-        </View>
-      </View>
-
-      <Input
-        label="Date of Birth (YYYY-MM-DD)"
-        placeholder="1990-01-15"
-        value={formData.date_of_birth}
-        onChangeText={(text) => setFormData({ ...formData, date_of_birth: text })}
-        icon="calendar-outline"
-      />
-
-      <Input
-        label="Email (Optional)"
-        placeholder="your.email@example.com"
-        value={formData.email}
-        onChangeText={(text) => setFormData({ ...formData, email: text })}
-        keyboardType="email-address"
-        autoCapitalize="none"
-        icon="mail-outline"
+        onChangeText={(text) => {
+          // Only allow letters and spaces
+          const filtered = text.replace(/[^a-zA-Z\s]/g, '');
+          setFormData({ ...formData, father_name: filtered });
+        }}
+        maxLength={100}
       />
 
       {/* Address Section */}
@@ -329,36 +331,24 @@ export default function RegisterFarmerScreen() {
         label="Village"
         placeholder="Your village name"
         value={formData.village}
-        onChangeText={(text) => setFormData({ ...formData, village: text })}
-      />
-
-      <Input
-        label="Post Office"
-        placeholder="Post office name"
-        value={formData.post_office}
-        onChangeText={(text) => setFormData({ ...formData, post_office: text })}
-      />
-
-      <Input
-        label="Tehsil"
-        placeholder="Tehsil/Taluka name"
-        value={formData.tehsil}
-        onChangeText={(text) => setFormData({ ...formData, tehsil: text })}
-      />
-
-      <Input
-        label="City"
-        placeholder="City name"
-        value={formData.city}
-        onChangeText={(text) => setFormData({ ...formData, city: text })}
+        onChangeText={(text) => {
+          // Allow letters, spaces, and some special characters
+          const filtered = text.replace(/[^a-zA-Z\s\-,.']/g, '');
+          setFormData({ ...formData, village: filtered });
+        }}
+        maxLength={100}
       />
 
       <Input
         label="District *"
         placeholder="District name"
         value={formData.district}
-        onChangeText={(text) => setFormData({ ...formData, district: text })}
-        icon="location-outline"
+        onChangeText={(text) => {
+          // Only allow letters and spaces
+          const filtered = text.replace(/[^a-zA-Z\s]/g, '');
+          setFormData({ ...formData, district: filtered });
+        }}
+        maxLength={50}
       />
 
       <View style={styles.pickerContainer}>
@@ -380,18 +370,13 @@ export default function RegisterFarmerScreen() {
         label="Pincode"
         placeholder="6-digit pincode"
         value={formData.pincode}
-        onChangeText={(text) => setFormData({ ...formData, pincode: text })}
+        onChangeText={(text) => {
+          // Only allow numbers
+          const filtered = text.replace(/[^0-9]/g, '');
+          setFormData({ ...formData, pincode: filtered });
+        }}
         keyboardType="number-pad"
         maxLength={6}
-      />
-
-      <Input
-        label="Complete Address"
-        placeholder="House number, street, landmark"
-        value={formData.address}
-        onChangeText={(text) => setFormData({ ...formData, address: text })}
-        multiline
-        numberOfLines={3}
       />
 
       {/* Farm Details Section */}
@@ -401,115 +386,58 @@ export default function RegisterFarmerScreen() {
         label="Total Land (Acres) *"
         placeholder="e.g., 5.5"
         value={formData.total_land_acres}
-        onChangeText={(text) => setFormData({ ...formData, total_land_acres: text })}
+        onChangeText={(text) => {
+          // Only allow numbers and one decimal point
+          const filtered = text.replace(/[^0-9.]/g, '');
+          // Ensure only one decimal point
+          const parts = filtered.split('.');
+          const validInput = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filtered;
+          setFormData({ ...formData, total_land_acres: validInput });
+        }}
         keyboardType="decimal-pad"
-        icon="leaf-outline"
-      />
-
-      <Input
-        label="Farming Experience (Years)"
-        placeholder="e.g., 10"
-        value={formData.farming_experience_years}
-        onChangeText={(text) => setFormData({ ...formData, farming_experience_years: text })}
-        keyboardType="number-pad"
-      />
-
-      {/* Bank Details Section */}
-      <Text style={styles.sectionTitle}>Bank Details (Optional)</Text>
-
-      <Input
-        label="Account Holder Name"
-        placeholder="Name as per bank account"
-        value={formData.bank_account_holder_name}
-        onChangeText={(text) => setFormData({ ...formData, bank_account_holder_name: text })}
-      />
-
-      <Input
-        label="Account Number"
-        placeholder="Bank account number"
-        value={formData.bank_account_number}
-        onChangeText={(text) => setFormData({ ...formData, bank_account_number: text })}
-        keyboardType="number-pad"
-        icon="card-outline"
-      />
-
-      <Input
-        label="IFSC Code"
-        placeholder="11-character IFSC code"
-        value={formData.ifsc_code}
-        onChangeText={(text) => setFormData({ ...formData, ifsc_code: text.toUpperCase() })}
-        maxLength={11}
-        autoCapitalize="characters"
-      />
-
-      <Input
-        label="Bank Name"
-        placeholder="e.g., State Bank of India"
-        value={formData.bank_name}
-        onChangeText={(text) => setFormData({ ...formData, bank_name: text })}
-      />
-
-      <Input
-        label="Branch Name"
-        placeholder="Branch location"
-        value={formData.bank_branch}
-        onChangeText={(text) => setFormData({ ...formData, bank_branch: text })}
-      />
-
-      {/* KYC Section */}
-      <Text style={styles.sectionTitle}>KYC Details (Optional)</Text>
-      <Text style={styles.sectionHint}>You can add these later from your profile</Text>
-
-      <Input
-        label="Aadhaar Number"
-        placeholder="12-digit Aadhaar number"
-        value={formData.aadhaar_number}
-        onChangeText={(text) => setFormData({ ...formData, aadhaar_number: text })}
-        keyboardType="number-pad"
-        maxLength={12}
-      />
-
-      <Input
-        label="PAN Number"
-        placeholder="10-character PAN (e.g., ABCDE1234F)"
-        value={formData.pan_number}
-        onChangeText={(text) => setFormData({ ...formData, pan_number: text.toUpperCase() })}
         maxLength={10}
-        autoCapitalize="characters"
       />
 
-      <Button
-        title="Complete Registration"
-        onPress={handleCompleteRegistration}
-        loading={loading}
-        style={styles.button}
-      />
+      <View style={styles.buttonContainer}>
+        <Button
+          title="Complete Registration"
+          onPress={handleCompleteRegistration}
+          loading={loading}
+        />
+      </View>
     </View>
   );
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
       >
-        {step === 1 ? renderStep1() : renderStep2()}
-      </ScrollView>
-    </KeyboardAvoidingView>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          {step === 1 ? renderStep1() : renderStep2()}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  container: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
     padding: 20,
+    paddingBottom: 100,
   },
   stepContainer: {
     width: '100%',
@@ -535,7 +463,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: COLORS.dark,
+    color: COLORS.text.primary,
     marginBottom: 8,
   },
   subtitle: {
@@ -545,10 +473,14 @@ const styles = StyleSheet.create({
   button: {
     marginTop: 16,
   },
+  buttonContainer: {
+    marginTop: 32,
+    marginBottom: 40,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.dark,
+    color: COLORS.text.primary,
     marginTop: 24,
     marginBottom: 16,
     paddingBottom: 8,
@@ -568,7 +500,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.dark,
+    color: COLORS.text.primary,
     marginBottom: 8,
   },
   picker: {

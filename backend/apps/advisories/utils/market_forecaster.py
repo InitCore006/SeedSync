@@ -370,6 +370,144 @@ class MarketForecaster:
         except Exception as e:
             return {'error': f'Forecast failed for {crop_type}: {str(e)}'}
     
+    def crop_specific_price_forecast(self, crop_type, days_ahead=30):
+        """
+        Forecast price trends for specific crop
+        
+        Args:
+            crop_type: Crop name (e.g., 'soybean', 'mustard')
+            days_ahead: Days to forecast (default: 30)
+        
+        Returns:
+            dict: {
+                'crop_type': crop name,
+                'current_price': current average price,
+                'forecast_avg_price': predicted average price,
+                'price_change_percent': percentage change,
+                'trend': 'bullish/bearish/stable',
+                'recommendation': action recommendation,
+                'forecast_values': [list of daily prices],
+                'forecast_dates': [list of dates]
+            }
+        """
+        crop_df = self.df[self.df['crop_type'] == crop_type]
+        
+        if len(crop_df) < 20:
+            return {'error': f'Insufficient data for {crop_type}. Need at least 20 transactions.'}
+        
+        # Create daily price series for this crop
+        crop_df['order_date'] = pd.to_datetime(crop_df['order_date'])
+        crop_df = crop_df.sort_values('order_date')
+        
+        crop_daily = crop_df.groupby('order_date')['price_per_quintal_inr'].mean()
+        
+        # Fill missing dates
+        date_range = pd.date_range(
+            start=crop_daily.index.min(),
+            end=crop_daily.index.max(),
+            freq='D'
+        )
+        crop_daily = crop_daily.reindex(date_range).fillna(method='ffill')
+        
+        try:
+            # Fit ARIMA model
+            model = ARIMA(crop_daily, order=(3, 1, 2))
+            fitted_model = model.fit()
+            
+            # Forecast
+            forecast_result = fitted_model.get_forecast(steps=days_ahead)
+            forecast = forecast_result.predicted_mean
+            conf_int = forecast_result.conf_int()
+            
+            # Generate dates
+            forecast_dates = pd.date_range(
+                start=crop_daily.index[-1] + pd.Timedelta(days=1),
+                periods=days_ahead,
+                freq='D'
+            )
+            
+            # Calculate metrics
+            current_price = crop_daily[-7:].mean()  # Last 7 days average
+            forecast_avg = forecast.mean()
+            price_change_pct = ((forecast_avg - current_price) / current_price) * 100
+            
+            # Determine trend
+            if price_change_pct > 2:
+                trend = 'bullish'
+                recommendation = f'HOLD - {crop_type.capitalize()} prices expected to rise'
+            elif price_change_pct < -2:
+                trend = 'bearish'
+                recommendation = f'SELL NOW - {crop_type.capitalize()} prices may decline'
+            else:
+                trend = 'stable'
+                recommendation = f'FLEXIBLE - {crop_type.capitalize()} prices stable'
+            
+            return {
+                'crop_type': crop_type,
+                'current_price': round(current_price, 2),
+                'forecast_avg_price': round(forecast_avg, 2),
+                'price_change_percent': round(price_change_pct, 2),
+                'trend': trend,
+                'recommendation': recommendation,
+                'forecast_values': [round(v, 2) for v in forecast.tolist()],
+                'forecast_dates': forecast_dates.strftime('%Y-%m-%d').tolist(),
+                'confidence_lower': [round(v, 2) for v in conf_int.iloc[:, 0].tolist()],
+                'confidence_upper': [round(v, 2) for v in conf_int.iloc[:, 1].tolist()],
+                'volatility': round(crop_daily.std(), 2),
+                'min_price_last_30_days': round(crop_daily[-30:].min(), 2),
+                'max_price_last_30_days': round(crop_daily[-30:].max(), 2)
+            }
+        except Exception as e:
+            return {'error': f'Price forecast failed for {crop_type}: {str(e)}'}
+    
+    def all_crops_price_forecast(self, days_ahead=30, top_n=5):
+        """
+        Get price forecasts for all major crops
+        
+        Args:
+            days_ahead: Days to forecast
+            top_n: Number of top crops to analyze
+        
+        Returns:
+            dict: {
+                'forecasts': [list of crop forecasts],
+                'summary': overall market summary
+            }
+        """
+        # Get top crops by quantity
+        crop_analysis = self.crop_wise_analysis(top_n=top_n)
+        
+        if 'error' in crop_analysis:
+            return crop_analysis
+        
+        forecasts = []
+        
+        for crop_info in crop_analysis['top_crops']:
+            crop_type = crop_info['crop_type']
+            forecast = self.crop_specific_price_forecast(crop_type, days_ahead)
+            
+            if 'error' not in forecast:
+                forecasts.append({
+                    'crop': crop_type,
+                    'current_price': f"₹{forecast['current_price']:.2f}",
+                    'expected_price': f"₹{forecast['forecast_avg_price']:.2f}",
+                    'change': f"{forecast['price_change_percent']:+.1f}%",
+                    'trend': forecast['trend'],
+                    'recommendation': forecast['recommendation'],
+                    'market_share': f"{crop_info['market_share_percent']:.1f}%"
+                })
+        
+        return {
+            'forecasts': forecasts,
+            'forecast_period': f'{days_ahead} days',
+            'total_crops_analyzed': len(forecasts),
+            'summary': {
+                'bullish_crops': [f['crop'] for f in forecasts if f['trend'] == 'bullish'],
+                'bearish_crops': [f['crop'] for f in forecasts if f['trend'] == 'bearish'],
+                'stable_crops': [f['crop'] for f in forecasts if f['trend'] == 'stable']
+            }
+        }
+    
     # ==================== 5. STATE-WISE ANALYSIS ====================
     
     def state_wise_analysis(self, top_n=5):

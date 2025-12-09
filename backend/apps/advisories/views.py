@@ -134,157 +134,213 @@ class MarketForecastAPIView(APIView):
         crop_analysis = forecaster.crop_wise_analysis(top_n=5)
         seasonal = forecaster.seasonal_analysis()
         
+        # Get all crops and their individual forecasts
+        available_crops = df['crop_type'].unique().tolist()
+        all_crop_forecasts = []
+        
+        for crop in available_crops:
+            crop_price = forecaster.crop_specific_price_forecast(crop, days_ahead=30)
+            crop_demand = forecaster.crop_specific_forecast(crop, days_ahead=30)
+            
+            if 'error' not in crop_price and 'error' not in crop_demand:
+                all_crop_forecasts.append({
+                    'crop_name': crop.capitalize(),
+                    'price_forecast': {
+                        'price_today': f"₹{crop_price['current_price']:.2f}/quintal",
+                        'price_in_30_days': f"₹{crop_price['forecast_avg_price']:.2f}/quintal",
+                        'expected_change': f"{crop_price['price_change_percent']:+.1f}%",
+                        'price_trend': crop_price['trend'].upper(),
+                        'our_recommendation': crop_price['recommendation']
+                    },
+                    'demand_forecast': {
+                        'demand_today': f"{crop_demand['current_avg_demand']:,.0f} quintals/day",
+                        'demand_in_30_days': f"{crop_demand['forecast_avg_demand']:,.0f} quintals/day",
+                        'demand_trend': crop_demand['demand_trend'].upper(),
+                        'total_expected_demand': f"{crop_demand['total_forecast']:,.0f} quintals"
+                    }
+                })
+        
         # Base insights
         insights = {
-            'summary': {
-                'total_market_value': f"₹{df['total_value_inr'].sum():,.0f}",
-                'average_price': f"₹{df['price_per_quintal_inr'].mean():.2f} per quintal",
-                'total_quantity': f"{df['quantity_quintals'].sum():,.0f} quintals",
-                'total_transactions': len(df)
-            }
+            'market_overview': {
+                #'total_business_value': f"₹{df['total_value_inr'].sum():,.0f}",
+                'average_crop_price': f"₹{df['price_per_quintal_inr'].mean():.2f} per quintal",
+                'total_quantity_traded': f"{df['quantity_quintals'].sum():,.0f} quintals",
+                #'number_of_transactions': len(df)
+            },
+            'individual_crop_insights': all_crop_forecasts
         }
         
         # Role-specific insights
         if role == 'farmer':
-            insights.update(self._farmer_insights(price_forecast, crop_analysis, seasonal))
+            insights.update(self._farmer_insights(price_forecast, crop_analysis, seasonal, all_crop_forecasts))
         
         elif role == 'fpo':
-            insights.update(self._fpo_insights(quantity_forecast, price_forecast, crop_analysis))
+            insights.update(self._fpo_insights(quantity_forecast, price_forecast, crop_analysis, all_crop_forecasts))
         
         elif role == 'processor':
-            insights.update(self._processor_insights(quantity_forecast, price_forecast, crop_analysis))
+            insights.update(self._processor_insights(quantity_forecast, price_forecast, crop_analysis, all_crop_forecasts))
         
         elif role == 'retailer':
-            insights.update(self._retailer_insights(quantity_forecast, price_forecast, crop_analysis))
+            insights.update(self._retailer_insights(quantity_forecast, price_forecast, crop_analysis, all_crop_forecasts))
         
         return insights
     
-    def _farmer_insights(self, price_forecast, crop_analysis, seasonal):
-        """Simple insights for farmers"""
-        if 'error' in price_forecast:
-            recommendation = {
-                'action': 'Monitor Market',
-                'message': 'Keep checking prices regularly'
-            }
-        else:
-            if price_forecast['trend'] == 'bullish':
-                recommendation = {
-                    'action': 'Wait & Watch',
-                    'message': f"Prices may go UP by {abs(price_forecast['price_change_percent']):.1f}% in next 30 days",
-                    'suggestion': 'Consider holding your crop for better prices',
-                    'best_time_to_sell': '20-30 days from now'
-                }
-            elif price_forecast['trend'] == 'bearish':
-                recommendation = {
-                    'action': 'Sell Soon',
-                    'message': f"Prices may go DOWN by {abs(price_forecast['price_change_percent']):.1f}% in next 30 days",
-                    'suggestion': 'Selling now may be better',
-                    'best_time_to_sell': 'Within next 7-10 days'
-                }
+    def _farmer_insights(self, price_forecast, crop_analysis, seasonal, all_crop_forecasts):
+        """Simple insights for farmers - with individual crop recommendations"""
+        
+        # Generate crop-specific recommendations for farmers
+        crop_recommendations = []
+        for crop_data in all_crop_forecasts:
+            price_trend = crop_data['price_forecast']['price_trend']
+            price_change = crop_data['price_forecast']['expected_change']
+            
+            if price_trend == 'BULLISH':
+                action = 'HOLD'
+                advice = f"Wait for better prices - expected to rise"
+            elif price_trend == 'BEARISH':
+                action = 'SELL NOW'
+                advice = f"Sell immediately - prices may decline"
             else:
-                recommendation = {
-                    'action': 'Flexible',
-                    'message': 'Prices are stable',
-                    'suggestion': 'You can sell anytime in next 30 days',
-                    'best_time_to_sell': 'Anytime convenient'
-                }
+                action = 'FLEXIBLE'
+                advice = f"Stable prices - sell anytime convenient"
+            
+            crop_recommendations.append({
+                'crop_name': crop_data['crop_name'],
+                'what_to_do': action,
+                'price_today': crop_data['price_forecast']['price_today'],
+                'price_in_30_days': crop_data['price_forecast']['price_in_30_days'],
+                'expected_change': price_change,
+                'our_advice': advice
+            })
         
         return {
-            'price_today': f"₹{price_forecast.get('current_price', 0):.2f} per quintal" if 'current_price' in price_forecast else 'Not available',
-            'price_expected_30_days': f"₹{price_forecast.get('forecast_avg_price', 0):.2f} per quintal" if 'forecast_avg_price' in price_forecast else 'Not available',
-            'recommendation': recommendation,
-            'top_crops_by_price': [
+            'recommendations_for_each_crop': crop_recommendations,
+            'most_profitable_crops': [
                 {
-                    'crop': crop['crop_type'],
-                    'average_price': f"₹{crop['avg_price']:.2f}/quintal",
-                    'market_demand': f"{crop['market_share_percent']:.1f}% of total market"
+                    'crop_name': crop['crop_type'],
+                    'current_price': f"₹{crop['avg_price']:.2f}/quintal",
+                    'market_demand_share': f"{crop['market_share_percent']:.1f}% of total market"
                 }
                 for crop in crop_analysis.get('top_crops', [])[:3]
             ],
-            'seasonal_tip': seasonal.get('recommendation', 'Plant according to season'),
-            'best_season': seasonal.get('peak_season', 'rabi')
+            'best_planting_season': seasonal.get('peak_season', 'rabi'),
+            'seasonal_advice': seasonal.get('recommendation', 'Plant according to season')
         }
     
-    def _fpo_insights(self, quantity_forecast, price_forecast, crop_analysis):
-        """Simple insights for FPOs"""
+    def _fpo_insights(self, quantity_forecast, price_forecast, crop_analysis, all_crop_forecasts):
+        """Simple insights for FPOs - with crop-wise procurement planning"""
+        # Handle new forecast structure
+        if 'overall_forecast' in quantity_forecast:
+            qty_forecast = quantity_forecast['overall_forecast']
+        else:
+            qty_forecast = quantity_forecast
+        
+        if 'overall_forecast' in price_forecast:
+            prc_forecast = price_forecast['overall_forecast']
+        else:
+            prc_forecast = price_forecast
+        
         return {
-            'procurement_forecast': {
-                'next_60_days_demand': f"{quantity_forecast.get('total_forecast_demand', 0):,.0f} quintals" if 'total_forecast_demand' in quantity_forecast else 'Not available',
-                'daily_average_demand': f"{quantity_forecast.get('avg_daily_demand', 0):.0f} quintals per day" if 'avg_daily_demand' in quantity_forecast else 'Not available',
-                'recommendation': f"Plan to procure approximately {quantity_forecast.get('total_forecast_demand', 0) * 1.15:,.0f} quintals (with 15% buffer)" if 'total_forecast_demand' in quantity_forecast else 'Monitor daily'
+            'how_much_to_procure': {
+                'quantity_needed_60_days': f"{qty_forecast.get('total_forecast_demand', 0):,.0f} quintals",
+                'daily_average_needed': f"{qty_forecast.get('avg_daily_demand', 0):.0f} quintals per day",
+                'recommended_quantity_with_buffer': f"Plan to procure approximately {qty_forecast.get('total_forecast_demand', 0) * 1.15:,.0f} quintals (with 15% buffer)"
             },
-            'price_trends': {
-                'current_average': f"₹{price_forecast.get('current_price', 0):.2f}/quintal" if 'current_price' in price_forecast else 'Not available',
-                'expected_in_60_days': f"₹{price_forecast.get('forecast_avg_price', 0):.2f}/quintal" if 'forecast_avg_price' in price_forecast else 'Not available',
-                'trend': price_forecast.get('trend', 'stable').upper()
+            'price_trends_overview': {
+                'average_price_now': f"₹{prc_forecast.get('current_price', 0):.2f}/quintal",
+                'expected_price_60_days': f"₹{prc_forecast.get('forecast_avg_price', 0):.2f}/quintal",
+                'market_trend': prc_forecast.get('trend', 'stable').upper()
             },
-            'top_crops_to_focus': [
+            'which_crops_to_focus': [
                 {
-                    'crop': crop['crop_type'],
-                    'demand': f"{crop['total_quantity']:,.0f} quintals",
-                    'price': f"₹{crop['avg_price']:.2f}/quintal",
+                    'crop_name': crop['crop_type'],
+                    'total_demand': f"{crop['total_quantity']:,.0f} quintals",
+                    'average_price': f"₹{crop['avg_price']:.2f}/quintal",
                     'market_share': f"{crop['market_share_percent']:.1f}%"
                 }
                 for crop in crop_analysis.get('top_crops', [])[:5]
             ],
-            'action_plan': {
-                'message': 'Focus on crops with high demand and good prices',
-                'priority_crops': [crop['crop_type'] for crop in crop_analysis.get('top_crops', [])[:3]]
+            'procurement_strategy': {
+                'key_message': 'Focus on crops with high demand and good prices',
+                'priority_crops_list': [crop['crop_type'] for crop in crop_analysis.get('top_crops', [])[:3]]
             }
         }
     
-    def _processor_insights(self, quantity_forecast, price_forecast, crop_analysis):
-        """Simple insights for processors"""
-        strategy = 'Buy Now' if price_forecast.get('trend') == 'bearish' else 'Buy Gradually'
+    def _processor_insights(self, quantity_forecast, price_forecast, crop_analysis, all_crop_forecasts):
+        """Simple insights for processors - with crop-wise supply analysis"""
+        # Handle new forecast structure
+        if 'overall_forecast' in quantity_forecast:
+            qty_forecast = quantity_forecast['overall_forecast']
+        else:
+            qty_forecast = quantity_forecast
+        
+        if 'overall_forecast' in price_forecast:
+            prc_forecast = price_forecast['overall_forecast']
+        else:
+            prc_forecast = price_forecast
+        
+        strategy = 'Buy Now' if prc_forecast.get('trend') == 'bearish' else 'Buy Gradually'
         
         return {
-            'supply_forecast': {
-                'next_90_days_supply': f"{quantity_forecast.get('total_forecast_demand', 0):,.0f} quintals available" if 'total_forecast_demand' in quantity_forecast else 'Not available',
-                'recommended_procurement': f"{quantity_forecast.get('total_forecast_demand', 0) * 1.2:,.0f} quintals (with 20% buffer)" if 'total_forecast_demand' in quantity_forecast else 'Monitor weekly'
+            'expected_supply_availability': {
+                'total_supply_90_days': f"{qty_forecast.get('total_forecast_demand', 0):,.0f} quintals available",
+                'how_much_to_buy': f"{qty_forecast.get('total_forecast_demand', 0) * 1.2:,.0f} quintals (with 20% buffer)"
             },
-            'price_analysis': {
-                'current_price': f"₹{price_forecast.get('current_price', 0):.2f}/quintal" if 'current_price' in price_forecast else 'Not available',
-                'price_trend': price_forecast.get('trend', 'stable').upper(),
-                'price_change_expected': f"{price_forecast.get('price_change_percent', 0):.1f}%" if 'price_change_percent' in price_forecast else '0%'
+            'price_analysis_for_procurement': {
+                'price_now': f"₹{prc_forecast.get('current_price', 0):.2f}/quintal",
+                'price_direction': prc_forecast.get('trend', 'stable').upper(),
+                'expected_price_change': f"{prc_forecast.get('price_change_percent', 0):.1f}%"
             },
-            'procurement_strategy': {
-                'recommendation': strategy,
-                'reason': f"Prices are {price_forecast.get('trend', 'stable')}",
-                'best_timing': 'Next 2 weeks' if strategy == 'Buy Now' else 'Spread over 4-6 weeks'
+            'when_to_buy': {
+                'our_recommendation': strategy,
+                'why': f"Prices are {prc_forecast.get('trend', 'stable')}",
+                'best_buying_time': 'Next 2 weeks' if strategy == 'Buy Now' else 'Spread over 4-6 weeks'
             },
-            'crop_availability': [
+            'available_crops_list': [
                 {
-                    'crop': crop['crop_type'],
-                    'available_quantity': f"{crop['total_quantity']:,.0f} quintals",
-                    'average_price': f"₹{crop['avg_price']:.2f}/quintal"
+                    'crop_name': crop['crop_type'],
+                    'quantity_available': f"{crop['total_quantity']:,.0f} quintals",
+                    'current_price': f"₹{crop['avg_price']:.2f}/quintal"
                 }
                 for crop in crop_analysis.get('top_crops', [])[:5]
             ]
         }
     
-    def _retailer_insights(self, quantity_forecast, price_forecast, crop_analysis):
-        """Simple insights for retailers"""
+    def _retailer_insights(self, quantity_forecast, price_forecast, crop_analysis, all_crop_forecasts):
+        """Simple insights for retailers - with crop-wise product availability"""
+        # Handle new forecast structure
+        if 'overall_forecast' in quantity_forecast:
+            qty_forecast = quantity_forecast['overall_forecast']
+        else:
+            qty_forecast = quantity_forecast
+        
+        if 'overall_forecast' in price_forecast:
+            prc_forecast = price_forecast['overall_forecast']
+        else:
+            prc_forecast = price_forecast
+        
         return {
-            'product_availability': {
-                'next_30_days': f"{quantity_forecast.get('total_forecast_demand', 0):,.0f} quintals expected" if 'total_forecast_demand' in quantity_forecast else 'Good availability',
-                'supply_status': 'Sufficient' if quantity_forecast.get('current_trend') != 'decreasing' else 'Limited'
+            'stock_availability_forecast': {
+                'expected_supply_30_days': f"{qty_forecast.get('total_forecast_demand', 0):,.0f} quintals expected",
+                'availability_status': 'Sufficient' if qty_forecast.get('current_trend') != 'decreasing' else 'Limited'
             },
-            'pricing': {
-                'current_market_price': f"₹{price_forecast.get('current_price', 0):.2f}/quintal" if 'current_price' in price_forecast else 'Not available',
-                'expected_price_30_days': f"₹{price_forecast.get('forecast_avg_price', 0):.2f}/quintal" if 'forecast_avg_price' in price_forecast else 'Not available',
-                'price_stability': 'Stable' if abs(price_forecast.get('price_change_percent', 0)) < 5 else 'Volatile'
+            'pricing_information': {
+                'market_price_today': f"₹{prc_forecast.get('current_price', 0):.2f}/quintal",
+                'expected_price_in_30_days': f"₹{prc_forecast.get('forecast_avg_price', 0):.2f}/quintal",
+                'price_stability_status': 'Stable' if abs(prc_forecast.get('price_change_percent', 0)) < 5 else 'Volatile'
             },
-            'popular_products': [
+            'customer_favorite_products': [
                 {
-                    'product': crop['crop_type'],
-                    'demand': f"{crop['market_share_percent']:.1f}% market share",
-                    'price': f"₹{crop['avg_price']:.2f}/quintal"
+                    'product_name': crop['crop_type'],
+                    'popularity': f"{crop['market_share_percent']:.1f}% market share",
+                    'selling_price': f"₹{crop['avg_price']:.2f}/quintal"
                 }
                 for crop in crop_analysis.get('top_crops', [])[:5]
             ],
-            'business_tip': {
-                'message': 'Stock up on high-demand crops',
-                'focus_products': [crop['crop_type'] for crop in crop_analysis.get('top_crops', [])[:3]]
+            'stocking_advice': {
+                'suggestion': 'Stock up on high-demand crops',
+                'recommended_products': [crop['crop_type'] for crop in crop_analysis.get('top_crops', [])[:3]]
             }
         }
 
@@ -292,7 +348,7 @@ class MarketForecastAPIView(APIView):
 # Individual analysis endpoints (optional - for advanced users)
 
 class QuickPriceForecastAPIView(APIView):
-    """Quick price forecast for all crops"""
+    """Quick price forecast for all crops - shows individual crop forecasts"""
     permission_classes = [AllowAny]
     
     def get(self, request):
@@ -305,28 +361,60 @@ class QuickPriceForecastAPIView(APIView):
             
             df = extractor.to_dataframe(data)
             forecaster = MarketForecaster(df)
-            forecast = forecaster.forecast_price_trend(days_ahead=30)
             
-            # Simple format
-            simple_forecast = {
-                'current_price': f"₹{forecast.get('current_price', 0):.2f}",
-                'expected_price_30_days': f"₹{forecast.get('forecast_avg_price', 0):.2f}",
-                'trend': forecast.get('trend', 'stable').upper(),
-                'change_percentage': f"{forecast.get('price_change_percent', 0):.1f}%",
-                'recommendation': forecast.get('recommendation', 'Monitor market')
-            }
+            # Get all unique crops in the data
+            available_crops = df['crop_type'].unique().tolist()
+            
+            # Get price forecast for each crop
+            crop_forecasts = []
+            for crop in available_crops:
+                crop_forecast = forecaster.crop_specific_price_forecast(crop, days_ahead=30)
+                
+                if 'error' not in crop_forecast:
+                    crop_forecasts.append({
+                        'crop': crop.capitalize(),
+                        'current_price': f"₹{crop_forecast['current_price']:.2f}/quintal",
+                        'expected_price_30_days': f"₹{crop_forecast['forecast_avg_price']:.2f}/quintal",
+                        'price_change': f"{crop_forecast['price_change_percent']:+.1f}%",
+                        'trend': crop_forecast['trend'].upper(),
+                        'recommendation': crop_forecast['recommendation'],
+                        'price_range': {
+                            'min': f"₹{crop_forecast['min_price_last_30_days']:.2f}",
+                            'max': f"₹{crop_forecast['max_price_last_30_days']:.2f}"
+                        }
+                    })
+            
+            # Sort by crop name
+            crop_forecasts.sort(key=lambda x: x['crop'])
+            
+            # Categorize by trend
+            bullish = [c['crop'] for c in crop_forecasts if c['trend'] == 'BULLISH']
+            bearish = [c['crop'] for c in crop_forecasts if c['trend'] == 'BEARISH']
+            stable = [c['crop'] for c in crop_forecasts if c['trend'] == 'STABLE']
             
             return Response({
                 'success': True,
-                'forecast': simple_forecast
+                'total_crops': len(crop_forecasts),
+                'forecasts': crop_forecasts,
+                'market_summary': {
+                    'bullish_crops': bullish,
+                    'bearish_crops': bearish,
+                    'stable_crops': stable
+                },
+                'quick_insights': {
+                    'buy_now': bearish,  # Prices declining
+                    'wait_for_better_prices': bullish,  # Prices rising
+                    'neutral': stable  # Prices stable
+                }
             }, status=200)
             
         except Exception as e:
+            logger.error(f"Price forecast error: {str(e)}")
             return Response({'success': False, 'message': str(e)}, status=500)
 
 
 class QuickDemandForecastAPIView(APIView):
-    """Quick demand forecast for all crops"""
+    """Quick demand forecast for all crops - shows individual crop forecasts"""
     permission_classes = [AllowAny]
     
     def get(self, request):
@@ -341,17 +429,45 @@ class QuickDemandForecastAPIView(APIView):
             forecaster = MarketForecaster(df)
             forecast = forecaster.forecast_demand_quantity(days_ahead=30)
             
-            # Simple format
-            simple_forecast = {
-                'current_demand': f"{forecast.get('current_avg_demand', 0):,.0f} quintals/day",
-                'expected_demand': f"{forecast.get('avg_daily_demand', 0):,.0f} quintals/day",
-                'trend': forecast.get('current_trend', 'stable').upper(),
-                'total_30_days': f"{forecast.get('total_forecast_demand', 0):,.0f} quintals"
+            # Get all unique crops in the data
+            available_crops = df['crop_type'].unique().tolist()
+            
+            # Get demand forecast for each crop
+            crop_forecasts = []
+            for crop in available_crops:
+                crop_forecast = forecaster.crop_specific_forecast(crop, days_ahead=30)
+                if 'error' not in crop_forecast:
+                    crop_forecasts.append({
+                        'crop': crop.capitalize(),
+                        'current_demand': f"{crop_forecast['current_avg_demand']:,.0f} quintals/day",
+                        'expected_demand': f"{crop_forecast['forecast_avg_demand']:,.0f} quintals/day",
+                        'trend': crop_forecast['demand_trend'].upper(),
+                        'total_30_days': f"{crop_forecast['total_forecast']:,.0f} quintals",
+                        'demand_change': f"{((crop_forecast['forecast_avg_demand'] - crop_forecast['current_avg_demand']) / max(crop_forecast['current_avg_demand'], 1)) * 100:+.1f}%"
+                    })
+            
+            # Categorize crops by trend
+            increasing_crops = [c['crop'] for c in crop_forecasts if c['trend'] == 'INCREASING']
+            decreasing_crops = [c['crop'] for c in crop_forecasts if c['trend'] == 'DECREASING']
+            
+            # Overall market summary
+            overall_forecast = forecast.get('overall_forecast', forecast)
+            market_summary = {
+                'overall_current_demand': f"{overall_forecast.get('current_avg_demand', 0):,.0f} quintals/day",
+                'overall_expected_demand': f"{overall_forecast.get('avg_daily_demand', 0):,.0f} quintals/day",
+                'overall_trend': overall_forecast.get('current_trend', 'stable').upper(),
+                'overall_total_30_days': f"{overall_forecast.get('total_forecast_demand', 0):,.0f} quintals"
             }
             
             return Response({
                 'success': True,
-                'forecast': simple_forecast
+                'crop_forecasts': crop_forecasts,
+                'market_summary': market_summary,
+                'insights': {
+                    'increasing_demand': increasing_crops,
+                    'decreasing_demand': decreasing_crops,
+                    'total_crops': len(crop_forecasts)
+                }
             }, status=200)
             
         except Exception as e:
@@ -393,4 +509,116 @@ class TopCropsAPIView(APIView):
             }, status=200)
             
         except Exception as e:
+            return Response({'success': False, 'message': str(e)}, status=500)
+
+
+class CropSpecificPriceForecastAPIView(APIView):
+    """Get price forecast for a specific crop"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        crop_type = request.query_params.get('crop_type', '').lower().strip()
+        days_ahead = int(request.query_params.get('days', 30))
+        
+        if not crop_type:
+            return Response({
+                'success': False,
+                'message': 'Please provide crop_type parameter',
+                'example': '/api/advisories/crop-price-forecast/?crop_type=soybean&days=30'
+            }, status=400)
+        
+        try:
+            extractor = MarketDataExtractor()
+            data = extractor.get_combined_data(days_back=365, filters={})
+            
+            if not data:
+                return Response({'success': False, 'message': 'No data available'}, status=404)
+            
+            df = extractor.to_dataframe(data)
+            forecaster = MarketForecaster(df)
+            
+            # Get crop-specific forecast
+            forecast = forecaster.crop_specific_price_forecast(crop_type, days_ahead)
+            
+            if 'error' in forecast:
+                return Response({
+                    'success': False,
+                    'message': forecast['error']
+                }, status=404)
+            
+            # Format for easy understanding
+            simple_forecast = {
+                'crop': crop_type.capitalize(),
+                'current_price': f"₹{forecast['current_price']:.2f}/quintal",
+                'expected_price_in_{}_days'.format(days_ahead): f"₹{forecast['forecast_avg_price']:.2f}/quintal",
+                'price_change': f"{forecast['price_change_percent']:+.1f}%",
+                'trend': forecast['trend'].upper(),
+                'recommendation': forecast['recommendation'],
+                'price_range_last_30_days': {
+                    'minimum': f"₹{forecast['min_price_last_30_days']:.2f}",
+                    'maximum': f"₹{forecast['max_price_last_30_days']:.2f}"
+                },
+                'volatility': f"₹{forecast['volatility']:.2f}",
+                'forecast_details': {
+                    'values': forecast['forecast_values'][:7],  # Show first 7 days
+                    'dates': forecast['forecast_dates'][:7]
+                }
+            }
+            
+            return Response({
+                'success': True,
+                'forecast': simple_forecast
+            }, status=200)
+            
+        except Exception as e:
+            logger.error(f"Crop price forecast error: {str(e)}")
+            return Response({'success': False, 'message': str(e)}, status=500)
+
+
+class AllCropsPriceForecastAPIView(APIView):
+    """Get price forecasts for all major crops"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        days_ahead = int(request.query_params.get('days', 30))
+        top_n = int(request.query_params.get('top_crops', 5))
+        
+        try:
+            extractor = MarketDataExtractor()
+            data = extractor.get_combined_data(days_back=365, filters={})
+            
+            if not data:
+                return Response({'success': False, 'message': 'No data available'}, status=404)
+            
+            df = extractor.to_dataframe(data)
+            forecaster = MarketForecaster(df)
+            
+            # Get all crops forecast
+            all_forecasts = forecaster.all_crops_price_forecast(days_ahead, top_n)
+            
+            if 'error' in all_forecasts:
+                return Response({
+                    'success': False,
+                    'message': all_forecasts['error']
+                }, status=404)
+            
+            return Response({
+                'success': True,
+                'forecast_period': all_forecasts['forecast_period'],
+                'crops_analyzed': all_forecasts['total_crops_analyzed'],
+                'forecasts': all_forecasts['forecasts'],
+                'market_summary': {
+                    'bullish_crops': all_forecasts['summary']['bullish_crops'],
+                    'bearish_crops': all_forecasts['summary']['bearish_crops'],
+                    'stable_crops': all_forecasts['summary']['stable_crops']
+                },
+                'interpretation': {
+                    'buy_now': all_forecasts['summary']['bearish_crops'],
+                    'wait_for_better_prices': all_forecasts['summary']['bullish_crops'],
+                    'neutral': all_forecasts['summary']['stable_crops']
+                }
+            }, status=200)
+            
+        except Exception as e:
+            logger.error(f"All crops forecast error: {str(e)}")
             return Response({'success': False, 'message': str(e)}, status=500)
