@@ -512,7 +512,7 @@ function MarketplaceContent() {
                       {user?.role === 'processor' && (
                         <Button variant="outline" size="sm" onClick={() => handleGetSuggestion(lot)} className="flex items-center justify-center gap-2 border-blue-500 text-blue-600 hover:bg-blue-50">
                           <Lightbulb className="w-4 h-4" />
-                          AI
+                        
                         </Button>
                       )}
                       <Button variant="primary" size="sm" onClick={() => handlePlaceBid(lot)} className="flex-1">

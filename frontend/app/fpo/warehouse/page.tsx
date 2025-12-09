@@ -28,6 +28,7 @@ function WarehouseModal({ isOpen, onClose, onSuccess, warehouse }: WarehouseModa
   const isEdit = !!warehouse;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const [formData, setFormData] = useState({
     warehouse_name: warehouse?.warehouse_name || '',
     warehouse_code: warehouse?.warehouse_code || '',
@@ -53,6 +54,41 @@ function WarehouseModal({ isOpen, onClose, onSuccess, warehouse }: WarehouseModa
     operational_since: warehouse?.operational_since || '',
     notes: warehouse?.notes || '',
   });
+
+  const fetchCoordinates = async () => {
+    if (!formData.district || !formData.state) {
+      setError('Please fill district and state first');
+      return;
+    }
+    
+    setIsFetchingLocation(true);
+    setError('');
+    
+    try {
+      const stateLabel = INDIAN_STATES.find(([code]) => code === formData.state)?.[1] || formData.state;
+      const addressQuery = `${formData.village ? formData.village + ', ' : ''}${formData.district}, ${stateLabel}, India`;
+      
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressQuery)}&limit=1`
+      );
+      
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        setFormData({
+          ...formData,
+          latitude: parseFloat(data[0].lat).toFixed(6),
+          longitude: parseFloat(data[0].lon).toFixed(6)
+        });
+      } else {
+        setError('Could not find coordinates for this location. Please enter manually.');
+      }
+    } catch (err) {
+      setError('Failed to fetch coordinates. Please try again or enter manually.');
+    } finally {
+      setIsFetchingLocation(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -220,22 +256,44 @@ function WarehouseModal({ isOpen, onClose, onSuccess, warehouse }: WarehouseModa
                 placeholder="6-digit pincode"
                 maxLength={6}
               />
-              <Input
-                label="Latitude"
-                type="number"
-                value={formData.latitude}
-                onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                placeholder="Optional"
-                step="0.000001"
-              />
-              <Input
-                label="Longitude"
-                type="number"
-                value={formData.longitude}
-                onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                placeholder="Optional"
-                step="0.000001"
-              />
+            </div>
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Location Coordinates (Optional)
+                </label>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={fetchCoordinates}
+                  disabled={isFetchingLocation}
+                  className="text-xs"
+                >
+                  {isFetchingLocation ? 'Fetching...' : 'Fetch from Address'}
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Latitude"
+                  type="number"
+                  value={formData.latitude}
+                  onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                  placeholder="19.076090"
+                  step="0.000001"
+                />
+                <Input
+                  label="Longitude"
+                  type="number"
+                  value={formData.longitude}
+                  onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                  placeholder="72.877426"
+                  step="0.000001"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Click "Fetch from Address" to automatically get coordinates from the address details
+              </p>
             </div>
           </div>
         </div>

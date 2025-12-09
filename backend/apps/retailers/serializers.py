@@ -6,6 +6,7 @@ class RetailerProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = RetailerProfile
         fields = '__all__'
+        read_only_fields = ['user']
 
 class StoreSerializer(serializers.ModelSerializer):
     class Meta:

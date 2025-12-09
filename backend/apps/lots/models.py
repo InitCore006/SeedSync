@@ -235,6 +235,17 @@ class ProcurementLot(TimeStampedModel):
         if not self.pk:
             self.available_quantity_quintals = self.quantity_quintals
         
+        # Auto-assign location from farmer or FPO if not provided
+        if not self.location_latitude or not self.location_longitude:
+            if self.farmer:
+                # Use farmer's location
+                self.location_latitude = self.farmer.latitude
+                self.location_longitude = self.farmer.longitude
+            elif self.fpo:
+                # Use FPO's location (for aggregated lots)
+                self.location_latitude = self.fpo.latitude
+                self.location_longitude = self.fpo.longitude
+        
         super().save(*args, **kwargs)
     
     def generate_lot_number(self):

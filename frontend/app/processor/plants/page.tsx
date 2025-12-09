@@ -169,7 +169,6 @@ function PlantModal({ isOpen, onClose, onSuccess, plant, mode }: PlantModalProps
             value={formData.state}
             onChange={(e) => setFormData({ ...formData, state: e.target.value })}
             options={INDIAN_STATES}
-            placeholder="Select state"
           />
         </div>
 
@@ -318,12 +317,22 @@ function ProcessingPlantsContent() {
     try {
       const response = await API.processor.getPlants();
       console.log('Plants response:', response); // Debug log
-      if (response.data) {
+      
+      // Handle different response formats
+      if (response.data && Array.isArray(response.data)) {
         setPlants(response.data);
+      } else if (Array.isArray(response)) {
+        setPlants(response);
+      } else if (response.status === 'success' && Array.isArray(response.data)) {
+        setPlants(response.data);
+      } else {
+        console.warn('Unexpected plants response format:', response);
+        setPlants([]);
       }
     } catch (error) {
       console.error('Failed to fetch plants:', error);
       toast.error('Failed to load processing plants');
+      setPlants([]);
     } finally {
       setIsLoading(false);
     }
@@ -375,9 +384,9 @@ function ProcessingPlantsContent() {
         </div>
         <Button
           variant="primary"
-          icon={<Plus className="w-4 h-4" />}
           onClick={() => setIsCreateModalOpen(true)}
         >
+          <Plus className="w-4 h-4 mr-2" />
           Add Plant
         </Button>
       </div>
@@ -395,9 +404,9 @@ function ProcessingPlantsContent() {
             </p>
             <Button
               variant="primary"
-              icon={<Plus className="w-4 h-4" />}
               onClick={() => setIsCreateModalOpen(true)}
             >
+              <Plus className="w-4 h-4 mr-2" />
               Add Plant
             </Button>
           </CardContent>
@@ -442,19 +451,19 @@ function ProcessingPlantsContent() {
                     <Button
                       variant="outline"
                       size="sm"
-                      icon={<Edit className="w-4 h-4" />}
                       onClick={() => handleEdit(plant)}
                       className="flex-1"
                     >
+                      <Edit className="w-4 h-4 mr-2" />
                       Edit
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      icon={<Trash2 className="w-4 h-4" />}
                       onClick={() => handleDelete(plant)}
                       className="flex-1 text-red-600 hover:text-red-700 hover:border-red-600"
                     >
+                      <Trash2 className="w-4 h-4 mr-2" />
                       Delete
                     </Button>
                   </div>

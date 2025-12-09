@@ -19,9 +19,20 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Input validation
+    if (!phoneNumber.trim()) {
+      toast.error('Phone number is required');
+      return;
+    }
+    
+    if (phoneNumber.length !== 10) {
+      toast.error('Phone number must be exactly 10 digits');
+      return;
+    }
+    
     // Validate phone number (10 digits starting with 6-9)
     if (!/^[6-9]\d{9}$/.test(phoneNumber)) {
-      toast.error('Please enter a valid 10-digit mobile number starting with 6-9');
+      toast.error('Phone number must start with 6, 7, 8, or 9');
       return;
     }
     
@@ -63,27 +74,35 @@ export default function LoginPage() {
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="mt-8 space-y-6 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
           <div className="space-y-4">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none mt-7">
-                <Phone className="h-5 w-5 text-gray-400" />
+            <div>
+              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                Phone Number
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <Phone className="h-5 w-5 text-gray-400" />
+                </div>
+                <div className="absolute inset-y-0 left-10 flex items-center pl-1 pointer-events-none">
+                  <span className="text-gray-500 font-medium">+91</span>
+                </div>
+                <input
+                  id="phone"
+                  type="tel"
+                  placeholder="9876543210"
+                  required
+                  maxLength={10}
+                  value={phoneNumber}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setPhoneNumber(value);
+                  }}
+                  className="w-full pl-20 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                  autoComplete="tel"
+                />
               </div>
-              <div className="absolute inset-y-0 left-10 flex items-center pointer-events-none mt-7 text-gray-500 font-medium">
-                +91
-              </div>
-              <Input
-                label="Phone Number"
-                type="tel"
-                placeholder="9876543210"
-                required
-                maxLength={10}
-                value={phoneNumber}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                  setPhoneNumber(value);
-                }}
-                className="pl-16"
-                helperText="Enter your 10-digit mobile number"
-              />
+              <p className="mt-1.5 text-xs text-gray-500">
+                Enter your 10-digit mobile number
+              </p>
             </div>
           </div>
 

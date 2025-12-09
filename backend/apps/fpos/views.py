@@ -26,7 +26,7 @@ from datetime import date
 
 class FPOProfileAPIView(APIView):
     """
-    Get or update FPO profile
+    Get, create or update FPO profile
     """
     permission_classes = [IsAuthenticated, IsFPO]
     
@@ -45,6 +45,37 @@ class FPOProfileAPIView(APIView):
             return Response(
                 response_error(message="FPO profile not found"),
                 status=404
+            )
+    
+    def post(self, request):
+        """Create FPO profile"""
+        try:
+            # Check if profile already exists
+            existing_profile = FPOProfile.objects.filter(user=request.user).first()
+            if existing_profile:
+                return Response(
+                    response_error(message="Profile already exists. Use PATCH to update."),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            serializer = FPOProfileSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(user=request.user)
+                return Response(
+                    response_success(
+                        message="Profile created successfully",
+                        data=serializer.data
+                    ),
+                    status=status.HTTP_201_CREATED
+                )
+            return Response(
+                response_error(message="Validation failed", errors=serializer.errors),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                response_error(message=f"Failed to create profile: {str(e)}"),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     def patch(self, request):

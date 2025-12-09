@@ -228,6 +228,8 @@ export const fpoAPI = {
     pincode: string;
     village?: string;
     primary_crops?: string[];
+    latitude?: number;
+    longitude?: number;
   }) =>
     api.post<APIResponse>('/fpos/create-farmer/', data),
   

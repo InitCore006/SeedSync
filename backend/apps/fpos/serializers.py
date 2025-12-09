@@ -1,6 +1,7 @@
 """FPO Serializers"""
 from rest_framework import serializers
 from .models import FPOProfile, FPOMembership, FPOWarehouse, FPOJoinRequest
+from apps.farmers.models import FarmerProfile
 
 class FPOProfileSerializer(serializers.ModelSerializer):
     distance = serializers.FloatField(read_only=True, required=False)
@@ -8,11 +9,26 @@ class FPOProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = FPOProfile
         fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+class FarmerProfileLightSerializer(serializers.ModelSerializer):
+    """Lightweight farmer profile serializer for FPO membership list"""
+    phone_number = serializers.CharField(source='user.phone_number', read_only=True)
+    
+    class Meta:
+        model = FarmerProfile
+        fields = [
+            'id', 'full_name', 'father_name', 'phone_number',
+            'total_land_acres', 'district', 'state', 'pincode', 'village',
+            'primary_crops', 'latitude', 'longitude', 'kyc_status',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = fields
 
 class FPOMembershipSerializer(serializers.ModelSerializer):
-    farmer_name = serializers.CharField(source='farmer.user.get_full_name', read_only=True)
-    fpo_name = serializers.CharField(source='fpo.fpo_name', read_only=True)
+    farmer = FarmerProfileLightSerializer(read_only=True)
+    farmer_name = serializers.CharField(source='farmer.full_name', read_only=True)
+    fpo_name = serializers.CharField(source='fpo.organization_name', read_only=True)
     
     class Meta:
         model = FPOMembership

@@ -16,6 +16,7 @@ import { UserPlus, Search, Phone, Mail, Calendar, Eye, Trash2, Package } from 'l
 import { API } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { CROPS, INDIAN_STATES } from '@/lib/constants';
+import { stateNameToCode } from '@/lib/utils/stateMapping';
 
 interface AddMemberModalProps {
   isOpen: boolean;
@@ -43,7 +44,44 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
     pincode: '',
     village: '',
     primary_crops: [] as string[],
+    latitude: '',
+    longitude: '',
   });
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
+
+  const fetchCoordinates = async () => {
+    if (!newFormData.district || !newFormData.state) {
+      toast.error('Please fill district and state first');
+      return;
+    }
+    
+    setIsFetchingLocation(true);
+    
+    try {
+      const stateName = INDIAN_STATES.find(s => s[0] === newFormData.state)?.[1] || newFormData.state;
+      const address = `${newFormData.village ? newFormData.village + ', ' : ''}${newFormData.district}, ${stateName}, ${newFormData.pincode || ''}`;
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`
+      );
+      
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        setNewFormData({
+          ...newFormData,
+          latitude: parseFloat(data[0].lat).toFixed(6),
+          longitude: parseFloat(data[0].lon).toFixed(6)
+        });
+        toast.success('Location coordinates fetched successfully!');
+      } else {
+        toast.error('Could not find coordinates for this address');
+      }
+    } catch (error) {
+      toast.error('Failed to fetch coordinates');
+    } finally {
+      setIsFetchingLocation(false);
+    }
+  };
 
   const handleExistingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +101,53 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
 
   const handleNewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation
+    if (!newFormData.phone_number || newFormData.phone_number.length !== 10) {
+      toast.error('Please enter a valid 10-digit phone number');
+      return;
+    }
+    
+    if (!newFormData.phone_number.match(/^[6-9]\d{9}$/)) {
+      toast.error('Phone number must start with 6-9 and be 10 digits');
+      return;
+    }
+    
+    if (!newFormData.full_name.trim()) {
+      toast.error('Please enter farmer\'s full name');
+      return;
+    }
+    
+    if (newFormData.full_name.trim().length < 3) {
+      toast.error('Name must be at least 3 characters long');
+      return;
+    }
+    
+    if (!newFormData.total_land_acres || parseFloat(newFormData.total_land_acres) <= 0) {
+      toast.error('Please enter a valid land area');
+      return;
+    }
+    
+    if (newFormData.primary_crops.length === 0) {
+      toast.error('Please select at least one primary crop');
+      return;
+    }
+    
+    if (!newFormData.district.trim()) {
+      toast.error('Please enter district');
+      return;
+    }
+    
+    if (!newFormData.state) {
+      toast.error('Please select state');
+      return;
+    }
+    
+    if (!newFormData.pincode || newFormData.pincode.length !== 6) {
+      toast.error('Please enter a valid 6-digit pincode');
+      return;
+    }
+    
     setIsLoading(true);
     try {
       const response = await API.fpo.createFarmer({
@@ -75,6 +160,8 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
         pincode: newFormData.pincode,
         village: newFormData.village,
         primary_crops: newFormData.primary_crops,
+        latitude: newFormData.latitude ? parseFloat(newFormData.latitude) : undefined,
+        longitude: newFormData.longitude ? parseFloat(newFormData.longitude) : undefined,
       });
       
       const data = response.data;
@@ -95,6 +182,8 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
         pincode: '',
         village: '',
         primary_crops: [],
+        latitude: '',
+        longitude: '',
       });
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to create farmer account');
@@ -181,14 +270,22 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
               placeholder="Farmer's full name"
               required
               value={newFormData.full_name}
-              onChange={(e) => setNewFormData({ ...newFormData, full_name: e.target.value })}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                setNewFormData({ ...newFormData, full_name: value });
+              }}
+              maxLength={50}
             />
             
             <Input
               label="Father's Name"
               placeholder="Father's name (optional)"
               value={newFormData.father_name}
-              onChange={(e) => setNewFormData({ ...newFormData, father_name: e.target.value })}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                setNewFormData({ ...newFormData, father_name: value });
+              }}
+              maxLength={50}
             />
           </div>
           
@@ -200,7 +297,7 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
             maxLength={10}
             value={newFormData.phone_number}
             onChange={(e) => {
-              const value = e.target.value.replace(/\D/g, '');
+              const value = e.target.value.replace(/\D/g, '').slice(0, 10);
               setNewFormData({ ...newFormData, phone_number: value });
             }}
           />
@@ -209,6 +306,8 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
             label="Total Land (Acres)"
             type="number"
             step="0.01"
+            min="0.01"
+            max="10000"
             placeholder="Enter total land area"
             required
             value={newFormData.total_land_acres}
@@ -221,14 +320,14 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
             </label>
             <div className="grid grid-cols-2 gap-2">
               {CROPS.map((crop) => (
-                <label key={crop.value} className="flex items-center space-x-2 cursor-pointer">
+                <label key={crop} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors">
                   <input
                     type="checkbox"
-                    checked={newFormData.primary_crops.includes(crop.value)}
-                    onChange={() => toggleCrop(crop.value)}
-                    className="rounded border-gray-300 text-primary focus:ring-primary"
+                    checked={newFormData.primary_crops.includes(crop)}
+                    onChange={() => toggleCrop(crop)}
+                    className="rounded border-gray-300 text-primary focus:ring-primary w-4 h-4"
                   />
-                  <span className="text-sm">{crop.label}</span>
+                  <span className="text-sm select-none">{crop}</span>
                 </label>
               ))}
             </div>
@@ -239,7 +338,11 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
               label="Village"
               placeholder="Village name (optional)"
               value={newFormData.village}
-              onChange={(e) => setNewFormData({ ...newFormData, village: e.target.value })}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                setNewFormData({ ...newFormData, village: value });
+              }}
+              maxLength={50}
             />
             
             <Input
@@ -247,7 +350,11 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
               placeholder="District"
               required
               value={newFormData.district}
-              onChange={(e) => setNewFormData({ ...newFormData, district: e.target.value })}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                setNewFormData({ ...newFormData, district: value });
+              }}
+              maxLength={50}
             />
           </div>
           
@@ -270,10 +377,50 @@ function AddMemberModal({ isOpen, onClose, onAdd }: AddMemberModalProps) {
               maxLength={6}
               value={newFormData.pincode}
               onChange={(e) => {
-                const value = e.target.value.replace(/\D/g, '');
+                const value = e.target.value.replace(/\D/g, '').slice(0, 6);
                 setNewFormData({ ...newFormData, pincode: value });
               }}
             />
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-sm font-medium text-gray-700">
+                Location Coordinates (Optional)
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={fetchCoordinates}
+                isLoading={isFetchingLocation}
+                className="text-xs"
+              >
+                {isFetchingLocation ? 'Fetching...' : 'Fetch from Address'}
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Latitude"
+                type="number"
+                step="0.000001"
+                placeholder="19.076090"
+                value={newFormData.latitude}
+                onChange={(e) => setNewFormData({ ...newFormData, latitude: e.target.value })}
+              />
+              
+              <Input
+                label="Longitude"
+                type="number"
+                step="0.000001"
+                placeholder="72.877426"
+                value={newFormData.longitude}
+                onChange={(e) => setNewFormData({ ...newFormData, longitude: e.target.value })}
+              />
+            </div>
+            <p className="mt-1.5 text-xs text-gray-500">
+              Click "Fetch from Address" to automatically get coordinates
+            </p>
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -358,18 +505,16 @@ function CreateLotModal({ isOpen, onClose, onSuccess, member }: CreateLotModalPr
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Select
-            label="Crop Type"
-            required
-            value={formData.crop_type}
-            onChange={(e) => setFormData({ ...formData, crop_type: e.target.value })}
-            options={[
-              { value: '', label: 'Select Crop Type' },
-              ...CROPS.map(crop => ({ value: crop.value, label: crop.label }))
-            ]}
-          />
-
-          <Input
+            <Select
+              label="Crop Type"
+              required
+              value={formData.crop_type}
+              onChange={(e) => setFormData({ ...formData, crop_type: e.target.value })}
+              options={[
+                { value: '', label: 'Select Crop Type' },
+                ...CROPS.map(crop => ({ value: crop, label: crop }))
+              ]}
+            />          <Input
             label="Crop Variety"
             placeholder="e.g., Pusa Bold (optional)"
             value={formData.crop_variety}

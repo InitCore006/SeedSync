@@ -11,9 +11,14 @@ class ProcessingPlantSerializer(serializers.ModelSerializer):
 class ProcessorProfileSerializer(serializers.ModelSerializer):
     plants = ProcessingPlantSerializer(many=True, read_only=True)
     
+    # Make lat/long optional for create
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    
     class Meta:
         model = ProcessorProfile
         fields = '__all__'
+        read_only_fields = ['user', 'is_verified']
 
 class ProcessingStageLogSerializer(serializers.ModelSerializer):
     stage_display = serializers.CharField(source='get_stage_display', read_only=True)

@@ -31,6 +31,83 @@ from apps.processors.models import ProcessedProduct
 from django.db import transaction
 from apps.processors.models import ProcessedProduct
 
+class RetailerProfileAPIView(APIView):
+    """
+    Get, create or update Retailer profile
+    """
+    permission_classes = [IsAuthenticated, IsRetailer]
+    
+    def get(self, request):
+        """Get retailer profile"""
+        try:
+            retailer = RetailerProfile.objects.get(user=request.user)
+            serializer = RetailerProfileSerializer(retailer)
+            return Response(
+                response_success(
+                    message="Profile fetched successfully",
+                    data=serializer.data
+                )
+            )
+        except RetailerProfile.DoesNotExist:
+            return Response(
+                response_error(message="Retailer profile not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    def post(self, request):
+        """Create retailer profile"""
+        try:
+            # Check if profile already exists
+            existing_profile = RetailerProfile.objects.filter(user=request.user).first()
+            if existing_profile:
+                return Response(
+                    response_error(message="Profile already exists. Use PATCH to update."),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            serializer = RetailerProfileSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(user=request.user)
+                return Response(
+                    response_success(
+                        message="Profile created successfully",
+                        data=serializer.data
+                    ),
+                    status=status.HTTP_201_CREATED
+                )
+            return Response(
+                response_error(message="Validation failed", errors=serializer.errors),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                response_error(message=f"Failed to create profile: {str(e)}"),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def patch(self, request):
+        """Update retailer profile"""
+        try:
+            retailer = RetailerProfile.objects.get(user=request.user)
+            serializer = RetailerProfileSerializer(retailer, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    response_success(
+                        message="Profile updated successfully",
+                        data=serializer.data
+                    )
+                )
+            return Response(
+                response_error(message="Validation failed", errors=serializer.errors),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except RetailerProfile.DoesNotExist:
+            return Response(
+                response_error(message="Retailer profile not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+
 class RetailerProfileViewSet(viewsets.ModelViewSet):
     queryset = RetailerProfile.objects.filter(is_active=True)
     serializer_class = RetailerProfileSerializer

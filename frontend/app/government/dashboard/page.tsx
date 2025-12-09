@@ -1,17 +1,57 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Loading from '@/components/ui/Loading';
 import { useGovtDashboard, useGovtHeatmap } from '@/lib/hooks/useAPI';
 import { formatCurrency, formatNumber } from '@/lib/utils';
-import { TrendingUp, TrendingDown, Users, Package, IndianRupee, MapPin } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Package, IndianRupee, MapPin, Map } from 'lucide-react';
+import { getEntityLocations, type EntityLocation } from '@/lib/api/government';
+import { useAuthStore } from '@/lib/stores/authStore';
+// Dynamically import map to avoid SSR issues
+import dynamic from 'next/dynamic';
+
+const IndiaMap = dynamic(() => import('@/components/ui/IndiaMap'), { 
+  ssr: false,
+  loading: () => (
+    <div className="h-[600px] bg-gray-50 rounded-lg flex items-center justify-center">
+      <Loading />
+    </div>
+  )
+});
 
 function GovernmentDashboardContent() {
   const { dashboard, isError: dashError, isLoading: dashLoading } = useGovtDashboard();
   const { heatmap: heatmapData, isLoading: heatLoading, isError: heatError } = useGovtHeatmap();
+  const { token } = useAuthStore();
+  
+  const [locations, setLocations] = useState<EntityLocation[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
+  
+  // Fetch entity locations for map
+  useEffect(() => {
+    const fetchLocations = async () => {
+      if (!token) return;
+      
+      try {
+        setLocationsLoading(true);
+        const response = await getEntityLocations(token);
+        if (response.success && response.data) {
+          setLocations(response.data.locations);
+        }
+      } catch (error) {
+        console.error('Failed to fetch entity locations:', error);
+        setLocationsError('Failed to load map data');
+      } finally {
+        setLocationsLoading(false);
+      }
+    };
+    
+    fetchLocations();
+  }, [token]);
   
   if (dashLoading) return <Loading fullScreen />;
   if (dashError) {
@@ -33,6 +73,62 @@ function GovernmentDashboardContent() {
         <h1 className="text-3xl font-bold text-gray-900">National Dashboard</h1>
         <p className="text-gray-600 mt-1">Comprehensive overview of India's oilseed value chain</p>
       </div>
+      
+      {/* India Map with Entity Locations */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Entity Distribution Map</CardTitle>
+              <p className="text-sm text-gray-600 mt-1">
+                Geographic distribution of FPOs, Processors, and Farmers
+              </p>
+            </div>
+            <Map className="w-6 h-6 text-primary" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          {locationsLoading ? (
+            <div className="h-[600px] bg-gray-50 rounded-lg flex items-center justify-center">
+              <Loading />
+            </div>
+          ) : locationsError ? (
+            <div className="h-[600px] bg-red-50 rounded-lg flex items-center justify-center">
+              <p className="text-red-600">{locationsError}</p>
+            </div>
+          ) : (
+            <>
+              {/* Legend */}
+              <div className="flex items-center gap-6 mb-4 p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-green-600 rounded-full"></div>
+                  <span className="text-sm font-medium">
+                    FPOs ({locations.filter(l => l.entity_type === 'fpo').length})
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-blue-600 rounded-full"></div>
+                  <span className="text-sm font-medium">
+                    Processors ({locations.filter(l => l.entity_type === 'processor').length})
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-orange-600 rounded-full"></div>
+                  <span className="text-sm font-medium">
+                    Farmers ({locations.filter(l => l.entity_type === 'farmer').length})
+                  </span>
+                </div>
+                <div className="ml-auto text-sm text-gray-600">
+                  Total Locations: {locations.length}
+                </div>
+              </div>
+              
+              {/* Map Component */}
+              <IndiaMap locations={locations} loading={locationsLoading} />
+            </>
+          )}
+        </CardContent>
+      </Card>
       
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

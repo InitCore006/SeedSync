@@ -13,6 +13,7 @@ from .views import (
     SupplyChainTrackingAPIView,
     ProcurementAnalyticsAPIView,
     MarketPricesAnalyticsAPIView,
+    EntityLocationsAPIView,
 )
 
 app_name = 'government'
@@ -21,6 +22,7 @@ urlpatterns = [
     # Core Dashboard
     path('dashboard/', NationalDashboardAPIView.as_view(), name='national-dashboard'),
     path('heatmap/', StateHeatmapAPIView.as_view(), name='state-heatmap'),
+    path('entity-locations/', EntityLocationsAPIView.as_view(), name='entity-locations'),
     
     # Monitoring & Analytics
     path('fpo-monitoring/', FPOMonitoringAPIView.as_view(), name='fpo-monitoring'),

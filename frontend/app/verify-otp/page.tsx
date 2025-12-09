@@ -91,18 +91,79 @@ function VerifyOTPContent() {
           setAuth(user, accessToken, refreshToken);
           toast.success(purpose === 'login' ? 'Login successful!' : 'Account verified successfully!');
           
-          // Redirect based on role
+          // Redirect based on role and purpose
           const userRole = user.role;
-          if (userRole === 'fpo') {
-            router.push('/fpo/dashboard');
-          } else if (userRole === 'processor') {
-            router.push('/processor/dashboard');
-          } else if (userRole === 'government') {
-            router.push('/government/dashboard');
-          } else if (userRole === 'retailer') {
-            router.push('/retailer/dashboard');
+          
+          // For registration, redirect to onboarding
+          if (purpose === 'registration') {
+            if (userRole === 'fpo') {
+              router.push('/fpo/onboarding');
+            } else if (userRole === 'processor') {
+              router.push('/processor/onboarding');
+            } else if (userRole === 'retailer') {
+              router.push('/retailer/onboarding');
+            } else if (userRole === 'government') {
+              router.push('/government/dashboard');
+            } else {
+              router.push('/dashboard');
+            }
           } else {
-            router.push('/dashboard');
+            // For login, check if profile exists, otherwise redirect to onboarding
+            // Try to access profile endpoint to check if profile exists
+            if (userRole === 'fpo') {
+              // Check if FPO profile exists by fetching it
+              fetch(`${ENV.API_URL}/fpos/profile/`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+              })
+                .then(res => {
+                  if (!res.ok) throw new Error('Profile not found');
+                  return res.json();
+                })
+                .then(data => {
+                  if (data.status === 'success' && data.data) {
+                    router.push('/fpo/dashboard');
+                  } else {
+                    router.push('/fpo/onboarding');
+                  }
+                })
+                .catch(() => router.push('/fpo/onboarding'));
+            } else if (userRole === 'processor') {
+              fetch(`${ENV.API_URL}/processors/profile/`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+              })
+                .then(res => {
+                  if (!res.ok) throw new Error('Profile not found');
+                  return res.json();
+                })
+                .then(data => {
+                  if (data.status === 'success' && data.data) {
+                    router.push('/processor/dashboard');
+                  } else {
+                    router.push('/processor/onboarding');
+                  }
+                })
+                .catch(() => router.push('/processor/onboarding'));
+            } else if (userRole === 'retailer') {
+              fetch(`${ENV.API_URL}/retailers/profile/`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+              })
+                .then(res => {
+                  if (!res.ok) throw new Error('Profile not found');
+                  return res.json();
+                })
+                .then(data => {
+                  if (data.status === 'success' && data.data) {
+                    router.push('/retailer/dashboard');
+                  } else {
+                    router.push('/retailer/onboarding');
+                  }
+                })
+                .catch(() => router.push('/retailer/onboarding'));
+            } else if (userRole === 'government') {
+              router.push('/government/dashboard');
+            } else {
+              router.push('/dashboard');
+            }
           }
         } else {
           toast.error('Invalid response format');

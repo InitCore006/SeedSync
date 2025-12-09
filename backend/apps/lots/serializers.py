@@ -99,6 +99,8 @@ class ProcurementLotCreateSerializer(serializers.ModelSerializer):
         # Set available_quantity_quintals equal to quantity_quintals initially
         validated_data['available_quantity_quintals'] = validated_data['quantity_quintals']
         
+        # Location will be auto-assigned from farmer/FPO in model's save() method
+        
         # Check if farmer belongs to an FPO
         try:
             from apps.fpos.models import FPOMembership

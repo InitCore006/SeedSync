@@ -16,6 +16,8 @@ from apps.lots.models import ProcurementLot
 from apps.bids.models import Bid
 from apps.payments.models import Payment
 from apps.users.models import User
+from apps.processors.models import ProcessorProfile
+from apps.retailers.models import RetailerProfile
 
 # Import extended views
 from .views_extended import (
@@ -451,3 +453,123 @@ class RejectRegistrationAPIView(APIView):
             response_error(message="Invalid entity type"),
             status=400
         )
+
+
+class EntityLocationsAPIView(APIView):
+    """
+    Get all entity locations (FPOs, Processors, Farmers) with lat/long coordinates
+    Returns color-coded markers for map visualization
+    """
+    permission_classes = [IsAuthenticated, IsGovernment]
+    
+    def get(self, request):
+        """
+        Fetch all locations from FPO, Processor, and Farmer profiles
+        Returns: List of locations with entity_type, name, coordinates, and metadata
+        """
+        try:
+            locations = []
+            
+            # Fetch FPO locations (all FPOs with coordinates)
+            try:
+                fpo_profiles = FPOProfile.objects.filter(
+                    latitude__isnull=False,
+                    longitude__isnull=False
+                ).exclude(
+                    latitude=0,
+                    longitude=0
+                ).select_related('user')
+                
+                for fpo in fpo_profiles:
+                    locations.append({
+                        'id': str(fpo.id),
+                        'entity_type': 'fpo',
+                        'name': fpo.organization_name,
+                        'latitude': float(fpo.latitude),
+                        'longitude': float(fpo.longitude),
+                        'city': fpo.city or '',
+                        'state': fpo.state or '',
+                        'district': fpo.district or '',
+                        'is_verified': fpo.is_verified if hasattr(fpo, 'is_verified') else False,
+                        'total_members': fpo.total_members if hasattr(fpo, 'total_members') else 0,
+                        'contact_person': fpo.contact_person_name if hasattr(fpo, 'contact_person_name') else '',
+                        'phone': fpo.contact_person_phone if hasattr(fpo, 'contact_person_phone') else '',
+                    })
+            except Exception as e:
+                print(f"Error fetching FPO locations: {str(e)}")
+            
+            # Fetch Processor locations (all processors with coordinates)
+            try:
+                processor_profiles = ProcessorProfile.objects.filter(
+                    latitude__isnull=False,
+                    longitude__isnull=False
+                ).exclude(
+                    latitude=0,
+                    longitude=0
+                ).select_related('user')
+                
+                for processor in processor_profiles:
+                    locations.append({
+                        'id': str(processor.id),
+                        'entity_type': 'processor',
+                        'name': processor.company_name,
+                        'latitude': float(processor.latitude),
+                        'longitude': float(processor.longitude),
+                        'city': processor.city or '',
+                        'state': processor.state or '',
+                        'is_verified': processor.is_verified,
+                        'processing_capacity': float(processor.processing_capacity_quintals_per_day) if processor.processing_capacity_quintals_per_day else None,
+                        'contact_person': processor.contact_person or '',
+                        'phone': processor.phone or '',
+                    })
+            except Exception as e:
+                print(f"Error fetching Processor locations: {str(e)}")
+            
+            # Fetch Farmer locations (all farmers with coordinates)
+            try:
+                farmer_profiles = FarmerProfile.objects.filter(
+                    latitude__isnull=False,
+                    longitude__isnull=False
+                ).exclude(
+                    latitude=0,
+                    longitude=0
+                ).select_related('user')
+                
+                for farmer in farmer_profiles:
+                    locations.append({
+                        'id': str(farmer.id),
+                        'entity_type': 'farmer',
+                        'name': farmer.user.full_name or farmer.user.phone_number,
+                        'latitude': float(farmer.latitude),
+                        'longitude': float(farmer.longitude),
+                        'village': farmer.village or '',
+                        'district': farmer.district or '',
+                        'state': farmer.state or '',
+                        'total_land': float(farmer.total_land_acres) if farmer.total_land_acres else None,
+                        'kyc_status': farmer.kyc_status or 'pending',
+                    })
+            except Exception as e:
+                print(f"Error fetching Farmer locations: {str(e)}")
+            
+            # Summary statistics
+            summary = {
+                'total_locations': len(locations),
+                'fpo_count': len([l for l in locations if l['entity_type'] == 'fpo']),
+                'processor_count': len([l for l in locations if l['entity_type'] == 'processor']),
+                'farmer_count': len([l for l in locations if l['entity_type'] == 'farmer']),
+            }
+            
+            return Response(
+                response_success(
+                    message="Entity locations fetched successfully",
+                    data={
+                        'locations': locations,
+                        'summary': summary
+                    }
+                )
+            )
+        except Exception as e:
+            return Response(
+                response_error(message=f"Error fetching entity locations: {str(e)}"),
+                status=500
+            )
