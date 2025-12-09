@@ -30,11 +30,14 @@ interface LogisticsState {
   } | null;
   
   isLoading: boolean;
+  error: string | null;
   
   // Actions - Profile
   setProfile: (profile: LogisticsPartner | null) => void;
   setVehicles: (vehicles: Vehicle[]) => void;
   addVehicle: (vehicle: Vehicle) => void;
+  fetchProfile: () => Promise<void>;
+  fetchStats: () => Promise<void>;
   
   // Actions - Shipments
   setShipments: (shipments: Shipment[]) => void;
@@ -49,10 +52,11 @@ interface LogisticsState {
   
   // General actions
   setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
   clearData: () => void;
 }
 
-export const useLogisticsStore = create<LogisticsState>((set) => ({
+export const useLogisticsStore = create<LogisticsState>((set, get) => ({
   // Initial state
   profile: null,
   vehicles: [],
@@ -63,9 +67,10 @@ export const useLogisticsStore = create<LogisticsState>((set) => ({
   stats: null,
   earnings: null,
   isLoading: false,
+  error: null,
 
   // Profile actions
-  setProfile: (profile) => set({ profile }),
+  setProfile: (profile) => set({ profile, error: null }),
   
   setVehicles: (vehicles) => set({ vehicles }),
   
@@ -105,6 +110,42 @@ export const useLogisticsStore = create<LogisticsState>((set) => ({
   // General actions
   setLoading: (loading) => set({ isLoading: loading }),
   
+  setError: (error) => set({ error }),
+  
+  fetchProfile: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const { logisticsAPI } = await import('@/services/logisticsService');
+      const response = await logisticsAPI.getMyProfile();
+      
+      // Unwrap ApiSuccess response: response.data.data || response.data
+      const profileData = response.data.data || response.data;
+      
+      set({ profile: profileData, isLoading: false, error: null });
+    } catch (error: any) {
+      console.error('Failed to fetch logistics profile:', error);
+      set({ 
+        error: error?.response?.data?.message || 'Failed to fetch profile',
+        isLoading: false 
+      });
+    }
+  },
+  
+  fetchStats: async () => {
+    try {
+      const { logisticsAPI } = await import('@/services/logisticsService');
+      const response = await logisticsAPI.getStats();
+      
+      // Unwrap ApiSuccess response if needed
+      const statsData = response.data.data || response.data;
+      
+      set({ stats: statsData });
+    } catch (error: any) {
+      console.error('Failed to fetch logistics stats:', error);
+      set({ error: error?.response?.data?.message || 'Failed to fetch stats' });
+    }
+  },
+  
   clearData: () => set({
     profile: null,
     vehicles: [],
@@ -114,5 +155,6 @@ export const useLogisticsStore = create<LogisticsState>((set) => ({
     tripHistory: [],
     stats: null,
     earnings: null,
+    error: null,
   }),
 }));

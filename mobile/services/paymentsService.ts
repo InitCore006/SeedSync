@@ -11,7 +11,7 @@ export const paymentsAPI = {
     status?: string;
     start_date?: string;
     end_date?: string;
-  }): Promise<AxiosResponse<PaginatedResponse<Payment>>> => {
+  }): Promise<AxiosResponse<ApiSuccess<Payment[]>>> => {
     return api.get(ENDPOINTS.PAYMENTS.MY_PAYMENTS, { params });
   },
 
@@ -19,9 +19,9 @@ export const paymentsAPI = {
    * Get wallet balance and summary
    */
   getMyWallet: (): Promise<AxiosResponse<ApiSuccess<{
-    balance: number;
-    pending_payments: number;
-    total_earned: number;
+    balance: string;
+    pending_payments: string;
+    total_earned: string;
     currency: string;
   }>>> => {
     return api.get(ENDPOINTS.PAYMENTS.MY_WALLET);
@@ -30,7 +30,7 @@ export const paymentsAPI = {
   /**
    * Get payment details by ID
    */
-  getPaymentDetail: (id: number): Promise<AxiosResponse<Payment>> => {
+  getPaymentDetail: (id: number): Promise<AxiosResponse<ApiSuccess<Payment>>> => {
     return api.get(ENDPOINTS.PAYMENTS.DETAIL(id));
   },
 
@@ -85,12 +85,19 @@ export const paymentsAPI = {
   getFarmerEarnings: (): Promise<AxiosResponse<ApiSuccess<{
     payments: Payment[];
     summary: {
-      total_earnings: number;
-      pending_payments: number;
+      total_earnings: string;
+      pending_payments: string;
       total_payments: number;
       completed_payments: number;
     };
   }>>> => {
-    return api.get('/wallets/farmer_earnings/');
+    return api.get(ENDPOINTS.PAYMENTS.FARMER_EARNINGS);
+  },
+
+  /**
+   * Get payment by ID (alternative method)
+   */
+  getPaymentById: (id: number): Promise<AxiosResponse<ApiSuccess<Payment>>> => {
+    return api.get(ENDPOINTS.PAYMENTS.DETAIL(id));
   },
 };

@@ -61,13 +61,9 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
   const fetchProfileData = async () => {
     try {
       if (isFarmer) {
-        const { farmersAPI } = await import('@/services/farmersService');
-        const response = await farmersAPI.getMyProfile();
-        useFarmerStore.getState().setProfile(response.data);
+        await useFarmerStore.getState().fetchProfile();
       } else if (isLogistics) {
-        const { logisticsAPI } = await import('@/services/logisticsService');
-        const response = await logisticsAPI.getMyProfile();
-        useLogisticsStore.getState().setProfile(response.data);
+        await useLogisticsStore.getState().fetchProfile();
       }
     } catch (error) {
       console.error('Failed to fetch profile:', error);
@@ -166,12 +162,12 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
             <View style={styles.profileSection}>
               <View style={styles.avatarContainer}>
                 <Text style={styles.avatarText}>
-                  {(activeProfile?.user.profile?.full_name?.charAt(0) || user?.phone_number?.charAt(0) || 'U').toUpperCase()}
+                  {(activeProfile?.user.profile?.full_name?.charAt(0) || activeProfile?.user.profile?.full_name?.charAt(0) || user?.phone_number?.charAt(0) || 'U').toUpperCase()}
                 </Text>
               </View>
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName} numberOfLines={1}>
-                  {activeProfile?.user.profile?.full_name || 'User'}
+                  {(isFarmer && activeProfile?.full_name) || (isLogistics && activeProfile?.company_name) || user?.profile?.full_name || 'User'}
                 </Text>
                 <Text style={styles.profileRole}>
                   {isFarmer ? 'Farmer' : isLogistics ? 'Logistics Partner' : user?.role || 'User'}

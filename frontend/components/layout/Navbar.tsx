@@ -2,6 +2,7 @@
 
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { Bell, LogOut, Menu, User, X } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -39,8 +40,15 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
             )}
             
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">S</span>
+              <div className="relative w-10 h-10">
+                <Image
+                  src="/images/logo.png"
+                  alt="SeedSync Logo"
+                  width={40}
+                  height={40}
+                  className="object-contain"
+                  priority
+                />
               </div>
               <span className="text-xl font-bold text-gray-900">
                 {ENV.APP_NAME}
@@ -50,11 +58,7 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
           
           {/* Right side */}
           <div className="flex items-center gap-3">
-            {/* Notifications */}
-            <button className="relative p-2 rounded-lg hover:bg-gray-100">
-              <Bell className="h-5 w-5 text-gray-600" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
-            </button>
+            
             
             {/* User menu */}
             <div className="relative">
@@ -82,21 +86,7 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
                     onClick={() => setShowUserMenu(false)}
                   />
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
-                    <Link
-                      href="/profile"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      onClick={() => setShowUserMenu(false)}
-                    >
-                      Profile
-                    </Link>
-                    <Link
-                      href="/settings"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      onClick={() => setShowUserMenu(false)}
-                    >
-                      Settings
-                    </Link>
-                    <hr className="my-1 border-gray-200" />
+                    
                     <button
                       onClick={handleLogout}
                       className="w-full text-left px-4 py-2 text-sm text-error hover:bg-gray-100 flex items-center gap-2"

@@ -10,13 +10,14 @@ import Select from '@/components/ui/Select';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import { formatCurrency, formatNumber, formatDate } from '@/lib/utils';
-import { Package, Search, Eye, Wheat, Sprout, Flower2, Leaf, Users, User, ShoppingCart, Warehouse } from 'lucide-react';
+import { Package, Search, Eye, Wheat, Sprout, Flower2, Leaf, Users, User, ShoppingCart, Warehouse, Lightbulb, TrendingUp, Navigation, Car, AlertTriangle } from 'lucide-react';
 import { CROPS, QUALITY_GRADES } from '@/lib/constants';
 import useSWR from 'swr';
 import API from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { toast } from 'react-hot-toast';
+import { BidSuggestion } from '@/lib/types';
 
 // Helper function to get crop icon
 const getCropIcon = (cropType: string) => {
@@ -49,9 +50,23 @@ function MarketplaceContent() {
   const [listingTypeFilter, setListingTypeFilter] = useState('');
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isBidModalOpen, setIsBidModalOpen] = useState(false);
+  const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
   const [selectedLot, setSelectedLot] = useState<any>(null);
   const [bidAmount, setBidAmount] = useState('');
   const [bidQuantity, setBidQuantity] = useState('');
+  const [bidSuggestion, setBidSuggestion] = useState<BidSuggestion | null>(null);
+  const [originalSuggestion, setOriginalSuggestion] = useState<BidSuggestion | null>(null);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<string>('');
+
+  // Vehicle types with rates
+  const vehicleTypes = [
+    { type: 'mini_truck', label: 'Mini Truck (1 ton)', capacity_tons: 1, rate_per_km: 12 },
+    { type: 'small_truck', label: 'Small Truck (3 tons)', capacity_tons: 3, rate_per_km: 18 },
+    { type: 'medium_truck', label: 'Medium Truck (7 tons)', capacity_tons: 7, rate_per_km: 25 },
+    { type: 'large_truck', label: 'Large Truck (15 tons)', capacity_tons: 15, rate_per_km: 35 },
+    { type: 'trailer', label: 'Trailer (20+ tons)', capacity_tons: 20, rate_per_km: 50 },
+  ];
 
   const { data, error, isLoading, mutate } = useSWR(
     ['/marketplace/lots', cropFilter, gradeFilter, listingTypeFilter],
@@ -65,6 +80,132 @@ function MarketplaceContent() {
   const handleViewLot = (lot: any) => {
     setSelectedLot(lot);
     setIsViewModalOpen(true);
+  };
+
+  const handleGetSuggestion = async (lot: any) => {
+    // Check if user is processor
+    if (user?.role !== 'processor') {
+      toast.error('AI bid suggestion is only available for processors');
+      return;
+    }
+
+    setSelectedLot(lot);
+    setLoadingSuggestion(true);
+    setIsSuggestionModalOpen(true);
+    setBidSuggestion(null);
+
+    try {
+      console.log('Requesting bid suggestion for lot:', lot.id);
+      const response = await API.processor.getBidSuggestion(lot.id);
+      console.log('Full API Response:', response);
+      console.log('Response data:', response.data);
+      
+      // Handle both possible response structures: response.data.data or response.data
+      const suggestionData = response.data?.data || response.data;
+      console.log('Suggestion data:', suggestionData);
+      
+      if (!suggestionData || !suggestionData.recommended_vehicle_type) {
+        throw new Error('Invalid response structure from server');
+      }
+      
+      setBidSuggestion(suggestionData);
+      setOriginalSuggestion(suggestionData);
+      setSelectedVehicle(suggestionData.recommended_vehicle_type);
+    } catch (error: any) {
+      console.error('Bid suggestion error - Full error:', error);
+      console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
+      console.error('Error response status:', error.response?.status);
+      
+      const errorMessage = error?.response?.data?.detail || 
+                          error?.response?.data?.message || 
+                          error?.message ||
+                          'Failed to get bid suggestion';
+      
+      toast.error(errorMessage);
+    } finally {
+      setLoadingSuggestion(false);
+    }
+  };
+
+  // Recalculate costs based on selected vehicle
+  const recalculateCosts = (vehicleType: string) => {
+    if (!originalSuggestion) return;
+
+    const vehicle = vehicleTypes.find(v => v.type === vehicleType);
+    if (!vehicle) return;
+
+    const quantity = parseFloat(originalSuggestion.lot_quantity_quintals.toString());
+    const distance = originalSuggestion.distance_km;
+    
+    // Recalculate logistics costs
+    const transport_cost = distance * vehicle.rate_per_km;
+    const loading_cost = quantity * 20;
+    const unloading_cost = quantity * 20;
+    const toll_cost = distance * 0.5;
+    const total_logistics_cost = transport_cost + loading_cost + unloading_cost + toll_cost;
+    
+    // Recalculate total costs
+    const lot_total_price = parseFloat(originalSuggestion.lot_total_price.toString());
+    const processing_cost = quantity * 500;
+    const total_cost_with_logistics = lot_total_price + total_logistics_cost + processing_cost;
+    
+    // Recalculate financials
+    const expected_revenue = parseFloat(originalSuggestion.expected_processing_revenue.toString());
+    const expected_net_profit = expected_revenue - total_cost_with_logistics;
+    const roi_percentage = (expected_net_profit / total_cost_with_logistics) * 100;
+    
+    // Recalculate confidence and recommendation
+    let confidence_score = Math.min(100, Math.floor(roi_percentage * 2));
+    if (distance > 500) confidence_score -= 20;
+    if (quantity < 10) confidence_score -= 10;
+    confidence_score = Math.max(0, confidence_score);
+    
+    const should_bid = roi_percentage >= 15;
+    
+    // Update suggestion
+    setBidSuggestion({
+      ...originalSuggestion,
+      recommended_vehicle_type: vehicleType,
+      vehicle_capacity_tons: vehicle.capacity_tons,
+      logistics_cost_breakdown: {
+        transport_cost,
+        loading_cost,
+        unloading_cost,
+        toll_cost,
+        total_logistics_cost,
+      },
+      total_logistics_cost,
+      total_cost_with_logistics,
+      expected_net_profit,
+      roi_percentage,
+      confidence_score,
+      should_bid,
+      recommendation_reason: should_bid 
+        ? `${roi_percentage >= 30 ? 'Excellent' : 'Good'} opportunity! ${roi_percentage >= 30 ? 'High' : 'Positive'} ROI of ${roi_percentage.toFixed(1)}% with ${distance.toFixed(2)} km distance.`
+        : `ROI of ${roi_percentage.toFixed(1)}% is below the 15% threshold. Consider alternative lots or negotiate pricing.`,
+      suggested_bid_min: lot_total_price * 0.9,
+      suggested_bid_max: lot_total_price * 1.05,
+    });
+  };
+
+  const handleVehicleChange = (vehicleType: string) => {
+    setSelectedVehicle(vehicleType);
+    recalculateCosts(vehicleType);
+  };
+
+  const handleProceedToBid = () => {
+    setIsSuggestionModalOpen(false);
+    // Pre-fill with suggested bid amount
+    if (bidSuggestion && selectedLot) {
+      const suggestedMin = parseFloat(bidSuggestion.suggested_bid_min.toString());
+      const suggestedMax = parseFloat(bidSuggestion.suggested_bid_max.toString());
+      const suggestedAmount = (suggestedMin + suggestedMax) / 2;
+      const suggestedPerUnit = suggestedAmount / selectedLot.quantity_quintals;
+      setBidAmount(suggestedPerUnit.toFixed(2));
+      setBidQuantity(selectedLot.quantity_quintals?.toString() || '');
+    }
+    setIsBidModalOpen(true);
   };
 
   const handlePlaceBid = (lot: any) => {
@@ -289,10 +430,16 @@ function MarketplaceContent() {
                       <span className="font-bold text-green-600">{formatCurrency(lot.expected_price_per_quintal)}/Q</span>
                     </div>
                     <div className="pt-3 border-t flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => handleViewLot(lot)} className="flex-1 flex items-center justify-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleViewLot(lot)} className="flex items-center justify-center gap-2">
                         <Eye className="w-4 h-4" />
                         View
                       </Button>
+                      {user?.role === 'processor' && (
+                        <Button variant="outline" size="sm" onClick={() => handleGetSuggestion(lot)} className="flex items-center justify-center gap-2 border-blue-500 text-blue-600 hover:bg-blue-50">
+                          <Lightbulb className="w-4 h-4" />
+                          AI
+                        </Button>
+                      )}
                       <Button variant="primary" size="sm" onClick={() => handlePlaceBid(lot)} className="flex-1">
                         Place Bid
                       </Button>
@@ -358,10 +505,16 @@ function MarketplaceContent() {
                       <span className="font-bold text-green-600">{formatCurrency(lot.expected_price_per_quintal)}/Q</span>
                     </div>
                     <div className="pt-3 border-t flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => handleViewLot(lot)} className="flex-1 flex items-center justify-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleViewLot(lot)} className="flex items-center justify-center gap-2">
                         <Eye className="w-4 h-4" />
                         View
                       </Button>
+                      {user?.role === 'processor' && (
+                        <Button variant="outline" size="sm" onClick={() => handleGetSuggestion(lot)} className="flex items-center justify-center gap-2 border-blue-500 text-blue-600 hover:bg-blue-50">
+                          <Lightbulb className="w-4 h-4" />
+                          AI
+                        </Button>
+                      )}
                       <Button variant="primary" size="sm" onClick={() => handlePlaceBid(lot)} className="flex-1">
                         Place Bid
                       </Button>
@@ -381,6 +534,219 @@ function MarketplaceContent() {
             <p className="text-gray-600 text-lg">No lots available at the moment</p>
           </CardContent>
         </Card>
+      )}
+
+      {/* AI Bid Suggestion Modal */}
+      {selectedLot && (
+        <Modal isOpen={isSuggestionModalOpen} onClose={() => setIsSuggestionModalOpen(false)} title="AI Bid Suggestion" size="xl">
+          {loadingSuggestion ? (
+            <div className="text-center py-12">
+              <Loading />
+              <p className="mt-4 text-gray-600">Analyzing lot and calculating costs...</p>
+            </div>
+          ) : bidSuggestion ? (
+            <div className="space-y-6">
+              {/* Recommendation Banner */}
+              <div className={`p-4 rounded-lg ${bidSuggestion.should_bid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                <div className="flex items-center gap-3">
+                  {bidSuggestion.should_bid ? (
+                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white">✓</div>
+                  ) : (
+                    <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center text-white">✕</div>
+                  )}
+                  <div className="flex-1">
+                    <h3 className={`text-lg font-bold ${bidSuggestion.should_bid ? 'text-green-900' : 'text-red-900'}`}>
+                      {bidSuggestion.should_bid ? 'Recommended to Bid' : 'Not Recommended'}
+                    </h3>
+                    <p className={`text-sm ${bidSuggestion.should_bid ? 'text-green-700' : 'text-red-700'}`}>
+                      Confidence: {bidSuggestion.confidence_score}%
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-gray-700">{bidSuggestion.recommendation_reason}</p>
+              </div>
+
+              {/* Vehicle Selector */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h4 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
+                  <Car className="w-5 h-5" />
+                  Select Vehicle Type (Recalculates Costs)
+                </h4>
+                <Select
+                  value={selectedVehicle}
+                  onChange={(e) => handleVehicleChange(e.target.value)}
+                  options={vehicleTypes.map(v => ({ 
+                    value: v.type, 
+                    label: `${v.label} - ₹${v.rate_per_km}/km` 
+                  }))}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Key Metrics */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                    <span className="text-sm text-gray-600">Expected ROI</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-600">{parseFloat(bidSuggestion.roi_percentage.toString()).toFixed(1)}%</p>
+                </div>
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Navigation className="w-5 h-5 text-blue-600" />
+                    <span className="text-sm text-gray-600">Distance</span>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-600">{bidSuggestion.distance_km.toFixed(0)} km</p>
+                </div>
+                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Car className="w-5 h-5 text-orange-600" />
+                    <span className="text-sm text-gray-600">Logistics Cost</span>
+                  </div>
+                  <p className="text-2xl font-bold text-orange-600">{formatCurrency(parseFloat(bidSuggestion.total_logistics_cost.toString()))}</p>
+                </div>
+              </div>
+
+              {/* Logistics Cost Breakdown */}
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                <h4 className="font-bold text-orange-900 mb-3 flex items-center gap-2">
+                  <Car className="w-5 h-5" />
+                  Logistics Cost Breakdown
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Transport Cost ({bidSuggestion.distance_km.toFixed(2)} km × ₹{vehicleTypes.find(v => v.type === selectedVehicle)?.rate_per_km}/km)</span>
+                    <span className="font-semibold">{formatCurrency(bidSuggestion.logistics_cost_breakdown.transport_cost)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Loading Cost ({parseFloat(bidSuggestion.lot_quantity_quintals.toString()).toFixed(2)} Q × ₹20/Q)</span>
+                    <span className="font-semibold">{formatCurrency(bidSuggestion.logistics_cost_breakdown.loading_cost)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Unloading Cost ({parseFloat(bidSuggestion.lot_quantity_quintals.toString()).toFixed(2)} Q × ₹20/Q)</span>
+                    <span className="font-semibold">{formatCurrency(bidSuggestion.logistics_cost_breakdown.unloading_cost)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Toll Cost ({bidSuggestion.distance_km.toFixed(2)} km × ₹0.5/km)</span>
+                    <span className="font-semibold">{formatCurrency(bidSuggestion.logistics_cost_breakdown.toll_cost)}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t-2 border-orange-300">
+                    <span className="font-bold text-orange-900">Total Logistics Cost</span>
+                    <span className="font-bold text-orange-600">{formatCurrency(bidSuggestion.logistics_cost_breakdown.total_logistics_cost)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Analysis */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-bold text-gray-900 mb-3">Financial Analysis</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Lot Price ({parseFloat(bidSuggestion.lot_quantity_quintals.toString()).toFixed(2)} Q × ₹{parseFloat(bidSuggestion.lot_expected_price_per_quintal.toString()).toFixed(2)}/Q)</span>
+                    <span className="font-semibold">{formatCurrency(parseFloat(bidSuggestion.lot_total_price.toString()))}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total Logistics Cost</span>
+                    <span className="font-semibold">{formatCurrency(parseFloat(bidSuggestion.total_logistics_cost.toString()))}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Processing Cost ({parseFloat(bidSuggestion.lot_quantity_quintals.toString()).toFixed(2)} Q × ₹500/Q)</span>
+                    <span className="font-semibold">{formatCurrency(parseFloat(bidSuggestion.lot_quantity_quintals.toString()) * 500)}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-gray-300">
+                    <span className="font-semibold text-gray-900">Total Cost</span>
+                    <span className="font-bold">{formatCurrency(parseFloat(bidSuggestion.total_cost_with_logistics.toString()))}</span>
+                  </div>
+                  <div className="flex justify-between mt-3 pt-2 border-t-2 border-gray-300">
+                    <span className="text-gray-600">Expected Revenue ({parseFloat(bidSuggestion.lot_quantity_quintals.toString()).toFixed(2)} Q processed)</span>
+                    <span className="font-semibold text-green-600">{formatCurrency(parseFloat(bidSuggestion.expected_processing_revenue.toString()))}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-gray-300 bg-green-50 -mx-4 px-4 py-2 rounded">
+                    <span className="font-bold text-green-900">Net Profit</span>
+                    <span className="font-bold text-green-600">{formatCurrency(parseFloat(bidSuggestion.expected_net_profit.toString()))}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Logistics Details */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-bold text-gray-900 mb-3">Logistics Details</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-sm text-gray-600">Selected Vehicle</p>
+                    <div className="flex items-center gap-2">
+                      <Car className="w-4 h-4 text-blue-600" />
+                      <p className="font-semibold capitalize">{selectedVehicle.replace('_', ' ')}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Travel Time</p>
+                    <p className="font-semibold">~{Math.round(bidSuggestion.travel_duration_minutes)} mins</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Distance</p>
+                    <p className="font-semibold">{bidSuggestion.distance_km.toFixed(2)} km ({bidSuggestion.distance_calculation_method === 'osrm' ? 'Road' : 'Est.'})</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Vehicle Capacity</p>
+                    <p className="font-semibold">{vehicleTypes.find(v => v.type === selectedVehicle)?.capacity_tons} tons</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Lot Crop Type</p>
+                    <p className="font-semibold">{bidSuggestion.lot_crop_type}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Lot Quantity</p>
+                    <p className="font-semibold">{parseFloat(bidSuggestion.lot_quantity_quintals.toString()).toFixed(2)} Q</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Suggested Bid Range */}
+              <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-300">
+                <h4 className="font-bold text-blue-900 mb-3">Suggested Bid Range</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center">
+                    <p className="text-sm text-blue-700 mb-1">Minimum Bid</p>
+                    <p className="text-2xl font-bold text-blue-600">{formatCurrency(parseFloat(bidSuggestion.suggested_bid_min.toString()))}</p>
+                    <p className="text-sm text-blue-600">{formatCurrency(parseFloat(bidSuggestion.suggested_bid_min.toString()) / parseFloat(selectedLot.quantity_quintals.toString()))}/Q</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-blue-700 mb-1">Maximum Bid</p>
+                    <p className="text-2xl font-bold text-blue-600">{formatCurrency(parseFloat(bidSuggestion.suggested_bid_max.toString()))}</p>
+                    <p className="text-sm text-blue-600">{formatCurrency(parseFloat(bidSuggestion.suggested_bid_max.toString()) / parseFloat(selectedLot.quantity_quintals.toString()))}/Q</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Warnings */}
+              {bidSuggestion.warnings.length > 0 && (
+                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                    <h4 className="font-bold text-yellow-900">Important Considerations</h4>
+                  </div>
+                  <ul className="space-y-1 text-sm text-yellow-800">
+                    {bidSuggestion.warnings.map((warning, index) => (
+                      <li key={index}>• {warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4 border-t">
+                <Button variant="outline" onClick={() => setIsSuggestionModalOpen(false)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button variant="primary" onClick={handleProceedToBid} className="flex-1">
+                  Proceed to Place Bid
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </Modal>
       )}
 
       {/* View Lot Modal */}

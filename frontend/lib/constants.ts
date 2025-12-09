@@ -84,14 +84,14 @@ export const QUALITY_GRADES = {
 
 // Crop types
 export const CROPS = [
-  { value: 'soybean', label: 'Soybean' },
-  { value: 'mustard', label: 'Mustard' },
-  { value: 'groundnut', label: 'Groundnut' },
-  { value: 'sunflower', label: 'Sunflower' },
-  { value: 'safflower', label: 'Safflower' },
-  { value: 'sesame', label: 'Sesame' },
-  { value: 'linseed', label: 'Linseed' },
-  { value: 'niger', label: 'Niger' },
+  'Soybean',
+  'Mustard',
+  'Groundnut',
+  'Sunflower',
+  'Safflower',
+  'Sesame',
+  'Linseed',
+  'Niger',
 ] as const;
 
 // Indian states

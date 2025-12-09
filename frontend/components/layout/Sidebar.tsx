@@ -18,6 +18,15 @@ import {
   Activity,
   Factory,
   Wallet,
+  MapPin,
+  Shield,
+  TrendingDown,
+  Building2,
+  AlertCircle,
+  DollarSign,
+  PieChart,
+  Globe,
+  Award,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -95,12 +104,6 @@ const navItems: NavItem[] = [
     icon: <Home className="h-5 w-5" />,
     roles: [USER_ROLES.PROCESSOR],
   },
-  // {
-  //   label: 'Procurement',
-  //   href: '/processor/procurement',
-  //   icon: <Package className="h-5 w-5" />,
-  //   roles: [USER_ROLES.PROCESSOR],
-  // },
   {
     label: 'My Bids',
     href: '/processor/bids',
@@ -190,21 +193,33 @@ const navItems: NavItem[] = [
   
   // Government specific
   {
-    label: 'Dashboard',
+    label: 'National Dashboard',
     href: '/government/dashboard',
     icon: <Home className="h-5 w-5" />,
     roles: [USER_ROLES.GOVERNMENT],
   },
   {
     label: 'FPO Monitoring',
-    href: '/government/monitoring',
+    href: '/government/fpo-monitoring',
+    icon: <Building2 className="h-5 w-5" />,
+    roles: [USER_ROLES.GOVERNMENT],
+  },
+  {
+    label: 'Farmer Registry',
+    href: '/government/farmer-registry',
     icon: <Users className="h-5 w-5" />,
     roles: [USER_ROLES.GOVERNMENT],
   },
   {
-    label: 'Approvals',
-    href: '/government/approvals',
-    icon: <CheckCircle className="h-5 w-5" />,
+    label: 'Processor Monitoring',
+    href: '/government/processor-monitoring',
+    icon: <Factory className="h-5 w-5" />,
+    roles: [USER_ROLES.GOVERNMENT],
+  },
+  {
+    label: 'Retailer Analytics',
+    href: '/government/retailer-analytics',
+    icon: <ShoppingCart className="h-5 w-5" />,
     roles: [USER_ROLES.GOVERNMENT],
   },
   {
@@ -213,6 +228,19 @@ const navItems: NavItem[] = [
     icon: <Activity className="h-5 w-5" />,
     roles: [USER_ROLES.GOVERNMENT],
   },
+  {
+    label: 'Procurement Analytics',
+    href: '/government/procurement',
+    icon: <BarChart3 className="h-5 w-5" />,
+    roles: [USER_ROLES.GOVERNMENT],
+  },
+  {
+    label: 'Market Prices',
+    href: '/government/market-prices',
+    icon: <TrendingUp className="h-5 w-5" />,
+    roles: [USER_ROLES.GOVERNMENT],
+  },
+
   
   // Common
   // {

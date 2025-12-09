@@ -336,6 +336,10 @@ export const processorAPI = {
   placeBid: (data: { lot_id: string; bid_amount_per_quintal: number; quantity_quintals: number; remarks?: string }) =>
     api.post<APIResponse>('/processors/bids/', data),
 
+  // Get bid suggestion
+  getBidSuggestion: (lotId: string) =>
+    api.post<APIResponse>('/processors/profile/suggest-bid/', { lot_id: lotId }),
+
   // Get procurement opportunities
   getProcurement: (params?: { 
     view?: 'available' | 'history';
@@ -507,13 +511,46 @@ export const governmentAPI = {
   getHeatmap: (params?: { crop_type?: string; year?: number }) =>
     api.get<APIResponse>('/government/heatmap/', { params }),
 
-  // Get district performance
-  getDistricts: (params?: { state?: string; crop_type?: string }) =>
-    api.get<PaginatedResponse<any>>('/government/districts/', { params }),
-
   // Get FPO monitoring data
-  getFPOs: (params?: { state?: string; health_score_min?: number }) =>
-    api.get<PaginatedResponse<FPOHealthScore>>('/government/fpos/', { params }),
+  getFPOMonitoring: (params?: { state?: string; district?: string }) =>
+    api.get<APIResponse>('/government/fpo-monitoring/', { params }),
+
+  // Get farmer registry
+  getFarmerRegistry: (params?: { 
+    state?: string; 
+    district?: string; 
+    kyc_status?: string; 
+    crop_type?: string;
+  }) =>
+    api.get<APIResponse>('/government/farmer-registry/', { params }),
+
+  // Get processor monitoring
+  getProcessorMonitoring: (params?: { state?: string }) =>
+    api.get<APIResponse>('/government/processor-monitoring/', { params }),
+
+  // Get retailer analytics
+  getRetailerAnalytics: (params?: { state?: string }) =>
+    api.get<APIResponse>('/government/retailer-analytics/', { params }),
+
+  // Get supply chain tracking
+  getSupplyChainTracking: (params?: { status?: string; crop_type?: string }) =>
+    api.get<APIResponse>('/government/supply-chain-tracking/', { params }),
+
+  // Get procurement analytics
+  getProcurementAnalytics: (params?: { 
+    crop_type?: string; 
+    state?: string; 
+    days?: string;
+  }) =>
+    api.get<APIResponse>('/government/procurement-analytics/', { params }),
+
+  // Get market prices
+  getMarketPrices: (params?: { 
+    crop_type?: string; 
+    state?: string; 
+    days?: string;
+  }) =>
+    api.get<APIResponse>('/government/market-prices/', { params }),
 
   // Get approval queue
   getApprovals: () =>

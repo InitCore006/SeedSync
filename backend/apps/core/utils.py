@@ -102,6 +102,122 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     return round(distance, 2)
 
 
+def calculate_road_distance(origin_lat, origin_lon, dest_lat, dest_lon):
+    """
+    Calculate actual road distance using OSRM (OpenStreetMap Routing)
+    Returns distance in km and estimated duration in minutes
+    Falls back to Haversine formula if OSRM fails
+    """
+    import requests
+    from django.core.cache import cache
+    
+    # Create cache key for 7 days (roads don't change often)
+    cache_key = f"road_dist_{origin_lat}_{origin_lon}_{dest_lat}_{dest_lon}"
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+    
+    # OSRM API endpoint (free public server)
+    url = f"http://router.project-osrm.org/route/v1/driving/{origin_lon},{origin_lat};{dest_lon},{dest_lat}"
+    
+    params = {
+        'overview': 'false',
+        'alternatives': 'false',
+        'steps': 'false'
+    }
+    
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        
+        if data.get('code') == 'Ok' and data.get('routes'):
+            distance_meters = data['routes'][0]['distance']
+            duration_seconds = data['routes'][0]['duration']
+            
+            result = {
+                'distance_km': round(distance_meters / 1000, 2),
+                'duration_minutes': round(duration_seconds / 60, 2),
+                'method': 'osrm'
+            }
+            
+            # Cache for 7 days
+            cache.set(cache_key, result, 60 * 60 * 24 * 7)
+            return result
+    except Exception as e:
+        print(f"OSRM API Error: {e}")
+    
+    # Fallback to Haversine with road approximation (25% extra for curves)
+    straight_distance = calculate_distance(origin_lat, origin_lon, dest_lat, dest_lon)
+    estimated_road_distance = round(straight_distance * 1.25, 2)
+    
+    result = {
+        'distance_km': estimated_road_distance,
+        'duration_minutes': round(estimated_road_distance / 50 * 60, 2),  # Assume 50 km/h average
+        'method': 'estimated'
+    }
+    
+    # Cache fallback for 1 day only
+    cache.set(cache_key, result, 60 * 60 * 24)
+    return result
+
+
+def select_optimal_vehicle(quantity_quintals):
+    """
+    Select appropriate vehicle type based on load quantity
+    1 quintal = 100 kg = 0.1 ton
+    """
+    quantity_tons = float(quantity_quintals) * 0.1
+    
+    if quantity_tons < 1:
+        return 'mini_truck'
+    elif quantity_tons <= 3:
+        return 'small_truck'
+    elif quantity_tons <= 7:
+        return 'medium_truck'
+    elif quantity_tons <= 15:
+        return 'large_truck'
+    else:
+        return 'trailer'
+
+
+def calculate_logistics_cost(distance_km, vehicle_type, quantity_quintals):
+    """
+    Calculate total logistics cost including transport, loading, unloading, and tolls
+    Returns breakdown and total cost in INR
+    """
+    # Vehicle rates per km (INR)
+    VEHICLE_RATES = {
+        'mini_truck': 12,
+        'small_truck': 18,
+        'medium_truck': 25,
+        'large_truck': 35,
+        'trailer': 50,
+    }
+    
+    # Fixed costs per quintal (INR)
+    LOADING_COST_PER_QUINTAL = 20
+    UNLOADING_COST_PER_QUINTAL = 20
+    
+    # Toll estimation (INR per km)
+    TOLL_RATE_PER_KM = 0.5
+    
+    # Calculate components
+    transport_cost = float(distance_km) * VEHICLE_RATES.get(vehicle_type, 25)
+    loading_cost = float(quantity_quintals) * LOADING_COST_PER_QUINTAL
+    unloading_cost = float(quantity_quintals) * UNLOADING_COST_PER_QUINTAL
+    toll_cost = float(distance_km) * TOLL_RATE_PER_KM
+    
+    total_cost = transport_cost + loading_cost + unloading_cost + toll_cost
+    
+    return {
+        'transport_cost': round(transport_cost, 2),
+        'loading_cost': round(loading_cost, 2),
+        'unloading_cost': round(unloading_cost, 2),
+        'toll_cost': round(toll_cost, 2),
+        'total_logistics_cost': round(total_cost, 2)
+    }
+
+
 def get_financial_year():
     """Get current Indian financial year (April to March)"""
     now = datetime.now()

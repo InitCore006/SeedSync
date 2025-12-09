@@ -296,20 +296,14 @@ function MonitoringContent() {
                     <p className="text-xs text-gray-600 mb-1">Procurement Value</p>
                     <p className="text-lg font-bold text-primary">{formatCurrency(fpo.totalProcurement)}</p>
                   </div>
-                 <div>
+                  <div>
                     <p className="text-xs text-gray-600 mb-1">Registered On</p>
-                    <p className="text-sm font-medium text-gray-900">
-                        {formatDate(fpo.registeredOn, 'P')}
-                    </p>
-                    </div>
-
-                    <div>
+                    <p className="text-sm font-medium text-gray-900">{formatDate(fpo.registeredOn, 'short')}</p>
+                  </div>
+                  <div>
                     <p className="text-xs text-gray-600 mb-1">Last Active</p>
-                    <p className="text-sm font-medium text-gray-900">
-                        {formatDate(fpo.lastActive, 'P')}
-                    </p>
-                    </div>
-
+                    <p className="text-sm font-medium text-gray-900">{formatDate(fpo.lastActive, 'short')}</p>
+                  </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Contact</p>
                     <p className="text-sm font-medium text-gray-900">{fpo.contactPerson}</p>
@@ -321,7 +315,7 @@ function MonitoringContent() {
                   <p className="text-xs font-medium text-gray-600 mb-2">CROPS HANDLED</p>
                   <div className="flex flex-wrap gap-2">
                     {fpo.crops.map((crop, idx) => (
-                      <Badge key={idx} variant="status">
+                      <Badge key={idx} variant="outline">
                         {crop}
                       </Badge>
                     ))}

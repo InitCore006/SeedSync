@@ -21,21 +21,21 @@ export const logisticsAPI = {
   /**
    * Get my logistics partner profile
    */
-  getMyProfile: (): Promise<AxiosResponse<LogisticsPartner>> => {
+  getMyProfile: (): Promise<AxiosResponse<ApiSuccess<LogisticsPartner>>> => {
     return api.get(ENDPOINTS.LOGISTICS.MY_PROFILE);
   },
 
   /**
    * Create logistics partner profile (after registration)
    */
-  createProfile: (data: LogisticsPartnerCreateData): Promise<AxiosResponse<LogisticsPartner>> => {
+  createProfile: (data: LogisticsPartnerCreateData): Promise<AxiosResponse<ApiSuccess<LogisticsPartner>>> => {
     return api.post(ENDPOINTS.LOGISTICS.PARTNERS, data);
   },
 
   /**
    * Update logistics partner profile
    */
-  updateProfile: (id: string, data: FormData | Partial<LogisticsPartner>): Promise<AxiosResponse<LogisticsPartner>> => {
+  updateProfile: (id: string, data: FormData | Partial<LogisticsPartner>): Promise<AxiosResponse<ApiSuccess<LogisticsPartner>>> => {
     return api.put(`${ENDPOINTS.LOGISTICS.PARTNERS}${id}/`, data, {
       headers: data instanceof FormData ? {
         'Content-Type': 'multipart/form-data',

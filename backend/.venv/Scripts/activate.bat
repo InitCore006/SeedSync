@@ -12,7 +12,6 @@ if defined _OLD_CODEPAGE (
 set VIRTUAL_ENV=D:\InitCore-GitHub\SeedSync\backend\.venv
 =======
 set "VIRTUAL_ENV=C:\Users\ASUS\Desktop\SIH\SeedSync\backend\.venv"
->>>>>>> 3d2aeeed16a61dc4e231b22f630c2e133629644d
 
 if not defined PROMPT set PROMPT=$P$G
 

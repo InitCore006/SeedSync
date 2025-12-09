@@ -31,26 +31,55 @@ export default function PaymentsScreen() {
 
   const fetchPayments = async () => {
     try {
-      // Try farmer earnings endpoint first, fall back to general payments
+      setLoading(true);
+      
+      // Try farmer earnings endpoint first (for farmers)
       try {
         const earningsRes = await paymentsAPI.getFarmerEarnings();
-        setPayments(earningsRes.data.payments);
-        setWalletData({
-          balance: earningsRes.data.summary.total_earnings,
-          pending_payments: earningsRes.data.summary.pending_payments,
-          total_earned: earningsRes.data.summary.total_earnings,
-          currency: 'INR'
-        });
-      } catch {
-        // Not a farmer or endpoint unavailable, use general endpoints
+        
+        if (earningsRes.data && earningsRes.data.data) {
+          const { payments: farmerPayments, summary } = earningsRes.data.data;
+          setPayments(farmerPayments || []);
+          setWalletData({
+            balance: parseFloat(summary.total_earnings || '0'),
+            pending_payments: parseFloat(summary.pending_payments || '0'),
+            total_earned: parseFloat(summary.total_earnings || '0'),
+            currency: 'INR'
+          });
+          return;
+        }
+      } catch (error: any) {
+        // Not a farmer or endpoint unavailable
+        console.log('Farmer earnings endpoint not available, trying general endpoints');
+      }
+      
+      // Fall back to general endpoints (for FPOs, processors, retailers)
+      try {
         const [paymentsRes, walletRes] = await Promise.all([
           paymentsAPI.getMyPayments(),
           paymentsAPI.getMyWallet(),
         ]);
-        setPayments(paymentsRes.data);
-        setWalletData(walletRes.data);
+        
+        // Handle payments response
+        if (paymentsRes.data && paymentsRes.data.data) {
+          setPayments(paymentsRes.data.data);
+        }
+        
+        // Handle wallet response
+        if (walletRes.data && walletRes.data.data) {
+          const walletInfo = walletRes.data.data;
+          setWalletData({
+            balance: parseFloat(walletInfo.balance || '0'),
+            pending_payments: parseFloat(walletInfo.pending_payments || '0'),
+            total_earned: parseFloat(walletInfo.total_earned || '0'),
+            currency: walletInfo.currency || 'INR'
+          });
+        }
+      } catch (error: any) {
+        console.error('Failed to fetch general payments:', error);
+        Alert.alert('Error', 'Failed to load payment information');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch payments:', error);
       Alert.alert('Error', 'Failed to load payments');
     } finally {
@@ -70,6 +99,20 @@ export default function PaymentsScreen() {
 
   const renderPayment = ({ item }: { item: Payment }) => {
     const statusInfo = getStatusInfo('payment', item.status);
+    
+    // Safely parse amounts
+    const grossAmount = typeof item.gross_amount === 'string' 
+      ? parseFloat(item.gross_amount) 
+      : item.gross_amount;
+    const commissionAmount = typeof item.commission_amount === 'string'
+      ? parseFloat(item.commission_amount)
+      : item.commission_amount || 0;
+    const taxAmount = typeof item.tax_amount === 'string'
+      ? parseFloat(item.tax_amount)
+      : item.tax_amount || 0;
+    const netAmount = typeof item.net_amount === 'string'
+      ? parseFloat(item.net_amount)
+      : item.net_amount;
 
     return (
       <TouchableOpacity
@@ -78,9 +121,11 @@ export default function PaymentsScreen() {
       >
         <View style={styles.cardHeader}>
           <View style={styles.paymentInfo}>
-            <Text style={styles.paymentId}>Payment #{item.id}</Text>
+            <Text style={styles.paymentId}>
+              {item.payment_id || `Payment #${item.id}`}
+            </Text>
             <Text style={styles.paymentDate}>
-              {new Date(item.created_at).toLocaleDateString('en-IN', {
+              {new Date(item.initiated_at || item.created_at).toLocaleDateString('en-IN', {
                 day: 'numeric',
                 month: 'short',
                 year: 'numeric',
@@ -99,24 +144,24 @@ export default function PaymentsScreen() {
             <View style={styles.amountSection}>
               <Text style={styles.amountLabel}>Gross Amount</Text>
               <Text style={styles.amountValue}>
-                ₹{item.gross_amount.toLocaleString('en-IN')}
+                ₹{grossAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
-            {item.commission_amount > 0 && (
+            {commissionAmount > 0 && (
               <View style={styles.deductionSection}>
                 <Text style={styles.deductionLabel}>Commission</Text>
                 <Text style={styles.deductionValue}>
-                  -₹{item.commission_amount.toLocaleString('en-IN')}
+                  -₹{commissionAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </Text>
               </View>
             )}
           </View>
 
-          {item.tax_amount > 0 && (
+          {taxAmount > 0 && (
             <View style={styles.taxRow}>
-              <Text style={styles.taxLabel}>Tax ({item.tax_percentage}%)</Text>
+              <Text style={styles.taxLabel}>Tax</Text>
               <Text style={styles.taxValue}>
-                ₹{item.tax_amount.toLocaleString('en-IN')}
+                -₹{taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
           )}
@@ -124,7 +169,7 @@ export default function PaymentsScreen() {
           <View style={styles.netRow}>
             <Text style={styles.netLabel}>Net Amount</Text>
             <Text style={styles.netValue}>
-              ₹{item.net_amount.toLocaleString('en-IN')}
+              ₹{netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
           </View>
         </View>
@@ -143,7 +188,7 @@ export default function PaymentsScreen() {
               color={COLORS.secondary}
             />
             <Text style={styles.methodText}>
-              {item.payment_method.replace('_', ' ').toUpperCase()}
+              {item.payment_method?.replace('_', ' ').toUpperCase() || 'N/A'}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={COLORS.secondary} />
@@ -180,19 +225,21 @@ export default function PaymentsScreen() {
             <Ionicons name="wallet" size={24} color={COLORS.primary} />
             <Text style={styles.walletTitle}>Wallet Balance</Text>
           </View>
-          <Text style={styles.walletBalance}>₹{walletData.balance.toLocaleString('en-IN')}</Text>
+          <Text style={styles.walletBalance}>
+            ₹{walletData.balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </Text>
           <View style={styles.walletStats}>
             <View style={styles.walletStat}>
               <Text style={styles.walletStatLabel}>Pending</Text>
               <Text style={styles.walletStatValue}>
-                ₹{walletData.pending_payments.toLocaleString('en-IN')}
+                ₹{walletData.pending_payments.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
             <View style={styles.walletDivider} />
             <View style={styles.walletStat}>
               <Text style={styles.walletStatLabel}>Total Earned</Text>
               <Text style={styles.walletStatValue}>
-                ₹{walletData.total_earned.toLocaleString('en-IN')}
+                ₹{walletData.total_earned.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
           </View>
@@ -243,8 +290,13 @@ export default function PaymentsScreen() {
             ₹
             {payments
               .filter(p => p.status === 'completed')
-              .reduce((sum, p) => sum + p.net_amount, 0)
-              .toLocaleString('en-IN')}
+              .reduce((sum, p) => {
+                const netAmount = typeof p.net_amount === 'string' 
+                  ? parseFloat(p.net_amount) 
+                  : p.net_amount;
+                return sum + (netAmount || 0);
+              }, 0)
+              .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </Text>
         </View>
         <View style={styles.summaryDivider} />
@@ -254,8 +306,13 @@ export default function PaymentsScreen() {
             ₹
             {payments
               .filter(p => p.status === 'pending')
-              .reduce((sum, p) => sum + p.net_amount, 0)
-              .toLocaleString('en-IN')}
+              .reduce((sum, p) => {
+                const netAmount = typeof p.net_amount === 'string'
+                  ? parseFloat(p.net_amount)
+                  : p.net_amount;
+                return sum + (netAmount || 0);
+              }, 0)
+              .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </Text>
         </View>
       </View>

@@ -186,12 +186,12 @@ export default function MyLotsScreen() {
         }
       />
       
-      <TouchableOpacity
+      {/* <TouchableOpacity
         style={styles.fab}
         onPress={() => router.push('/(tabs)/lots/create')}
       >
         <Ionicons name="add" size={32} color={COLORS.white} />
-      </TouchableOpacity>
+      </TouchableOpacity> */}
     </View>
   );
 }

@@ -106,7 +106,7 @@ export default function LoginScreen() {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.registerButton}
               onPress={() => router.push('/(auth)/register-logistics')}
             >
@@ -117,7 +117,7 @@ export default function LoginScreen() {
                 <Text style={styles.registerButtonTitle}>Logistics Partner</Text>
                 <Text style={styles.registerButtonSubtitle}>Transport agricultural products</Text>
               </View>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
       </ScrollView>

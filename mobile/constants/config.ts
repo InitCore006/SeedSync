@@ -57,12 +57,15 @@ export const ENDPOINTS = {
   
   // Payments endpoints
   PAYMENTS: {
-    LIST: '/payments/',
-    MY_PAYMENTS: '/payments/my-payments/',
-    MY_WALLET: '/payments/my-wallet/',
-    DETAIL: (id: number) => `/payments/${id}/`,
-    CREATE: '/payments/create/',
-    VERIFY: (id: number) => `/payments/${id}/verify/`,
+    LIST: '/payments/payments/',
+    MY_PAYMENTS: '/payments/payments/my_payments/',
+    MY_WALLET: '/payments/payments/my_wallet/',
+    PENDING_PAYMENTS: '/payments/wallets/pending_payments/',
+    FARMER_EARNINGS: '/payments/wallets/farmer_earnings/',
+    DETAIL: (id: number) => `/payments/payments/${id}/`,
+    CREATE: '/payments/payments/',
+    VERIFY: (id: number) => `/payments/payments/${id}/verify/`,
+    PROCESS_WALLET_PAYMENT: '/payments/wallets/process_payment/',
   },
   
   // Logistics endpoints
@@ -125,6 +128,7 @@ export const ENDPOINTS = {
     INVENTORY: '/processors/inventory/',
     BIDS: '/processors/bids/',
     PROCUREMENT: '/processors/procurement/',
+    SUGGEST_BID: '/processors/profile/suggest-bid/',
   },
 };
 

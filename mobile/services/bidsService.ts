@@ -1,6 +1,6 @@
 import api from './api';
 import { ENDPOINTS } from '@/constants/config';
-import { Bid, BidCreateData, MyBidsResponse, PaginatedResponse, ApiSuccess } from '@/types/api';
+import { Bid, BidCreateData, MyBidsResponse, PaginatedResponse, ApiSuccess, BidSuggestion } from '@/types/api';
 import { AxiosResponse } from 'axios';
 
 export const bidsAPI = {
@@ -37,5 +37,10 @@ export const bidsAPI = {
   // Reject bid
   rejectBid: (id: number, data?: { reason?: string }): Promise<AxiosResponse<ApiSuccess<Bid>>> => {
     return api.post(ENDPOINTS.BIDS.REJECT(id), data || {});
+  },
+
+  // Get bid suggestion for a lot
+  getBidSuggestion: (lotId: string): Promise<AxiosResponse<ApiSuccess<BidSuggestion>>> => {
+    return api.post(ENDPOINTS.PROCESSOR.SUGGEST_BID, { lot_id: lotId });
   },
 };

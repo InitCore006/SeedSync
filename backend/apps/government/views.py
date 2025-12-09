@@ -17,6 +17,16 @@ from apps.bids.models import Bid
 from apps.payments.models import Payment
 from apps.users.models import User
 
+# Import extended views
+from .views_extended import (
+    FarmerRegistryAPIView,
+    ProcessorMonitoringAPIView,
+    RetailerAnalyticsAPIView,
+    SupplyChainTrackingAPIView,
+    ProcurementAnalyticsAPIView,
+    MarketPricesAnalyticsAPIView
+)
+
 
 class NationalDashboardAPIView(APIView):
     """

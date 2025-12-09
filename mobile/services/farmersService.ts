@@ -23,21 +23,21 @@ export const farmersAPI = {
   /**
    * Get my farmer profile
    */
-  getMyProfile: (): Promise<AxiosResponse<FarmerProfile>> => {
+  getMyProfile: (): Promise<AxiosResponse<ApiSuccess<FarmerProfile>>> => {
     return api.get(ENDPOINTS.FARMERS.MY_PROFILE);
   },
 
   /**
    * Create farmer profile (after registration)
    */
-  createProfile: (data: FarmerProfileCreateData): Promise<AxiosResponse<FarmerProfile>> => {
+  createProfile: (data: FarmerProfileCreateData): Promise<AxiosResponse<ApiSuccess<FarmerProfile>>> => {
     return api.post(ENDPOINTS.FARMERS.PROFILE, data);
   },
 
   /**
    * Update farmer profile
    */
-  updateProfile: (id: string, data: FormData | Partial<FarmerProfile>): Promise<AxiosResponse<FarmerProfile>> => {
+  updateProfile: (id: string, data: FormData | Partial<FarmerProfile>): Promise<AxiosResponse<ApiSuccess<FarmerProfile>>> => {
     return api.put(`${ENDPOINTS.FARMERS.PROFILE}${id}/`, data, {
       headers: data instanceof FormData ? {
         'Content-Type': 'multipart/form-data',

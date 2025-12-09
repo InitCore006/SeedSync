@@ -227,3 +227,165 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     return false;
   }
 }
+
+// ============= Government-specific Utilities =============
+
+// Get health score color for FPOs
+export function getHealthScoreColor(score: number): string {
+  if (score >= 80) return 'text-green-700 bg-green-100 border-green-300';
+  if (score >= 60) return 'text-blue-700 bg-blue-100 border-blue-300';
+  if (score >= 40) return 'text-yellow-700 bg-yellow-100 border-yellow-300';
+  return 'text-red-700 bg-red-100 border-red-300';
+}
+
+// Get health status badge
+export function getHealthStatus(score: number): { label: string; color: string } {
+  if (score >= 80) return { label: 'Excellent', color: 'bg-green-100 text-green-800' };
+  if (score >= 60) return { label: 'Good', color: 'bg-blue-100 text-blue-800' };
+  if (score >= 40) return { label: 'Average', color: 'bg-yellow-100 text-yellow-800' };
+  return { label: 'Poor', color: 'bg-red-100 text-red-800' };
+}
+
+// Get efficiency badge
+export function getEfficiencyBadge(efficiency: number): { label: string; color: string } {
+  if (efficiency >= 90) return { label: 'Excellent', color: 'bg-green-100 text-green-800' };
+  if (efficiency >= 75) return { label: 'Good', color: 'bg-blue-100 text-blue-800' };
+  if (efficiency >= 60) return { label: 'Average', color: 'bg-yellow-100 text-yellow-800' };
+  return { label: 'Poor', color: 'bg-red-100 text-red-800' };
+}
+
+// Get fulfillment rate badge
+export function getFulfillmentBadge(rate: number): { label: string; color: string } {
+  if (rate >= 95) return { label: 'Excellent', color: 'bg-green-100 text-green-800' };
+  if (rate >= 80) return { label: 'Good', color: 'bg-blue-100 text-blue-800' };
+  if (rate >= 60) return { label: 'Average', color: 'bg-yellow-100 text-yellow-800' };
+  return { label: 'Poor', color: 'bg-red-100 text-red-800' };
+}
+
+// Get KYC status badge
+export function getKYCBadge(status: string): { label: string; color: string } {
+  const badges: Record<string, { label: string; color: string }> = {
+    verified: { label: 'Verified', color: 'bg-green-100 text-green-800' },
+    pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
+    rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800' },
+  };
+  return badges[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+}
+
+// Get shipment status badge
+export function getShipmentStatusBadge(status: string): { label: string; color: string } {
+  const badges: Record<string, { label: string; color: string }> = {
+    pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
+    in_transit: { label: 'In Transit', color: 'bg-blue-100 text-blue-800' },
+    delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800' },
+    delayed: { label: 'Delayed', color: 'bg-red-100 text-red-800' },
+  };
+  return badges[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+}
+
+// Get lot status badge
+export function getLotStatusBadge(status: string): { label: string; color: string } {
+  const badges: Record<string, { label: string; color: string }> = {
+    open: { label: 'Open', color: 'bg-blue-100 text-blue-800' },
+    in_progress: { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800' },
+    closed: { label: 'Closed', color: 'bg-green-100 text-green-800' },
+    sold: { label: 'Sold', color: 'bg-purple-100 text-purple-800' },
+  };
+  return badges[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+}
+
+// Get MSP comparison badge
+export function getMSPBadge(priceVsMsp: number | null): { label: string; color: string } {
+  if (priceVsMsp === null) return { label: 'No MSP', color: 'bg-gray-100 text-gray-800' };
+  if (priceVsMsp >= 0) return { label: 'Above MSP', color: 'bg-green-100 text-green-800' };
+  return { label: 'Below MSP', color: 'bg-red-100 text-red-800' };
+}
+
+// Calculate verification rate
+export function calculateVerificationRate(verified: number, total: number): number {
+  if (total === 0) return 0;
+  return Math.round((verified / total) * 100);
+}
+
+// Format percentage
+export function formatPercentage(value: number, decimals: number = 1): string {
+  return `${value.toFixed(decimals)}%`;
+}
+
+// Format quintals to metric tons
+export function quintalsToMetricTons(quintals: number): string {
+  const tons = quintals / 10;
+  return `${tons.toFixed(2)} MT`;
+}
+
+// Get trend indicator
+export function getTrendIndicator(current: number, previous: number): {
+  direction: 'up' | 'down' | 'stable';
+  percentage: number;
+  color: string;
+} {
+  if (previous === 0) {
+    return { direction: 'stable', percentage: 0, color: 'text-gray-600' };
+  }
+  
+  const percentage = ((current - previous) / previous) * 100;
+  
+  if (Math.abs(percentage) < 1) {
+    return { direction: 'stable', percentage: 0, color: 'text-gray-600' };
+  }
+  
+  return {
+    direction: percentage > 0 ? 'up' : 'down',
+    percentage: Math.abs(percentage),
+    color: percentage > 0 ? 'text-green-600' : 'text-red-600',
+  };
+}
+
+// Export data to CSV
+export function exportToCSV(data: any[], filename: string) {
+  if (data.length === 0) return;
+  
+  const headers = Object.keys(data[0]);
+  const csvContent = [
+    headers.join(','),
+    ...data.map(row => 
+      headers.map(header => {
+        const value = row[header];
+        // Escape commas and quotes
+        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
+      }).join(',')
+    )
+  ].join('\n');
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  downloadFile(blob, `${filename}.csv`);
+}
+
+// Format Indian date
+export function formatIndianDate(date: string | Date): string {
+  const dateObj = typeof date === 'string' ? parseISO(date) : date;
+  if (!isValid(dateObj)) return '';
+  return format(dateObj, 'dd/MM/yyyy');
+}
+
+// Get state name from code
+export function getStateName(stateCode: string, states: readonly [string, string][]): string {
+  const state = states.find(([code]) => code === stateCode);
+  return state ? state[1] : stateCode;
+}
+
+// Get crop display name
+export function getCropDisplayName(cropType: string): string {
+  return cropType.charAt(0).toUpperCase() + cropType.slice(1).toLowerCase();
+}
+
+// Calculate days difference
+export function daysDifference(date1: string | Date, date2: string | Date = new Date()): number {
+  const d1 = typeof date1 === 'string' ? parseISO(date1) : date1;
+  const d2 = typeof date2 === 'string' ? parseISO(date2) : date2;
+  const diffTime = Math.abs(d2.getTime() - d1.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}

@@ -41,6 +41,45 @@ export interface OTPRequest {
   purpose?: 'registration' | 'login' | 'password_reset';
 }
 
+// Bid Suggestion types
+export interface BidSuggestion {
+  should_bid: boolean;
+  confidence_score: number;
+  recommendation_reason: string;
+  lot_id: string;
+  lot_crop_type: string;
+  lot_quantity_quintals: string | number;
+  lot_expected_price_per_quintal: string | number;
+  distance_km: number;
+  travel_duration_minutes: number;
+  distance_calculation_method: 'osrm' | 'estimated';
+  recommended_vehicle_type: string;
+  vehicle_capacity_tons: number;
+  logistics_cost_breakdown: {
+    transport_cost: number;
+    loading_cost: number;
+    unloading_cost: number;
+    toll_cost: number;
+    total_logistics_cost: number;
+  };
+  total_logistics_cost: string | number;
+  lot_total_price: string | number;
+  total_cost_with_logistics: string | number;
+  expected_processing_revenue: string | number;
+  expected_net_profit: string | number;
+  roi_percentage: string | number;
+  suggested_bid_min: string | number;
+  suggested_bid_max: string | number;
+  warnings: string[];
+}
+
+export interface VehicleType {
+  type: string;
+  label: string;
+  capacity_tons: number;
+  rate_per_km: number;
+}
+
 export interface AuthResponse {
   status: 'success' | 'error';
   message: string;
@@ -322,4 +361,241 @@ export interface ChartDataPoint {
   name: string;
   value: number;
   [key: string]: any;
+}
+
+// ============= Government-specific Types =============
+
+// FPO Monitoring
+export interface FPOMonitoring {
+  id: string;
+  organization_name: string;
+  registration_number: string;
+  district: string;
+  state: string;
+  total_members: number;
+  year_established: number;
+  total_procurement_quintals: number;
+  health_score: number;
+  health_status: 'Excellent' | 'Good' | 'Average' | 'Poor';
+  is_government_verified: boolean;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface FPOMonitoringStats {
+  total_count: number;
+  excellent_count: number;
+  good_count: number;
+  needs_attention_count: number;
+}
+
+// Farmer Registry
+export interface FarmerRegistry {
+  id: string;
+  full_name: string;
+  phone_number: string;
+  district: string;
+  state: string;
+  village: string;
+  total_land_acres: number;
+  primary_crops: string[];
+  kyc_status: 'verified' | 'pending' | 'rejected';
+  fpo_name: string | null;
+  total_lots: number;
+  total_earnings: number;
+  latitude: number | null;
+  longitude: number | null;
+  created_at: string;
+}
+
+export interface FarmerRegistryStats {
+  total_farmers: number;
+  total_land_acres: number;
+  verified_farmers: number;
+  verification_rate: number;
+}
+
+// Processor Monitoring
+export interface ProcessorMonitoring {
+  id: string;
+  company_name: string;
+  license_number: string;
+  district: string;
+  state: string;
+  processing_capacity_mt_per_day: number;
+  total_batches: number;
+  completed_batches: number;
+  completion_rate: number;
+  total_input_quintals: number;
+  total_output_quintals: number;
+  processing_efficiency: number;
+  total_bids: number;
+  won_bids: number;
+  bid_success_rate: number;
+  is_verified: boolean;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface ProcessorMonitoringStats {
+  total_count: number;
+  total_processing_capacity: number;
+  avg_efficiency: number;
+}
+
+// Retailer Analytics
+export interface RetailerAnalytics {
+  id: string;
+  business_name: string;
+  gstin: string;
+  district: string;
+  state: string;
+  total_orders: number;
+  completed_orders: number;
+  order_fulfillment_rate: number;
+  total_purchase_value: number;
+  is_verified: boolean;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface RetailerAnalyticsStats {
+  total_count: number;
+  total_transaction_value: number;
+}
+
+// Supply Chain Tracking
+export interface Shipment {
+  id: string;
+  tracking_number: string;
+  crop_type: string;
+  quantity_quintals: number;
+  status: 'pending' | 'in_transit' | 'delivered' | 'delayed';
+  logistics_partner: string;
+  pickup_location: string;
+  delivery_location: string;
+  pickup_district: string;
+  pickup_state: string;
+  delivery_district: string;
+  delivery_state: string;
+  current_latitude: number | null;
+  current_longitude: number | null;
+  estimated_delivery: string | null;
+  actual_delivery: string | null;
+}
+
+export interface ShipmentStats {
+  total_shipments: number;
+  in_transit: number;
+  delivered: number;
+  pending: number;
+}
+
+// Procurement Analytics
+export interface ProcurementSummary {
+  total_lots: number;
+  total_volume_quintals: number;
+  avg_price: number;
+  total_value: number;
+}
+
+export interface CropBreakdown {
+  crop_type: string;
+  total_volume: number;
+  avg_price: number;
+  lot_count: number;
+}
+
+export interface DailyTrend {
+  date: string;
+  volume: number;
+  count: number;
+}
+
+export interface StatusDistribution {
+  status: string;
+  count: number;
+}
+
+export interface ProcurementAnalytics {
+  summary: ProcurementSummary;
+  crop_breakdown: CropBreakdown[];
+  daily_trends: DailyTrend[];
+  status_distribution: StatusDistribution[];
+}
+
+// Market Prices
+export interface PriceSummary {
+  avg_price: number;
+  min_price: number;
+  max_price: number;
+  price_range: number;
+}
+
+export interface CropPrice {
+  crop_type: string;
+  avg_price: number;
+  min_price: number;
+  max_price: number;
+  msp: number | null;
+  price_vs_msp: number | null;
+}
+
+export interface PriceTrend {
+  date: string;
+  avg_price: number;
+}
+
+export interface MarketPricesAnalytics {
+  summary: PriceSummary;
+  crop_prices: CropPrice[];
+  price_trends: PriceTrend[];
+}
+
+// Government Dashboard
+export interface GovernmentDashboard {
+  total_fpos: number;
+  total_farmers: number;
+  total_processors: number;
+  total_retailers: number;
+  total_production_mt: number;
+  total_market_value: number;
+  crop_distribution: CropDistribution[];
+  state_production: StateProduction[];
+  monthly_trends: MonthlyTrend[];
+}
+
+export interface MonthlyTrend {
+  month: string;
+  production: number;
+  transactions: number;
+  value: number;
+}
+
+// Heatmap Data
+export interface StateHeatmap {
+  state: string;
+  state_code: string;
+  production_mt: number;
+  fpo_count: number;
+  farmer_count: number;
+  avg_price: number;
+}
+
+// Approval Queue
+export interface ApprovalRequest {
+  id: string;
+  user_id: string;
+  full_name: string;
+  phone_number: string;
+  role: string;
+  registration_date: string;
+  documents: ApprovalDocument[];
+  status: 'pending' | 'approved' | 'rejected';
+}
+
+export interface ApprovalDocument {
+  type: string;
+  url: string;
+  verified: boolean;
 }

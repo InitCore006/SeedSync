@@ -26,9 +26,15 @@ export default function PaymentDetailsScreen() {
 
   const fetchPaymentDetails = async () => {
     try {
+      setLoading(true);
       const response = await paymentsAPI.getPaymentById(parseInt(id));
-      setPayment(response.data);
-    } catch (error) {
+      
+      if (response.data && response.data.data) {
+        setPayment(response.data.data);
+      } else {
+        throw new Error('Payment not found');
+      }
+    } catch (error: any) {
       console.error('Failed to fetch payment details:', error);
       Alert.alert('Error', 'Failed to load payment details');
       router.back();
@@ -49,11 +55,17 @@ export default function PaymentDetailsScreen() {
           text: 'Yes, Received',
           onPress: async () => {
             try {
-              await paymentsAPI.verifyPayment(payment.id);
-              await fetchPaymentDetails();
-              Alert.alert('Success', 'Payment verified successfully');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to verify payment');
+              const response = await paymentsAPI.verifyPayment(payment.id, {
+                gateway_transaction_id: `MANUAL_VERIFY_${Date.now()}`
+              });
+              
+              if (response.data && response.data.success) {
+                await fetchPaymentDetails();
+                Alert.alert('Success', 'Payment verified successfully');
+              }
+            } catch (error: any) {
+              console.error('Failed to verify payment:', error);
+              Alert.alert('Error', error.response?.data?.message || 'Failed to verify payment');
             }
           },
         },
@@ -70,6 +82,23 @@ export default function PaymentDetailsScreen() {
   }
 
   const statusInfo = getStatusInfo('payment', payment.status);
+  
+  // Safely parse amounts
+  const grossAmount = typeof payment.gross_amount === 'string'
+    ? parseFloat(payment.gross_amount)
+    : payment.gross_amount;
+  const commissionAmount = typeof payment.commission_amount === 'string'
+    ? parseFloat(payment.commission_amount)
+    : payment.commission_amount || 0;
+  const taxAmount = typeof payment.tax_amount === 'string'
+    ? parseFloat(payment.tax_amount)
+    : payment.tax_amount || 0;
+  const netAmount = typeof payment.net_amount === 'string'
+    ? parseFloat(payment.net_amount)
+    : payment.net_amount;
+  const commissionPercentage = typeof payment.commission_percentage === 'string'
+    ? parseFloat(payment.commission_percentage)
+    : payment.commission_percentage || 0;
 
   return (
     <ScrollView style={styles.container}>
@@ -95,9 +124,11 @@ export default function PaymentDetailsScreen() {
 
       {/* Payment ID */}
       <View style={styles.section}>
-        <Text style={styles.paymentId}>Payment #{payment.id}</Text>
+        <Text style={styles.paymentId}>
+          {payment.payment_id || `Payment #${payment.id}`}
+        </Text>
         <Text style={styles.paymentDate}>
-          Created on {new Date(payment.created_at).toLocaleDateString('en-IN', {
+          Created on {new Date(payment.initiated_at || payment.created_at).toLocaleDateString('en-IN', {
             day: 'numeric',
             month: 'long',
             year: 'numeric',
@@ -113,28 +144,26 @@ export default function PaymentDetailsScreen() {
           <View style={styles.breakdownRow}>
             <Text style={styles.breakdownLabel}>Gross Amount</Text>
             <Text style={styles.breakdownValue}>
-              ₹{payment.gross_amount.toLocaleString('en-IN')}
+              ₹{grossAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
           </View>
 
-          {payment.commission_amount > 0 && (
+          {commissionAmount > 0 && (
             <View style={styles.breakdownRow}>
               <Text style={styles.breakdownLabel}>
-                Commission ({payment.commission_percentage}%)
+                Commission ({commissionPercentage}%)
               </Text>
               <Text style={[styles.breakdownValue, { color: COLORS.error }]}>
-                -₹{payment.commission_amount.toLocaleString('en-IN')}
+                -₹{commissionAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
           )}
 
-          {payment.tax_amount > 0 && (
+          {taxAmount > 0 && (
             <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>
-                Tax ({payment.tax_percentage}%)
-              </Text>
+              <Text style={styles.breakdownLabel}>Tax</Text>
               <Text style={[styles.breakdownValue, { color: COLORS.error }]}>
-                -₹{payment.tax_amount.toLocaleString('en-IN')}
+                -₹{taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
           )}
@@ -142,7 +171,7 @@ export default function PaymentDetailsScreen() {
           <View style={[styles.breakdownRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Net Amount</Text>
             <Text style={styles.totalValue}>
-              ₹{payment.net_amount.toLocaleString('en-IN')}
+              ₹{netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
           </View>
         </View>
@@ -174,12 +203,12 @@ export default function PaymentDetailsScreen() {
       </View>
 
       {/* Transaction Details */}
-      {payment.transaction_id && (
+      {payment.gateway_transaction_id && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Transaction Details</Text>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Transaction ID</Text>
-            <Text style={styles.detailValue}>{payment.transaction_id}</Text>
+            <Text style={styles.detailValue}>{payment.gateway_transaction_id}</Text>
           </View>
         </View>
       )}
@@ -194,7 +223,7 @@ export default function PaymentDetailsScreen() {
             <View style={styles.timelineContent}>
               <Text style={styles.timelineLabel}>Payment Created</Text>
               <Text style={styles.timelineDate}>
-                {new Date(payment.created_at).toLocaleString('en-IN')}
+                {new Date(payment.initiated_at || payment.created_at).toLocaleString('en-IN')}
               </Text>
             </View>
           </View>
@@ -206,18 +235,6 @@ export default function PaymentDetailsScreen() {
                 <Text style={styles.timelineLabel}>Payment Completed</Text>
                 <Text style={styles.timelineDate}>
                   {new Date(payment.completed_at).toLocaleString('en-IN')}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {payment.verified_at && (
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineDot, { backgroundColor: COLORS.success }]} />
-              <View style={styles.timelineContent}>
-                <Text style={styles.timelineLabel}>Payment Verified</Text>
-                <Text style={styles.timelineDate}>
-                  {new Date(payment.verified_at).toLocaleString('en-IN')}
                 </Text>
               </View>
             </View>
@@ -234,20 +251,13 @@ export default function PaymentDetailsScreen() {
       )}
 
       {/* Action Buttons */}
-      {payment.status === 'completed' && !payment.verified_at && (
+      {payment.status === 'completed' && (
         <View style={styles.actionSection}>
           <Button
-            title="Verify Payment Received"
+            title="Confirm Payment Received"
             onPress={handleVerifyPayment}
             style={styles.verifyBtn}
           />
-        </View>
-      )}
-
-      {payment.verified_at && (
-        <View style={styles.verifiedBanner}>
-          <Ionicons name="shield-checkmark" size={24} color={COLORS.success} />
-          <Text style={styles.verifiedText}>Payment Verified</Text>
         </View>
       )}
 
