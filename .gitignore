@@ -1,0 +1,55 @@
+# Python Virtual Environments
+**/.venv/
+**/.venv
+**/venv/
+**/venv
+**/env/
+**/ENV/
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.so
+
+# Node
+**/node_modules/
+**/.next/
+**/dist/
+**/build/
+
+# Environment files
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Database
+**/db.sqlite3
+**/db.sqlite3-journal
+
+# IDE
+.vscode/
+.idea/
+**/*.swp
+**/*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+**/*.log
+**/logs/
+
+# Media & Static
+**/media/
+**/staticfiles/
+
+# Package managers
+**/package-lock.json
+**/yarn.lock
+**/pnpm-lock.yaml
+
+# Expo
+**/.expo/
+**/.expo-shared/
