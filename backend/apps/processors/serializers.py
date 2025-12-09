@@ -200,3 +200,45 @@ class ProcessedProductListSerializer(serializers.ModelSerializer):
             'processor_name', 'processor_id', 'stock_status', 'created_at'
         ]
 
+
+class BidSuggestionSerializer(serializers.Serializer):
+    """Serializer for bid suggestion response"""
+    
+    # Recommendation
+    should_bid = serializers.BooleanField(help_text="Whether processor should place a bid")
+    confidence_score = serializers.IntegerField(help_text="Confidence score 0-100")
+    recommendation_reason = serializers.CharField(help_text="Explanation of recommendation")
+    
+    # Lot details
+    lot_id = serializers.UUIDField()
+    lot_crop_type = serializers.CharField()
+    lot_quantity_quintals = serializers.DecimalField(max_digits=10, decimal_places=2)
+    lot_expected_price_per_quintal = serializers.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Distance & logistics
+    distance_km = serializers.FloatField(help_text="Road distance in kilometers")
+    travel_duration_minutes = serializers.FloatField(help_text="Estimated travel time")
+    distance_calculation_method = serializers.CharField(help_text="osrm or estimated")
+    
+    # Vehicle selection
+    recommended_vehicle_type = serializers.CharField(help_text="Optimal vehicle for this load")
+    vehicle_capacity_tons = serializers.FloatField(help_text="Vehicle capacity")
+    
+    # Cost breakdown
+    logistics_cost_breakdown = serializers.DictField(help_text="Detailed logistics costs")
+    total_logistics_cost = serializers.DecimalField(max_digits=12, decimal_places=2)
+    
+    # Financial analysis
+    lot_total_price = serializers.DecimalField(max_digits=15, decimal_places=2, help_text="Total cost to procure lot")
+    total_cost_with_logistics = serializers.DecimalField(max_digits=15, decimal_places=2)
+    expected_processing_revenue = serializers.DecimalField(max_digits=15, decimal_places=2, help_text="Estimated revenue after processing")
+    expected_net_profit = serializers.DecimalField(max_digits=15, decimal_places=2)
+    roi_percentage = serializers.DecimalField(max_digits=6, decimal_places=2, help_text="Return on investment")
+    
+    # Bid recommendations
+    suggested_bid_min = serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Minimum suggested bid per quintal")
+    suggested_bid_max = serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Maximum suggested bid per quintal")
+    
+    # Warnings
+    warnings = serializers.ListField(child=serializers.CharField(), required=False)
+

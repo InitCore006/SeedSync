@@ -41,6 +41,45 @@ export interface OTPRequest {
   purpose?: 'registration' | 'login' | 'password_reset';
 }
 
+// Bid Suggestion types
+export interface BidSuggestion {
+  should_bid: boolean;
+  confidence_score: number;
+  recommendation_reason: string;
+  lot_id: string;
+  lot_crop_type: string;
+  lot_quantity_quintals: string | number;
+  lot_expected_price_per_quintal: string | number;
+  distance_km: number;
+  travel_duration_minutes: number;
+  distance_calculation_method: 'osrm' | 'estimated';
+  recommended_vehicle_type: string;
+  vehicle_capacity_tons: number;
+  logistics_cost_breakdown: {
+    transport_cost: number;
+    loading_cost: number;
+    unloading_cost: number;
+    toll_cost: number;
+    total_logistics_cost: number;
+  };
+  total_logistics_cost: string | number;
+  lot_total_price: string | number;
+  total_cost_with_logistics: string | number;
+  expected_processing_revenue: string | number;
+  expected_net_profit: string | number;
+  roi_percentage: string | number;
+  suggested_bid_min: string | number;
+  suggested_bid_max: string | number;
+  warnings: string[];
+}
+
+export interface VehicleType {
+  type: string;
+  label: string;
+  capacity_tons: number;
+  rate_per_km: number;
+}
+
 export interface AuthResponse {
   status: 'success' | 'error';
   message: string;

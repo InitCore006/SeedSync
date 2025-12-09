@@ -19,6 +19,10 @@ class ProcessorProfile(TimeStampedModel):
     processing_capacity_quintals_per_day = models.DecimalField(max_digits=10, decimal_places=2)
     is_verified = models.BooleanField(default=False)
     
+    # Location coordinates for distance calculation
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, help_text="Processor location latitude")
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, help_text="Processor location longitude")
+    
     class Meta:
         db_table = 'processor_profiles'
     

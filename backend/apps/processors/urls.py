@@ -6,6 +6,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     ProcessorProfileAPIView,
+    BidSuggestionAPIView,
     ProcessorDashboardAPIView,
     ProcessorBidsAPIView,
     ProcessorProcurementAPIView,
@@ -37,6 +38,7 @@ router.register(r'plants', ProcessingPlantViewSet, basename='plant')
 urlpatterns = [
     # Profile
     path('profile/', ProcessorProfileAPIView.as_view(), name='processor-profile'),
+    path('profile/suggest-bid/', BidSuggestionAPIView.as_view(), name='processor-suggest-bid'),
     
     # Dashboard
     path('dashboard/', ProcessorDashboardAPIView.as_view(), name='processor-dashboard'),

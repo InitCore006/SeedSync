@@ -87,6 +87,208 @@ class ProcessorProfileAPIView(APIView):
             )
 
 
+class BidSuggestionAPIView(APIView):
+    """
+    Get intelligent bid suggestion for a procurement lot
+    POST: /api/processors/profile/suggest-bid/
+    Body: { "lot_id": "<uuid>" }
+    """
+    permission_classes = [IsAuthenticated, IsProcessor]
+    
+    def post(self, request):
+        """Generate bid suggestion for a specific lot"""
+        from apps.core.utils import calculate_road_distance, select_optimal_vehicle, calculate_logistics_cost
+        from .serializers import BidSuggestionSerializer
+        
+        lot_id = request.data.get('lot_id')
+        if not lot_id:
+            return Response(
+                response_error(message="lot_id is required"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            processor = ProcessorProfile.objects.get(user=request.user)
+        except ProcessorProfile.DoesNotExist:
+            return Response(
+                response_error(message="Processor profile not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if processor has location set
+        if not processor.latitude or not processor.longitude:
+            return Response(
+                response_error(message="Please set your location in profile settings to get bid suggestions"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            lot = ProcurementLot.objects.select_related('farmer', 'fpo').get(id=lot_id)
+        except ProcurementLot.DoesNotExist:
+            return Response(
+                response_error(message="Procurement lot not found"),
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if lot is available
+        if lot.status not in ['available', 'under_bidding']:
+            return Response(
+                response_error(message=f"Lot is not available for bidding (Status: {lot.get_status_display()})"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if lot has location
+        if not lot.location_latitude or not lot.location_longitude:
+            return Response(
+                response_error(message="Lot location not available"),
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        warnings = []
+        
+        # Calculate road distance
+        distance_result = calculate_road_distance(
+            processor.latitude,
+            processor.longitude,
+            lot.location_latitude,
+            lot.location_longitude
+        )
+        
+        distance_km = distance_result['distance_km']
+        travel_duration = distance_result['duration_minutes']
+        distance_method = distance_result['method']
+        
+        if distance_method == 'estimated':
+            warnings.append("Distance is estimated. Actual road distance may vary.")
+        
+        # Select optimal vehicle
+        vehicle_type = select_optimal_vehicle(lot.quantity_quintals)
+        
+        # Vehicle capacity mapping (in tons)
+        vehicle_capacities = {
+            'mini_truck': 1.0,
+            'small_truck': 3.0,
+            'medium_truck': 7.0,
+            'large_truck': 15.0,
+            'trailer': 25.0
+        }
+        vehicle_capacity = vehicle_capacities.get(vehicle_type, 5.0)
+        
+        # Calculate logistics costs
+        logistics_breakdown = calculate_logistics_cost(
+            distance_km,
+            vehicle_type,
+            lot.quantity_quintals
+        )
+        
+        total_logistics_cost = logistics_breakdown['total_logistics_cost']
+        
+        # Financial analysis
+        lot_total_price = float(lot.expected_price_per_quintal) * float(lot.quantity_quintals)
+        total_cost_with_logistics = lot_total_price + total_logistics_cost
+        
+        # Estimate processing revenue (simplified - 40% oil extraction rate)
+        # Assume oil sells at 2.5x the raw material cost
+        oil_extraction_rate = 0.40
+        oil_quantity_quintals = float(lot.quantity_quintals) * oil_extraction_rate
+        oil_price_multiplier = 2.5
+        expected_revenue = oil_quantity_quintals * float(lot.expected_price_per_quintal) * oil_price_multiplier
+        
+        # Add cake/meal revenue (remaining 60% sells at 0.8x raw material cost)
+        cake_quantity_quintals = float(lot.quantity_quintals) * 0.55  # 5% loss
+        cake_revenue = cake_quantity_quintals * float(lot.expected_price_per_quintal) * 0.8
+        expected_revenue += cake_revenue
+        
+        # Calculate profit and ROI
+        processing_cost_per_quintal = 500  # Estimated processing cost
+        total_processing_cost = float(lot.quantity_quintals) * processing_cost_per_quintal
+        total_cost = total_cost_with_logistics + total_processing_cost
+        
+        expected_net_profit = expected_revenue - total_cost
+        roi_percentage = (expected_net_profit / total_cost) * 100 if total_cost > 0 else 0
+        
+        # Determine if should bid
+        should_bid = roi_percentage >= 15  # Minimum 15% ROI threshold
+        
+        # Calculate confidence score
+        confidence_score = min(100, max(0, int(roi_percentage * 2)))  # ROI% * 2, capped at 100
+        
+        if distance_km > 500:
+            confidence_score -= 20
+            warnings.append(f"Long distance ({distance_km} km) may increase risks and costs")
+        
+        if lot.quantity_quintals < 10:
+            confidence_score -= 10
+            warnings.append("Small lot size may not be cost-effective")
+        
+        # Suggested bid range (±10% of expected price)
+        suggested_bid_min = float(lot.expected_price_per_quintal) * 0.90
+        suggested_bid_max = float(lot.expected_price_per_quintal) * 1.05
+        
+        # Generate recommendation reason
+        if should_bid:
+            if roi_percentage > 30:
+                recommendation_reason = f"Excellent opportunity! High ROI of {roi_percentage:.1f}% with {distance_km} km distance. Strong profit margins expected."
+            elif roi_percentage > 20:
+                recommendation_reason = f"Good opportunity with {roi_percentage:.1f}% ROI. Moderate distance ({distance_km} km) and reasonable logistics costs."
+            else:
+                recommendation_reason = f"Acceptable opportunity with {roi_percentage:.1f}% ROI. Consider bidding at the lower range."
+        else:
+            if distance_km > 500:
+                recommendation_reason = f"Not recommended. Distance too high ({distance_km} km) making logistics costs prohibitive."
+            elif roi_percentage < 5:
+                recommendation_reason = f"Not recommended. Very low ROI of {roi_percentage:.1f}% indicates poor profitability."
+            else:
+                recommendation_reason = f"Not recommended. ROI of {roi_percentage:.1f}% is below minimum threshold of 15%."
+        
+        # Build response
+        suggestion_data = {
+            'should_bid': should_bid,
+            'confidence_score': max(0, confidence_score),
+            'recommendation_reason': recommendation_reason,
+            
+            'lot_id': str(lot.id),
+            'lot_crop_type': lot.get_crop_type_display(),
+            'lot_quantity_quintals': float(lot.quantity_quintals),
+            'lot_expected_price_per_quintal': float(lot.expected_price_per_quintal),
+            
+            'distance_km': distance_km,
+            'travel_duration_minutes': travel_duration,
+            'distance_calculation_method': distance_method,
+            
+            'recommended_vehicle_type': vehicle_type,
+            'vehicle_capacity_tons': vehicle_capacity,
+            
+            'logistics_cost_breakdown': logistics_breakdown,
+            'total_logistics_cost': total_logistics_cost,
+            
+            'lot_total_price': round(lot_total_price, 2),
+            'total_cost_with_logistics': round(total_cost_with_logistics, 2),
+            'expected_processing_revenue': round(expected_revenue, 2),
+            'expected_net_profit': round(expected_net_profit, 2),
+            'roi_percentage': round(roi_percentage, 2),
+            
+            'suggested_bid_min': round(suggested_bid_min, 2),
+            'suggested_bid_max': round(suggested_bid_max, 2),
+            
+            'warnings': warnings
+        }
+        
+        serializer = BidSuggestionSerializer(data=suggestion_data)
+        if serializer.is_valid():
+            return Response(
+                response_success(
+                    message="Bid suggestion generated successfully",
+                    data=serializer.data
+                )
+            )
+        else:
+            return Response(
+                response_error(message="Serialization error", errors=serializer.errors),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class ProcessingPlantViewSet(viewsets.ModelViewSet):
     """
     Processing Plant CRUD operations

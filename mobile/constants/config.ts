@@ -125,6 +125,7 @@ export const ENDPOINTS = {
     INVENTORY: '/processors/inventory/',
     BIDS: '/processors/bids/',
     PROCUREMENT: '/processors/procurement/',
+    SUGGEST_BID: '/processors/profile/suggest-bid/',
   },
 };
 

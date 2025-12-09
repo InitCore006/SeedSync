@@ -336,6 +336,10 @@ export const processorAPI = {
   placeBid: (data: { lot_id: string; bid_amount_per_quintal: number; quantity_quintals: number; remarks?: string }) =>
     api.post<APIResponse>('/processors/bids/', data),
 
+  // Get bid suggestion
+  getBidSuggestion: (lotId: string) =>
+    api.post<APIResponse>('/processors/profile/suggest-bid/', { lot_id: lotId }),
+
   // Get procurement opportunities
   getProcurement: (params?: { 
     view?: 'available' | 'history';
